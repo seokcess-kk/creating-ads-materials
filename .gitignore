@@ -12,6 +12,9 @@ fonts/*.OTF
 fonts/*.ttc
 fonts/*.TTC
 
+# 폰트 zip (1.8GB)
+fonts_library.zip
+
 # Python
 __pycache__/
 *.pyc
