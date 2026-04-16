@@ -1,0 +1,25 @@
+# 환경변수 (API 키)
+.env
+
+# 작업 산출물 (대용량 이미지)
+_workspace/
+
+# 폰트 바이너리 (2.5GB, 로컬 관리)
+fonts/*.ttf
+fonts/*.otf
+fonts/*.TTF
+fonts/*.OTF
+fonts/*.ttc
+fonts/*.TTC
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
