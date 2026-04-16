@@ -83,16 +83,34 @@ description: "광고 소재 제작 에이전트 팀을 조율하는 오케스트
        depends_on: ["크리에이티브 브리프 작성"]
      },
      {
-       title: "소재 평가 및 피드백",
-       description: "완성된 카피와 비주얼을 평가. 경쟁사 분석 포함. A/B 테스트 설계 및 개선 권고. _workspace/04_performance_review.md에 저장.",
+       title: "[1차 리뷰] 카피/이미지 개별 평가",
+       description: "카피와 배경 이미지를 개별 평가. 경쟁사 분석 포함. 합성 전 수정이 필요한 피드백 제공. _workspace/04_review_round1.md에 저장.",
        assignee: "performance-analyst",
        depends_on: ["광고 카피 작성", "비주얼 설계 및 이미지 생성"]
      },
      {
-       title: "최종 검수 및 전달",
-       description: "퍼포먼스 분석가의 피드백을 검토하고, 필요 시 카피/비주얼 수정 지시. 최종 산출물을 정리하여 사용자에게 전달.",
+       title: "1차 피드백 반영 및 소재 합성",
+       description: "1차 리뷰 피드백을 반영하여 카피/이미지 수정 지시. 이후 compositor에게 최종 합성 지시. _workspace/images/final/에 저장.",
        assignee: "creative-director",
-       depends_on: ["소재 평가 및 피드백"]
+       depends_on: ["[1차 리뷰] 카피/이미지 개별 평가"]
+     },
+     {
+       title: "소재 합성",
+       description: "카피 + 배경 이미지 + 브랜드 요소를 합성하여 최종 완성형 소재 생성. _workspace/images/final/에 저장.",
+       assignee: "compositor",
+       depends_on: ["1차 피드백 반영 및 소재 합성"]
+     },
+     {
+       title: "[2차 리뷰] 최종 합성 소재 평가",
+       description: "합성된 최종 소재를 평가. 가독성, 레이아웃, 텍스트-이미지 조화, CTA 명확성 점검. 업로드 가능 여부 판정. _workspace/04_review_round2.md에 저장.",
+       assignee: "performance-analyst",
+       depends_on: ["소재 합성"]
+     },
+     {
+       title: "최종 검수 및 전달",
+       description: "2차 리뷰 결과를 검토. 수정 필요 시 compositor에게 재합성 지시. 최종 산출물을 정리하여 사용자에게 전달.",
+       assignee: "creative-director",
+       depends_on: ["[2차 리뷰] 최종 합성 소재 평가"]
      }
    ])
    ```
