@@ -43,10 +43,10 @@ export function DeleteBrandButton({ brandId, brandName }: DeleteBrandButtonProps
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+      <DialogTrigger>
+        <span className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-8 px-3 cursor-pointer text-destructive">
           삭제
-        </Button>
+        </span>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
