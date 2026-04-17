@@ -61,12 +61,18 @@ export default async function CampaignDetailPage({
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {creative.bg_image_url && (
+                  {(creative.file_url || creative.bg_image_url) && (
                     <img
-                      src={creative.bg_image_url as string}
-                      alt="배경 이미지"
+                      src={(creative.file_url || creative.bg_image_url) as string}
+                      alt={creative.file_url ? "완성형 소재" : "배경 이미지"}
                       className="rounded-lg w-full"
                     />
+                  )}
+                  {creative.file_url && creative.bg_image_url && (
+                    <details className="text-xs">
+                      <summary className="text-muted-foreground cursor-pointer">배경 원본 보기</summary>
+                      <img src={creative.bg_image_url as string} alt="배경 원본" className="rounded-lg w-full mt-2" />
+                    </details>
                   )}
 
                   {copy && (
