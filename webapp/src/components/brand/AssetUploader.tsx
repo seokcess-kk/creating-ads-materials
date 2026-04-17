@@ -107,9 +107,9 @@ export function AssetUploader({ brandId }: AssetUploaderProps) {
             onChange={handleFileSelect}
             className="hidden"
           />
-          <Button variant="outline" size="sm" asChild>
-            <span>파일 선택</span>
-          </Button>
+          <span className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 cursor-pointer">
+            파일 선택
+          </span>
         </label>
       </div>
 

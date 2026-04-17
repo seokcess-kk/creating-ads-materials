@@ -12,24 +12,39 @@ export async function POST(
     const { campaignId } = await params;
     const campaign = await getCampaign(campaignId);
     const creatives = await getCreatives(campaignId);
-    const copyData = campaign.copy_json as { copies?: Array<{ channel: string; variations: Array<Record<string, string>> }> };
+    const copyData = campaign.copy_json as {
+      copies?: Array<{
+        channel: string;
+        variations: Array<Record<string, string>>;
+      }>;
+    };
 
-    // 각 크리에이티브에 대해 첫 번째 카피 변형을 매핑
+    // 채널별로 크리에이티브를 그룹화
+    const byChannel: Record<string, typeof creatives> = {};
     for (const creative of creatives) {
-      const channelCopy = copyData.copies?.find(
-        (c) => c.channel === creative.channel
-      );
-      const firstVariation = channelCopy?.variations?.[0];
+      const ch = creative.channel as string;
+      if (!byChannel[ch]) byChannel[ch] = [];
+      byChannel[ch].push(creative);
+    }
 
-      if (firstVariation) {
-        await updateCreative(creative.id, {
-          copy_json: firstVariation,
-          status: "composed",
-        });
+    // 각 채널의 크리에이티브에 서로 다른 카피 변형을 매핑
+    for (const [channel, channelCreatives] of Object.entries(byChannel)) {
+      const channelCopy = copyData.copies?.find((c) => c.channel === channel);
+      const variations = channelCopy?.variations || [];
+
+      for (let i = 0; i < channelCreatives.length; i++) {
+        const creative = channelCreatives[i];
+        const variation = variations[i % variations.length]; // 순환 매핑
+
+        if (variation) {
+          await updateCreative(creative.id as string, {
+            copy_json: variation,
+            status: "composed",
+          });
+        }
       }
     }
 
-    // 캠페인 상태 업데이트
     await updateCampaign(campaignId, { status: "completed" });
 
     return NextResponse.json({ success: true });

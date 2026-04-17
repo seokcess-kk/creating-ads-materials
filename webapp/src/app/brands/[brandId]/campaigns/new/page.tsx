@@ -37,6 +37,9 @@ export default function NewCampaignPage({
   // Step 2
   const [selectedChannels, setSelectedChannels] = useState<string[]>(["ig_feed_square"]);
 
+  // 생성 개수
+  const [countPerChannel, setCountPerChannel] = useState(3);
+
   const channelsByPlatform = getChannelsByPlatform();
 
   function toggleChannel(channelId: string) {
@@ -105,9 +108,11 @@ export default function NewCampaignPage({
       addProgress("✅ 카피 생성 완료");
 
       // 4. 이미지 생성 (Gemini)
-      addProgress("배경 이미지 생성 중... (Gemini) — 1~2분 소요");
+      addProgress(`배경 이미지 생성 중... (Gemini) — 채널당 ${countPerChannel}개, 총 ${selectedChannels.length * countPerChannel}개`);
       const imageRes = await fetch(`/api/campaigns/${campaign.id}/images`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ countPerChannel }),
       });
       if (!imageRes.ok) throw new Error("이미지 생성 실패");
       addProgress("✅ 이미지 생성 완료");
@@ -301,11 +306,31 @@ export default function NewCampaignPage({
                   ))}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t text-xs text-muted-foreground">
-                <p>폰트: AI 자동 선택</p>
-                <p>컬러: 브랜드 기본값</p>
-                <p>로고: 자동 배치</p>
-                <p>리뷰: 2단계 자동</p>
+              <div className="pt-2 border-t space-y-3">
+                <div>
+                  <p className="text-sm font-medium mb-2">채널당 생성 개수</p>
+                  <div className="flex items-center gap-3">
+                    {[1, 2, 3, 5].map((n) => (
+                      <Badge
+                        key={n}
+                        variant={countPerChannel === n ? "default" : "outline"}
+                        className="cursor-pointer text-sm px-3 py-1"
+                        onClick={() => setCountPerChannel(n)}
+                      >
+                        {n}개
+                      </Badge>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    총 {selectedChannelConfigs.length}개 채널 × {countPerChannel}개 = {selectedChannelConfigs.length * countPerChannel}개 소재 생성
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <p>폰트: AI 자동 선택</p>
+                  <p>컬러: 브랜드 기본값</p>
+                  <p>로고: 자동 배치</p>
+                  <p>리뷰: 2단계 자동</p>
+                </div>
               </div>
             </div>
 
