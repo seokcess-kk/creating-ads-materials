@@ -42,13 +42,27 @@ description: "광고 소재 컴포지터. 카피라이터의 텍스트와 비주
 {
   "background_image": "배경 이미지 경로",
   "output": "출력 경로",
+  "channel": "ig_feed_square",
+  "auto_fit": true,
+  "adaptive_style": true,
+  "adaptive_gradient": true,
+  "overlay": { "top": true, "top_opacity": 180, "bottom": true, "bottom_opacity": 200, "adaptive": true },
   "brand": { "text": "브랜드명", "color": "#색상" },
-  "main_copy": { "text": "메인\n카피", "color": "#색상", "size_ratio": 0.048 },
-  "sub_copy": { "text": "서브 카피", "color": "#색상" },
-  "cta": { "text": "CTA 텍스트", "bg_color": "#버튼색" },
+  "main_copy": { "text": "메인 카피 텍스트", "color": "#색상", "size_ratio": 0.048, "max_lines": 2 },
+  "sub_copy": { "text": "서브 카피", "color": "#색상", "max_lines": 2 },
+  "cta": { "text": "CTA 텍스트", "bg_color": "#버튼색", "shadow": true, "outline": false },
   "slogan": { "text": "슬로건" }
 }
 ```
+
+**v2 신규 옵션 (모두 선택적, 미지정 시 v1 동작):**
+- `channel`: 채널명 → 세이프존 자동 적용 (ig_feed_square, ig_story, fb_feed_landscape, tiktok, gdn_300x250 등)
+- `auto_fit`: true → 텍스트 길이 기반 자동 줄바꿈(어절 단위) + 폰트 크기 자동 축소
+- `adaptive_style`: true → 배경 명도 분석 후 텍스트 색상·그림자 자동 결정
+- `adaptive_gradient`: true → 영역 밝기에 따라 그래디언트 강도 자동 조절
+- `max_lines`: 텍스트 요소별 최대 줄 수 (auto_fit과 함께 사용)
+- `cta.shadow`: true → CTA 버튼에 블러 드롭섀도우
+- `cta.outline`: true → CTA 버튼 아웃라인
 
 ## 폰트 적용 원칙
 - `fonts/catalog.md`에 등록된 폰트만 사용한다
@@ -77,8 +91,9 @@ description: "광고 소재 컴포지터. 카피라이터의 텍스트와 비주
 
 ## 에러 핸들링
 - Gemini 텍스트 렌더링에서 한국어가 깨지면 Python 컴포지터로 폴백
-- 텍스트가 배경과 대비가 낮으면 그라데이션 오버레이 강도 조정
-- CTA 버튼이 너무 작으면 size_ratio 자동 조정
+- `adaptive_style: true`이면 텍스트-배경 대비를 자동 감지하여 색상/그림자 결정
+- `auto_fit: true`이면 텍스트가 넘칠 때 폰트 크기를 최대 60%까지 자동 축소
+- 브랜드명과 메인카피가 겹칠 경우 메인카피를 자동으로 아래로 밀어냄
 
 ## 협업
 - creative-director가 카피-이미지 조합을 지정하면 그에 따라 합성
