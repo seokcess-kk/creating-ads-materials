@@ -68,6 +68,11 @@ export default function NewCampaignPage({
   const [allImages, setAllImages] = useState<GeneratedImage[]>([]);
   const [selectedImageIndices, setSelectedImageIndices] = useState<Record<string, number[]>>({});
 
+  // 업로드된 직접 사용 이미지
+  interface UploadedVisual { id: string; file_url: string; file_name: string; }
+  const [uploadedVisuals, setUploadedVisuals] = useState<UploadedVisual[]>([]);
+  const [selectedUploadedUrls, setSelectedUploadedUrls] = useState<Record<string, string[]>>({});
+
   // Step 5: 합성 진행
   const [composing, setComposing] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
@@ -165,7 +170,7 @@ export default function NewCampaignPage({
     }
   }
 
-  // === Step 3 → 4: 이미지 생성 ===
+  // === Step 3 → 4: 이미지 생성 + 업로드 이미지 로드 ===
   async function handleStep3Next() {
     const hasSelection = Object.values(selectedCopyIndices).some((arr) => arr.length > 0);
     if (!hasSelection) { toast.error("카피를 최소 1개 선택하세요"); return; }
@@ -173,7 +178,15 @@ export default function NewCampaignPage({
 
     setLoading(true);
     try {
-      toast.info(`이미지 생성 중... (채널당 ${countPerChannel}개)`);
+      // 업로드된 직접 사용 이미지 로드
+      const visualRes = await fetch(`/api/brands/${brandId}/key-visuals`);
+      if (visualRes.ok) {
+        const visuals = await visualRes.json();
+        setUploadedVisuals(visuals);
+      }
+
+      // AI 이미지 생성
+      toast.info(`AI 이미지 생성 중... (채널당 ${countPerChannel}개)`);
       const imgRes = await fetch(`/api/campaigns/${campaignId}/images`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -194,13 +207,25 @@ export default function NewCampaignPage({
       }
       setSelectedImageIndices(defaults);
 
-      toast.success("이미지 생성 완료!");
+      toast.success("이미지 준비 완료!");
       setStep(3);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "오류 발생");
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleUploadedVisual(channel: string, url: string) {
+    setSelectedUploadedUrls((prev) => {
+      const current = prev[channel] || [];
+      return {
+        ...prev,
+        [channel]: current.includes(url)
+          ? current.filter((u) => u !== url)
+          : [...current, url],
+      };
+    });
   }
 
   // === Step 4 → 5 ===
@@ -212,28 +237,37 @@ export default function NewCampaignPage({
 
   // === Step 5: 조합 합성 ===
   function getCombinations() {
-    const combos: { channel: string; channelLabel: string; copy: CopyVariation; imageUrl: string; creativeId: string }[] = [];
+    const combos: { channel: string; channelLabel: string; copy: CopyVariation; imageUrl: string; creativeId: string; source: string }[] = [];
 
     for (const channel of selectedChannels) {
       const channelConfig = CHANNELS.find((c) => c.id === channel);
       const channelCopies = allCopies.find((c) => c.channel === channel);
       const copyIndices = selectedCopyIndices[channel] || [];
-      const imgIndices = selectedImageIndices[channel] || [];
-      const channelImages = allImages.filter((_, i) => imgIndices.includes(i) && allImages[i]?.channelId === channel);
 
-      // 실제 선택된 이미지 필터
-      const selImages = allImages.filter((img) => img.channelId === channel && imgIndices.includes(allImages.indexOf(img)));
+      // AI 생성 이미지
+      const imgIndices = selectedImageIndices[channel] || [];
+      const selAiImages = allImages.filter((img) => img.channelId === channel && imgIndices.includes(allImages.indexOf(img)));
+
+      // 업로드 이미지
+      const selUploadedUrls = selectedUploadedUrls[channel] || [];
+
+      // 모든 이미지 소스 합치기
+      const allImageSources: { url: string; creativeId: string; source: string }[] = [
+        ...selAiImages.map((img) => ({ url: img.imageUrl, creativeId: img.creativeId, source: "AI" })),
+        ...selUploadedUrls.map((url) => ({ url, creativeId: "", source: "업로드" })),
+      ];
 
       for (const ci of copyIndices) {
         const copy = channelCopies?.variations[ci];
         if (!copy) continue;
-        for (const img of selImages) {
+        for (const imgSrc of allImageSources) {
           combos.push({
             channel,
             channelLabel: channelConfig?.label || channel,
             copy,
-            imageUrl: img.imageUrl,
-            creativeId: img.creativeId,
+            imageUrl: imgSrc.url,
+            creativeId: imgSrc.creativeId,
+            source: imgSrc.source,
           });
         }
       }
@@ -418,8 +452,44 @@ export default function NewCampaignPage({
       {step === 3 && (
         <Card>
           <CardContent className="pt-6 space-y-6">
-            <p className="text-sm text-muted-foreground">사용할 배경 이미지를 선택하세요.</p>
+            <p className="text-sm text-muted-foreground">사용할 배경 이미지를 선택하세요. 업로드한 사진과 AI 생성 이미지를 혼합할 수 있습니다.</p>
 
+            {/* 업로드된 직접 사용 이미지 */}
+            {uploadedVisuals.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  📷 직접 업로드한 이미지
+                  <Badge variant="secondary" className="text-xs">{uploadedVisuals.length}개</Badge>
+                </h4>
+                <p className="text-xs text-muted-foreground">모든 채널에 공통으로 사용됩니다</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {uploadedVisuals.map((v) => {
+                    const isSelected = Object.values(selectedUploadedUrls).some((urls) => urls.includes(v.file_url));
+                    return (
+                      <label key={v.id} className={`cursor-pointer rounded-lg overflow-hidden border-2 transition-colors ${isSelected ? "border-primary" : "border-transparent"}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {
+                            // 모든 선택된 채널에 대해 토글
+                            for (const ch of selectedChannels) {
+                              toggleUploadedVisual(ch, v.file_url);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                        <img src={v.file_url} alt={v.file_name} className="w-full aspect-square object-cover" />
+                        <div className="p-1 text-center">
+                          <span className="text-xs text-muted-foreground truncate block">{v.file_name}</span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* AI 생성 이미지 (채널별) */}
             {selectedChannels.map((channelId) => {
               const channelConfig = CHANNELS.find((c) => c.id === channelId);
               const channelImages = allImages.filter((img) => img.channelId === channelId);
@@ -427,7 +497,7 @@ export default function NewCampaignPage({
 
               return (
                 <div key={channelId} className="space-y-2">
-                  <h4 className="text-sm font-medium">{channelConfig?.label || channelId}</h4>
+                  <h4 className="text-sm font-medium">🤖 AI 생성 — {channelConfig?.label || channelId}</h4>
                   <div className="grid grid-cols-3 gap-3">
                     {channelImages.map((img) => {
                       const globalIndex = allImages.indexOf(img);
@@ -437,7 +507,7 @@ export default function NewCampaignPage({
                           <input type="checkbox" checked={isSelected} onChange={() => toggleImage(channelId, globalIndex)} className="hidden" />
                           <img src={img.imageUrl} alt={`이미지 ${img.variation}`} className="w-full aspect-square object-cover" />
                           <div className="p-1 text-center">
-                            <span className="text-xs text-muted-foreground">v{img.variation}</span>
+                            <span className="text-xs text-muted-foreground">AI v{img.variation}</span>
                           </div>
                         </label>
                       );
@@ -471,7 +541,10 @@ export default function NewCampaignPage({
                           <p className="font-medium truncate">{combo.copy.headline}</p>
                           <p className="text-xs text-muted-foreground truncate">{combo.copy.sub_copy}</p>
                         </div>
-                        <Badge variant="outline" className="text-xs shrink-0">{combo.channelLabel}</Badge>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <Badge variant="outline" className="text-xs">{combo.channelLabel}</Badge>
+                          <Badge variant={combo.source === "업로드" ? "default" : "secondary"} className="text-xs">{combo.source}</Badge>
+                        </div>
                       </div>
                     ))}
                   </div>

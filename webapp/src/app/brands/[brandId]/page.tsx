@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AssetUploader } from "@/components/brand/AssetUploader";
 import { StyleGuideView } from "@/components/brand/StyleGuideView";
 import { DeleteBrandButton } from "@/components/brand/DeleteBrandButton";
+import { KeyVisualManager } from "@/components/brand/KeyVisualManager";
 
 export default async function BrandDetailPage({
   params,
@@ -16,6 +17,10 @@ export default async function BrandDetailPage({
   const brand = await getBrand(brandId);
 
   const hasStyleGuide = Object.keys(brand.style_guide_json || {}).length > 0;
+  const styleGuide = brand.style_guide_json as Record<string, unknown>;
+  const keyVisualType = styleGuide?.visual_style
+    ? (styleGuide.visual_style as Record<string, string>)?.key_visual_type
+    : null;
 
   return (
     <div className="space-y-6">
@@ -38,6 +43,7 @@ export default async function BrandDetailPage({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 로고/에셋 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -50,6 +56,7 @@ export default async function BrandDetailPage({
           </CardContent>
         </Card>
 
+        {/* 스타일 가이드 */}
         <Card>
           <CardHeader>
             <CardTitle>스타일 가이드</CardTitle>
@@ -63,6 +70,23 @@ export default async function BrandDetailPage({
                 <p>Claude가 자동으로 스타일 가이드를 생성합니다</p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* 직접 사용 이미지 */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              직접 사용 이미지
+              {keyVisualType && (
+                <Badge variant="outline" className="text-xs font-normal">
+                  BP 추천: {keyVisualType === "space" ? "공간 사진" : keyVisualType === "product" ? "제품 사진" : keyVisualType === "person" ? "인물 사진" : keyVisualType}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <KeyVisualManager brandId={brandId} />
           </CardContent>
         </Card>
       </div>
