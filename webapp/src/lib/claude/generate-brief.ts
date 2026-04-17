@@ -1,3 +1,4 @@
+import type { TextBlock } from "@anthropic-ai/sdk/resources/messages";
 import { getClaudeClient } from "./client";
 import { getBrand } from "@/lib/db/brands";
 import { getCampaign } from "@/lib/db/campaigns";
@@ -59,7 +60,7 @@ JSON만 출력하세요.`;
   });
 
   const text = response.content
-    .filter((b): b is { type: "text"; text: string } => b.type === "text")
+    .filter((b): b is TextBlock => b.type === "text")
     .map((b) => b.text)
     .join("");
 

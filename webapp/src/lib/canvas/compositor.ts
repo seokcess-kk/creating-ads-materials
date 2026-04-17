@@ -1,4 +1,4 @@
-import { createCanvas, loadImage, registerFont, type Canvas, type CanvasRenderingContext2D } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage, type Canvas, type CanvasRenderingContext2D } from "@napi-rs/canvas";
 import { createAdminClient } from "@/lib/supabase/admin";
 import path from "path";
 import fs from "fs";
@@ -78,7 +78,7 @@ async function loadFontFromUrl(url: string, family: string, weight?: string): Pr
     fs.writeFileSync(tmpPath, buffer);
   }
 
-  registerFont(tmpPath, { family, weight: weight || "normal" });
+  GlobalFonts.registerFromPath(tmpPath, cacheKey);
   fontCache.add(cacheKey);
 }
 

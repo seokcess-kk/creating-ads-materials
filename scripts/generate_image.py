@@ -1,16 +1,23 @@
 """
 광고 소재 이미지 생성 스크립트
-Gemini 3 Pro Image Preview (Nano Banana Pro) 모델을 사용하여 이미지를 생성한다.
+Gemini 이미지 모델(Nano Banana Pro / Nano Banana 2)로 이미지를 생성한다.
 레퍼런스 이미지를 함께 입력하여 스타일 전이가 가능하다. (최대 11장)
 
 사용법:
-  # 기본 생성
+  # 기본 생성 (Pro, 콘셉트 시안용)
   python scripts/generate_image.py --prompt "프롬프트" --output "출력경로.png"
+
+  # 대량 변형 (Nano Banana 2, 속도 우선)
+  python scripts/generate_image.py --prompt "프롬프트" --output "출력경로.png" --model flash
 
   # 레퍼런스 이미지 기반 생성
   python scripts/generate_image.py --prompt "이 레퍼런스들의 스타일로 새 광고 이미지를 생성해줘. 장면: ..." \
     --ref references/best_practices/bp_01.png references/brand_assets/logo.png \
     --output "출력경로.png" --aspect "1:1" --size "2K"
+
+모델 선택 (--model):
+  pro   → gemini-3-pro-image-preview (Nano Banana Pro, 전문 애셋·고급 추론, 기본값)
+  flash → gemini-3.1-flash-image-preview (Nano Banana 2, 속도·대량 작업)
 
 환경변수:
   GEMINI_API_KEY 또는 GOOGLE_API_KEY: Google AI Studio API 키
@@ -37,6 +44,11 @@ SUPPORTED_RATIOS = [
 
 MAX_REFERENCES = 11  # Gemini 3 Pro Image Preview 최대 레퍼런스 수
 
+MODEL_ALIASES = {
+    "pro": "gemini-3-pro-image-preview",      # Nano Banana Pro
+    "flash": "gemini-3.1-flash-image-preview", # Nano Banana 2
+}
+
 
 def generate_image(
     prompt: str,
@@ -44,6 +56,7 @@ def generate_image(
     aspect_ratio: str = "1:1",
     image_size: str = "2K",
     reference_images: list[str] | None = None,
+    model: str = "pro",
 ) -> str:
     """Gemini 모델로 이미지를 생성하고 파일로 저장한다."""
 
@@ -75,15 +88,16 @@ def generate_image(
 
     contents.append(prompt)
 
+    model_id = MODEL_ALIASES.get(model, model)
     print(f"프롬프트: {prompt[:100]}...")
-    print(f"비율: {aspect_ratio} | 해상도: {image_size}")
+    print(f"모델: {model_id} | 비율: {aspect_ratio} | 해상도: {image_size}")
     print("이미지 생성 중...")
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model=model_id,
         contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["TEXT", "IMAGE"],
@@ -116,6 +130,8 @@ def main():
                        help="이미지 해상도 (기본: 2K)")
     parser.add_argument("--ref", nargs="*", default=[],
                        help="레퍼런스 이미지 경로 (최대 11장). 폴더 경로도 가능")
+    parser.add_argument("--model", default="pro", choices=list(MODEL_ALIASES.keys()),
+                       help="pro (Nano Banana Pro, 기본) | flash (Nano Banana 2, 속도/대량)")
 
     args = parser.parse_args()
 
@@ -129,7 +145,7 @@ def main():
         elif p.exists():
             ref_files.append(str(p))
 
-    generate_image(args.prompt, args.output, args.aspect, args.size, ref_files or None)
+    generate_image(args.prompt, args.output, args.aspect, args.size, ref_files or None, args.model)
 
 
 if __name__ == "__main__":

@@ -64,13 +64,31 @@ Gemini 3 Pro Image Preview 모델용 프롬프트를 영어로 작성한다.
 `scripts/generate_image.py` 스크립트를 사용하여 이미지를 생성한다.
 aspect ratio와 해상도는 `imageConfig`를 통해 API에 전달된다.
 
+**모델 선택 (--model):**
+
+| 용도 | 모델 플래그 | 모델 ID | 특성 |
+|------|-----------|---------|------|
+| 콘셉트 시안·대표 소재 (1~3장) | `pro` (기본) | `gemini-3-pro-image-preview` | Nano Banana Pro. 고급 추론, 텍스트 렌더링, 전문 애셋 |
+| 대량 변형·A/B 소재 (5장+) | `flash` | `gemini-3.1-flash-image-preview` | Nano Banana 2. 속도·비용 우선 |
+
+**선택 기준:**
+- 콘셉트 탐색 단계 또는 브랜드 대표 이미지 → `pro`
+- 동일 콘셉트로 색상·구도 변형을 대량 생성 → `flash`
+- 텍스트가 삽입된 완성형 소재(ad-compose 방식 A) → `pro`
+
 **실행 방법:**
 ```bash
+# 콘셉트 시안 (Pro, 기본)
 python scripts/generate_image.py \
   --prompt "장면 서술식 프롬프트" \
   --output "_workspace/images/{channel}_{variation}.png" \
-  --aspect "1:1" \
-  --size "2K"
+  --aspect "1:1" --size "2K"
+
+# 대량 변형 (Flash)
+python scripts/generate_image.py \
+  --prompt "장면 서술식 프롬프트" \
+  --output "_workspace/images/{channel}_v{n}.png" \
+  --aspect "1:1" --size "2K" --model flash
 ```
 
 **비율 옵션 (전체):**

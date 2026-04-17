@@ -26,7 +26,7 @@ export default async function CampaignDetailPage({
       </div>
 
       {/* 브리프 요약 */}
-      {brief.campaign_concept && (
+      {Boolean(brief.campaign_concept) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">크리에이티브 브리프</CardTitle>
@@ -61,14 +61,14 @@ export default async function CampaignDetailPage({
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {(creative.file_url || creative.bg_image_url) && (
+                  {Boolean(creative.file_url || creative.bg_image_url) && (
                     <img
                       src={(creative.file_url || creative.bg_image_url) as string}
                       alt={creative.file_url ? "완성형 소재" : "배경 이미지"}
                       className="rounded-lg w-full"
                     />
                   )}
-                  {creative.file_url && creative.bg_image_url && (
+                  {Boolean(creative.file_url && creative.bg_image_url) && (
                     <details className="text-xs">
                       <summary className="text-muted-foreground cursor-pointer">배경 원본 보기</summary>
                       <img src={creative.bg_image_url as string} alt="배경 원본" className="rounded-lg w-full mt-2" />

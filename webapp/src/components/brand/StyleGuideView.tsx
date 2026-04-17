@@ -85,10 +85,10 @@ export function StyleGuideView({ styleGuide }: StyleGuideViewProps) {
       {targetAudience && (
         <div>
           <h4 className="font-medium mb-1">Target Audience</h4>
-          {targetAudience.primary && (
+          {Boolean(targetAudience.primary) && (
             <p className="text-muted-foreground">주요: {targetAudience.primary as string}</p>
           )}
-          {targetAudience.demographics && (
+          {Boolean(targetAudience.demographics) && (
             <p className="text-muted-foreground">인구통계: {targetAudience.demographics as string}</p>
           )}
           {(targetAudience.pain_points as string[] | undefined)?.length && (
