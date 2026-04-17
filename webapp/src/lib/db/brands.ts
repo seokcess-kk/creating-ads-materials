@@ -32,6 +32,15 @@ export async function createBrand(name: string, websiteUrl?: string) {
   return data;
 }
 
+export async function deleteBrand(id: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("brands")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function updateBrandStyleGuide(id: string, styleGuide: Record<string, unknown>) {
   const supabase = createAdminClient();
   const { data, error } = await supabase

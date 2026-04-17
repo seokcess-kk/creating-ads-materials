@@ -3,9 +3,9 @@ import { getBrand } from "@/lib/db/brands";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { AssetUploader } from "@/components/brand/AssetUploader";
 import { StyleGuideView } from "@/components/brand/StyleGuideView";
+import { DeleteBrandButton } from "@/components/brand/DeleteBrandButton";
 
 export default async function BrandDetailPage({
   params,
@@ -27,6 +27,7 @@ export default async function BrandDetailPage({
           )}
         </div>
         <div className="flex gap-2">
+          <DeleteBrandButton brandId={brandId} brandName={brand.name} />
           <Link href={`/brands/${brandId}/best-practices`}>
             <Button variant="outline">BP 레퍼런스</Button>
           </Link>
