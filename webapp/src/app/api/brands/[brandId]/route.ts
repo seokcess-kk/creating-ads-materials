@@ -1,17 +1,59 @@
-import { NextResponse } from "next/server";
-import { deleteBrand } from "@/lib/db/brands";
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteBrand, getBrand, updateBrand, loadBrandMemory } from "@/lib/memory";
+import { ok, fail, parseJson, serverError } from "@/lib/api-utils";
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ brandId: string }> }
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ brandId: string }> },
 ) {
   try {
     const { brandId } = await params;
+    const url = new URL(request.url);
+    const withMemory = url.searchParams.get("memory") === "1";
 
-    // Storage의 브랜드 관련 파일도 삭제
+    if (withMemory) {
+      const memory = await loadBrandMemory(brandId);
+      if (!memory) return fail("브랜드를 찾을 수 없습니다", 404);
+      return ok({ memory });
+    }
+    const brand = await getBrand(brandId);
+    if (!brand) return fail("브랜드를 찾을 수 없습니다", 404);
+    return ok({ brand });
+  } catch (e) {
+    return serverError(e);
+  }
+}
+
+const PatchSchema = z.object({
+  name: z.string().min(1).optional(),
+  website_url: z.string().url().nullable().optional(),
+  category: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ brandId: string }> },
+) {
+  try {
+    const { brandId } = await params;
+    const input = await parseJson(request, PatchSchema);
+    const brand = await updateBrand(brandId, input);
+    return ok({ brand });
+  } catch (e) {
+    return serverError(e);
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ brandId: string }> },
+) {
+  try {
+    const { brandId } = await params;
     const supabase = createAdminClient();
-    const buckets = ["brand-assets", "generated-images", "creatives"];
+    const buckets = ["brand-assets", "generated-images"];
     for (const bucket of buckets) {
       const { data: files } = await supabase.storage.from(bucket).list(brandId);
       if (files && files.length > 0) {
@@ -19,13 +61,9 @@ export async function DELETE(
         await supabase.storage.from(bucket).remove(paths);
       }
     }
-
-    // DB 삭제 (CASCADE로 brand_assets, best_practices, campaigns, creatives 자동 삭제)
     await deleteBrand(brandId);
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Brand delete error:", error);
-    return NextResponse.json({ error: "브랜드 삭제 실패" }, { status: 500 });
+    return ok({ success: true });
+  } catch (e) {
+    return serverError(e);
   }
 }

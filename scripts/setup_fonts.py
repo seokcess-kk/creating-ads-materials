@@ -40,9 +40,8 @@ def download_from_drive(file_id: str, output_path: Path):
         os.system(f"{sys.executable} -m pip install gdown")
         import gdown
 
-    url = f"https://drive.google.com/uc?id={file_id}"
     print(f"Google Drive에서 폰트 다운로드 중...")
-    gdown.download(url, str(output_path), quiet=False, fuzzy=True)
+    gdown.download(id=file_id, output=str(output_path), quiet=False)
 
 
 def extract_zip(zip_path: Path):

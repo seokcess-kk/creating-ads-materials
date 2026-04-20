@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/", label: "Dashboard", icon: "grid" },
   { href: "/brands", label: "Brands", icon: "building" },
-  { href: "/fonts", label: "Fonts", icon: "type" },
 ];
 
 const icons: Record<string, React.ReactNode> = {

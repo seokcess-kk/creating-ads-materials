@@ -1,21 +1,29 @@
-import { NextResponse } from "next/server";
-import { createBrand } from "@/lib/db/brands";
+import { z } from "zod";
+import { createBrand, listBrands } from "@/lib/memory";
+import { ok, parseJson, serverError } from "@/lib/api-utils";
+
+export async function GET() {
+  try {
+    const brands = await listBrands();
+    return ok({ brands });
+  } catch (e) {
+    return serverError(e);
+  }
+}
+
+const CreateSchema = z.object({
+  name: z.string().min(1),
+  website_url: z.string().url().nullable().optional(),
+  category: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+});
 
 export async function POST(request: Request) {
   try {
-    const { name, websiteUrl } = await request.json();
-
-    if (!name?.trim()) {
-      return NextResponse.json({ error: "브랜드명은 필수입니다" }, { status: 400 });
-    }
-
-    const brand = await createBrand(name.trim(), websiteUrl?.trim());
-    return NextResponse.json(brand);
-  } catch (error) {
-    console.error("Brand creation error:", error);
-    return NextResponse.json(
-      { error: "브랜드 생성 중 오류가 발생했습니다" },
-      { status: 500 }
-    );
+    const input = await parseJson(request, CreateSchema);
+    const brand = await createBrand(input);
+    return ok({ brand });
+  } catch (e) {
+    return serverError(e);
   }
 }

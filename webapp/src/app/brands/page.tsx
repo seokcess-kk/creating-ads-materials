@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { getBrands } from "@/lib/db/brands";
+import { listBrands } from "@/lib/memory";
+
+export const dynamic = "force-dynamic";
 
 export default async function BrandsPage() {
-  const brands = await getBrands();
+  const brands = await listBrands();
 
   return (
     <div className="space-y-6">
@@ -30,23 +31,18 @@ export default async function BrandsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {brands.map((brand: { id: string; name: string; website_url: string | null; style_guide_json: Record<string, unknown>; created_at: string }) => (
+          {brands.map((brand) => (
             <Link key={brand.id} href={`/brands/${brand.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+              <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
                 <CardHeader>
                   <CardTitle className="text-lg">{brand.name}</CardTitle>
                   {brand.website_url && (
                     <p className="text-xs text-muted-foreground truncate">{brand.website_url}</p>
                   )}
                 </CardHeader>
-                <CardContent>
-                  <div className="flex gap-2">
-                    {Object.keys(brand.style_guide_json || {}).length > 0 ? (
-                      <Badge variant="secondary">스타일 가이드 완료</Badge>
-                    ) : (
-                      <Badge variant="outline">분석 전</Badge>
-                    )}
-                  </div>
+                <CardContent className="space-y-1 text-sm text-muted-foreground">
+                  {brand.category && <p>카테고리: {brand.category}</p>}
+                  {brand.description && <p className="line-clamp-2">{brand.description}</p>}
                 </CardContent>
               </Card>
             </Link>
