@@ -1,16 +1,13 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getCampaign,
   getLatestRun,
   getStage,
-  listStages,
   listVariants,
 } from "@/lib/campaigns";
 import { getBrand, loadBrandMemory } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
 import { computeLogoDefaults } from "@/lib/canvas/compose-from-run";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StrategyGate } from "@/components/campaign/StrategyGate";
 import { CopyGate } from "@/components/campaign/CopyGate";
@@ -20,6 +17,11 @@ import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
+import {
+  CampaignStepper,
+  pickInitialStage,
+  type StepDef,
+} from "@/components/campaign/CampaignStepper";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +44,6 @@ export default async function CampaignPage({
   if (!campaign) notFound();
   const brand = await getBrand(campaign.brand_id);
   const run = await getLatestRun(campaignId);
-  const stages = run ? await listStages(run.id) : [];
   const channel = getChannel(campaign.channel);
 
   const isVisible = (status: string | undefined) =>
@@ -113,8 +114,46 @@ export default async function CampaignPage({
   const composeBaseUrl =
     ((selectedRetouch ?? selectedVisual)?.content_json as UrlContent | undefined)?.url ?? null;
 
-  const stageRows = ["strategy", "copy", "visual", "retouch", "compose", "ship"] as const;
-  const stageMap = Object.fromEntries(stages.map((s) => [s.stage, s]));
+  const steps: StepDef[] = [
+    {
+      key: "strategy",
+      label: "Strategy",
+      status: strategyStage?.status,
+      locked: false,
+    },
+    {
+      key: "copy",
+      label: "Copy",
+      status: copyStage?.status,
+      locked: !strategyReady,
+    },
+    {
+      key: "visual",
+      label: "Visual",
+      status: visualStage?.status,
+      locked: !copyReady,
+    },
+    {
+      key: "retouch",
+      label: "Retouch",
+      status: retouchStage?.status,
+      locked: !visualReady,
+      optional: true,
+    },
+    {
+      key: "compose",
+      label: "Compose",
+      status: composeStage?.status,
+      locked: !composeReadyGate,
+    },
+    {
+      key: "ship",
+      label: "Ship",
+      status: shipStage?.status,
+      locked: !composeReady,
+    },
+  ];
+  const initialStage = pickInitialStage(steps);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -180,114 +219,60 @@ export default async function CampaignPage({
         />
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">파이프라인</CardTitle>
-          <CardDescription>
-            Strategy → Copy → Visual → Retouch(옵션) → Compose → Ship
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {stageRows.map((stage, i) => {
-            const row = stageMap[stage];
-            return (
-              <div
-                key={stage}
-                className={
-                  "flex items-center justify-between border rounded-md p-3 " +
-                  (row?.status === "stale" ? "border-amber-500/50 bg-amber-500/5" : "")
-                }
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
-                      row?.status === "ready"
-                        ? "bg-primary text-primary-foreground"
-                        : row?.status === "running"
-                          ? "bg-primary/50 text-primary-foreground"
-                          : row?.status === "stale"
-                            ? "bg-amber-500 text-white"
-                            : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {i + 1}
-                  </div>
-                  <span className="text-sm capitalize">{stage}</span>
-                </div>
-                {row && (
-                  <Badge
-                    variant={
-                      row.status === "ready"
-                        ? "secondary"
-                        : row.status === "failed"
-                          ? "destructive"
-                          : row.status === "stale"
-                            ? "outline"
-                            : "outline"
-                    }
-                    className={row.status === "stale" ? "border-amber-500 text-amber-700" : ""}
-                  >
-                    {row.status === "stale" ? "⚠ stale" : row.status}
-                  </Badge>
-                )}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+      <CampaignStepper steps={steps} initialStage={initialStage}>
+        <StrategyGate
+          campaignId={campaignId}
+          initialRun={run}
+          initialStage={strategyStage}
+          initialVariants={strategyVariants}
+        />
 
-      <StrategyGate
-        campaignId={campaignId}
-        initialRun={run}
-        initialStage={strategyStage}
-        initialVariants={strategyVariants}
-      />
+        <CopyGate
+          campaignId={campaignId}
+          strategyReady={strategyReady}
+          initialStage={copyStage}
+          initialVariants={copyVariants}
+        />
 
-      <CopyGate
-        campaignId={campaignId}
-        strategyReady={strategyReady}
-        initialStage={copyStage}
-        initialVariants={copyVariants}
-      />
+        <VisualStage
+          campaignId={campaignId}
+          copyReady={copyReady}
+          aspectRatio={channel?.aspectRatio ?? "1:1"}
+          initialStage={visualStage}
+          initialVariants={visualVariants}
+        />
 
-      <VisualStage
-        campaignId={campaignId}
-        copyReady={copyReady}
-        aspectRatio={channel?.aspectRatio ?? "1:1"}
-        initialStage={visualStage}
-        initialVariants={visualVariants}
-      />
+        <RetouchStudio
+          campaignId={campaignId}
+          visualReady={visualReady}
+          baseImageUrl={baseImageUrl}
+          visualSuggestions={visualSuggestions}
+          aspectRatio={channel?.aspectRatio ?? "1:1"}
+          initialStage={retouchStage}
+          initialVariants={retouchVariants}
+        />
 
-      <RetouchStudio
-        campaignId={campaignId}
-        visualReady={visualReady}
-        baseImageUrl={baseImageUrl}
-        visualSuggestions={visualSuggestions}
-        aspectRatio={channel?.aspectRatio ?? "1:1"}
-        initialStage={retouchStage}
-        initialVariants={retouchVariants}
-      />
+        <ComposeStage
+          campaignId={campaignId}
+          previousReady={composeReadyGate}
+          baseImageUrl={composeBaseUrl}
+          logoDefaults={logoDefaults}
+          aspectRatio={channel?.aspectRatio ?? "1:1"}
+          initialStage={composeStage}
+          initialVariants={composeVariants}
+        />
 
-      <ComposeStage
-        campaignId={campaignId}
-        previousReady={composeReadyGate}
-        baseImageUrl={composeBaseUrl}
-        logoDefaults={logoDefaults}
-        aspectRatio={channel?.aspectRatio ?? "1:1"}
-        initialStage={composeStage}
-        initialVariants={composeVariants}
-      />
-
-      <ShipCard
-        campaignId={campaignId}
-        campaignName={campaign.name}
-        campaignStatus={campaign.status}
-        composeReady={composeReady}
-        composeUrl={composeUrl}
-        aspectRatio={channel?.aspectRatio ?? "1:1"}
-        initialRun={run}
-        initialStage={shipStage}
-      />
+        <ShipCard
+          campaignId={campaignId}
+          campaignName={campaign.name}
+          campaignStatus={campaign.status}
+          composeReady={composeReady}
+          composeUrl={composeUrl}
+          aspectRatio={channel?.aspectRatio ?? "1:1"}
+          initialRun={run}
+          initialStage={shipStage}
+        />
+      </CampaignStepper>
     </div>
   );
 }
