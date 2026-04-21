@@ -4,6 +4,11 @@ function readyRefs(memory: BrandMemory): BrandReference[] {
   return memory.references.filter((r) => r.vision_status === "ready");
 }
 
+// weight=50이 기본(1.0x). 100이면 2.0x, 0이면 집계에서 실질 제외.
+function refWeight(r: BrandReference): number {
+  return Math.max(0, r.weight ?? 50) / 50;
+}
+
 export function buildVisionDigest(memory: BrandMemory, maxRefs: number = 5): string {
   const ready = readyRefs(memory);
   if (ready.length === 0) return "(없음)";
@@ -27,37 +32,51 @@ export function buildCopyPatternDigest(memory: BrandMemory, maxRefs: number = 5)
   const ready = readyRefs(memory).filter((r) => !r.is_negative);
   if (ready.length === 0) return "(없음)";
 
-  const hookCounts: Record<string, number> = {};
-  const frameworkCounts: Record<string, number> = {};
-  const headlineLens: number[] = [];
+  const hookScores: Record<string, number> = {};
+  const frameworkScores: Record<string, number> = {};
+  let headlineLenWSum = 0;
+  let headlineLenW = 0;
   for (const r of ready) {
+    const w = refWeight(r);
+    if (w <= 0) continue;
     const a = r.vision_analysis_json;
     if (a.copyStructure?.hookType) {
-      hookCounts[a.copyStructure.hookType] = (hookCounts[a.copyStructure.hookType] ?? 0) + 1;
+      hookScores[a.copyStructure.hookType] =
+        (hookScores[a.copyStructure.hookType] ?? 0) + w;
     }
     if (a.copyStructure?.framework) {
-      frameworkCounts[a.copyStructure.framework] =
-        (frameworkCounts[a.copyStructure.framework] ?? 0) + 1;
+      frameworkScores[a.copyStructure.framework] =
+        (frameworkScores[a.copyStructure.framework] ?? 0) + w;
     }
-    if (a.copyStructure?.headlineLen) headlineLens.push(a.copyStructure.headlineLen);
+    if (a.copyStructure?.headlineLen) {
+      headlineLenWSum += a.copyStructure.headlineLen * w;
+      headlineLenW += w;
+    }
   }
+  const fmt = (m: Record<string, number>): string =>
+    Object.entries(m)
+      .map(([k, v]) => `${k}=${v.toFixed(1)}`)
+      .join(", ") || "없음";
   const topHook =
-    Object.entries(hookCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "(없음)";
+    Object.entries(hookScores).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "(없음)";
   const topFw =
-    Object.entries(frameworkCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "(없음)";
-  const avgHeadLen = headlineLens.length
-    ? Math.round(headlineLens.reduce((a, b) => a + b, 0) / headlineLens.length)
-    : null;
+    Object.entries(frameworkScores).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+    "(없음)";
+  const avgHeadLen =
+    headlineLenW > 0 ? Math.round(headlineLenWSum / headlineLenW) : null;
 
   const lines = [
-    `- 자주 쓰인 hook: ${topHook} (카운트: ${Object.entries(hookCounts).map(([k, v]) => `${k}=${v}`).join(", ") || "없음"})`,
-    `- 자주 쓰인 framework: ${topFw} (${Object.entries(frameworkCounts).map(([k, v]) => `${k}=${v}`).join(", ") || "없음"})`,
+    `- 자주 쓰인 hook: ${topHook} (가중치합: ${fmt(hookScores)})`,
+    `- 자주 쓰인 framework: ${topFw} (${fmt(frameworkScores)})`,
   ];
-  if (avgHeadLen) lines.push(`- 헤드라인 평균 길이: 약 ${avgHeadLen}자`);
+  if (avgHeadLen)
+    lines.push(`- 헤드라인 평균 길이: 약 ${avgHeadLen}자 (가중평균)`);
   const negativeHooks = readyRefs(memory).filter((r) => r.is_negative).length;
   if (negativeHooks > 0) {
     lines.push(`- Negative 샘플 ${negativeHooks}개 — 상기 패턴과 반대로 가지 말 것`);
   }
+  // maxRefs는 인터페이스 호환 유지용 (집계는 전체 사용)
+  void maxRefs;
   return lines.join("\n");
 }
 
@@ -75,58 +94,71 @@ export interface VisualPatternSummary {
 
 export function summarizeVisualPatterns(memory: BrandMemory): VisualPatternSummary {
   const ready = readyRefs(memory).filter((r) => !r.is_negative);
-  const paletteSet = new Set<string>();
-  const moodCounts: Record<string, number> = {};
-  const zoneCounts: Record<string, number> = {};
-  const typographyCounts: Record<string, number> = {};
-  const hookElementCounts: Record<string, number> = {};
-  const logoPosCounts: Record<string, number> = {};
-  const ctaStyleCounts: Record<string, number> = {};
-  const marginRatios: number[] = [];
-  const logoSizeRatios: number[] = [];
+  const paletteScores = new Map<string, number>();
+  const moodScores: Record<string, number> = {};
+  const zoneScores: Record<string, number> = {};
+  const typographyScores: Record<string, number> = {};
+  const hookElementScores: Record<string, number> = {};
+  const logoPosScores: Record<string, number> = {};
+  const ctaStyleScores: Record<string, number> = {};
+  let marginSum = 0;
+  let marginW = 0;
+  let logoSizeSum = 0;
+  let logoSizeW = 0;
 
   for (const r of ready) {
+    const w = refWeight(r);
+    if (w <= 0) continue;
     const a = r.vision_analysis_json;
-    a.color?.palette?.forEach((h) => paletteSet.add(h.toUpperCase()));
-    if (a.color?.mood) moodCounts[a.color.mood] = (moodCounts[a.color.mood] ?? 0) + 1;
+    a.color?.palette?.forEach((h) => {
+      const key = h.toUpperCase();
+      paletteScores.set(key, (paletteScores.get(key) ?? 0) + w);
+    });
+    if (a.color?.mood)
+      moodScores[a.color.mood] = (moodScores[a.color.mood] ?? 0) + w;
     if (a.layout?.textZone)
-      zoneCounts[a.layout.textZone] = (zoneCounts[a.layout.textZone] ?? 0) + 1;
-    if (a.layout?.marginRatio != null) marginRatios.push(a.layout.marginRatio);
+      zoneScores[a.layout.textZone] = (zoneScores[a.layout.textZone] ?? 0) + w;
+    if (a.layout?.marginRatio != null) {
+      marginSum += a.layout.marginRatio * w;
+      marginW += w;
+    }
     if (a.typography?.style)
-      typographyCounts[a.typography.style] = (typographyCounts[a.typography.style] ?? 0) + 1;
+      typographyScores[a.typography.style] =
+        (typographyScores[a.typography.style] ?? 0) + w;
     if (a.hookElement?.type)
-      hookElementCounts[a.hookElement.type] =
-        (hookElementCounts[a.hookElement.type] ?? 0) + 1;
+      hookElementScores[a.hookElement.type] =
+        (hookElementScores[a.hookElement.type] ?? 0) + w;
     if (a.brandElements?.logoPosition)
-      logoPosCounts[a.brandElements.logoPosition] =
-        (logoPosCounts[a.brandElements.logoPosition] ?? 0) + 1;
+      logoPosScores[a.brandElements.logoPosition] =
+        (logoPosScores[a.brandElements.logoPosition] ?? 0) + w;
     if (a.brandElements?.ctaStyle)
-      ctaStyleCounts[a.brandElements.ctaStyle] =
-        (ctaStyleCounts[a.brandElements.ctaStyle] ?? 0) + 1;
-    if (a.brandElements?.logoSizeRatio != null)
-      logoSizeRatios.push(a.brandElements.logoSizeRatio);
+      ctaStyleScores[a.brandElements.ctaStyle] =
+        (ctaStyleScores[a.brandElements.ctaStyle] ?? 0) + w;
+    if (a.brandElements?.logoSizeRatio != null) {
+      logoSizeSum += a.brandElements.logoSizeRatio * w;
+      logoSizeW += w;
+    }
   }
 
   const top = (m: Record<string, number>): string | null =>
     Object.entries(m).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
   return {
-    palette: Array.from(paletteSet).slice(0, 6),
-    topMoods: Object.entries(moodCounts)
+    palette: Array.from(paletteScores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([k]) => k),
+    topMoods: Object.entries(moodScores)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([k]) => k),
-    topLayoutZone: top(zoneCounts),
-    avgMarginRatio: marginRatios.length
-      ? marginRatios.reduce((a, b) => a + b, 0) / marginRatios.length
-      : null,
-    topTypography: top(typographyCounts),
-    topHookElement: top(hookElementCounts),
-    topLogoPosition: top(logoPosCounts),
-    topCtaStyle: top(ctaStyleCounts),
-    avgLogoSizeRatio: logoSizeRatios.length
-      ? logoSizeRatios.reduce((a, b) => a + b, 0) / logoSizeRatios.length
-      : null,
+    topLayoutZone: top(zoneScores),
+    avgMarginRatio: marginW > 0 ? marginSum / marginW : null,
+    topTypography: top(typographyScores),
+    topHookElement: top(hookElementScores),
+    topLogoPosition: top(logoPosScores),
+    topCtaStyle: top(ctaStyleScores),
+    avgLogoSizeRatio: logoSizeW > 0 ? logoSizeSum / logoSizeW : null,
   };
 }
 
