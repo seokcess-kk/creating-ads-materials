@@ -10,9 +10,40 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { TagInput } from "./TagInput";
+import { OptionChips, toggleInList } from "./OptionChips";
 import type { BrandAudience } from "@/lib/memory/types";
 
 const LANGUAGE_LEVELS = ["casual", "professional", "expert"];
+
+const PAIN_OPTIONS = [
+  "시간 부족",
+  "비용 부담",
+  "효과 미약",
+  "방법 혼란",
+  "결과 불확실",
+  "선택 장애",
+  "이해 어려움",
+  "지속성 부족",
+  "경쟁 심화",
+  "동기 저하",
+  "정보 과잉",
+  "신뢰 부족",
+];
+
+const DESIRE_OPTIONS = [
+  "빠른 결과",
+  "검증된 솔루션",
+  "명확한 방법",
+  "자기주도 학습",
+  "전문성 획득",
+  "인정받기",
+  "성장 기회",
+  "안정감",
+  "시간 절약",
+  "비용 절약",
+  "프리미엄 경험",
+  "도전과 변화",
+];
 
 interface AudienceManagerProps {
   brandId: string;
@@ -230,6 +261,14 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                   placeholder="타겟이 겪는 문제"
                   disabled={saving}
                 />
+                <OptionChips
+                  options={PAIN_OPTIONS}
+                  active={draft.pains}
+                  onToggle={(v) =>
+                    setDraft({ ...draft, pains: toggleInList(draft.pains, v) })
+                  }
+                  disabled={saving}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Desires (욕구·목표)</Label>
@@ -237,6 +276,14 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                   value={draft.desires}
                   onChange={(v) => setDraft({ ...draft, desires: v })}
                   placeholder="타겟이 원하는 결과"
+                  disabled={saving}
+                />
+                <OptionChips
+                  options={DESIRE_OPTIONS}
+                  active={draft.desires}
+                  onToggle={(v) =>
+                    setDraft({ ...draft, desires: toggleInList(draft.desires, v) })
+                  }
                   disabled={saving}
                 />
               </div>

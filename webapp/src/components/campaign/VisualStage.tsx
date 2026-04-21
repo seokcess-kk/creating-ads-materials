@@ -10,7 +10,11 @@ import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { VisualValidatorResult } from "@/lib/prompts/visual";
 import { RegenerateBox } from "./RegenerateBox";
 
-type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
+import {
+  aspectClass,
+  variantGridCols,
+  type ChannelAspectRatio,
+} from "./aspect-layout";
 
 interface VisualStageProps {
   campaignId: string;
@@ -18,19 +22,6 @@ interface VisualStageProps {
   aspectRatio?: ChannelAspectRatio;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
-}
-
-function aspectClass(ar: ChannelAspectRatio | undefined): string {
-  switch (ar) {
-    case "9:16":
-      return "aspect-[9/16]";
-    case "4:5":
-      return "aspect-[4/5]";
-    case "16:9":
-      return "aspect-[16/9]";
-    default:
-      return "aspect-square";
-  }
 }
 
 function scoreRow(label: string, value: number | undefined) {
@@ -191,7 +182,7 @@ export function VisualStage({
         <p className="text-sm text-muted-foreground mb-3">
           overall 점수 내림차순. Retouch/Compose/Ship은 M3에서 활성화됩니다.
         </p>
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className={`grid gap-3 ${variantGridCols(aspectRatio)}`}>
           {sorted.map((v) => {
             const c = v.content_json as {
               url: string;
@@ -211,9 +202,11 @@ export function VisualStage({
                     : "hover:border-primary/40 transition-colors"
                 }
               >
-                <div className={`${ac} overflow-hidden rounded-t-md border-b`}>
+                <div
+                  className={`${ac} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                >
                   <a href={c.url} target="_blank" rel="noreferrer">
-                    <img src={c.url} alt={c.focusLabel} className="w-full h-full object-cover" />
+                    <img src={c.url} alt={c.focusLabel} className="w-full h-full object-contain" />
                   </a>
                 </div>
                 <CardHeader className="pb-2">

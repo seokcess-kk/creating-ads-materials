@@ -8,6 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { LogoPosition } from "@/lib/canvas/compositor";
+import {
+  composeGridCols,
+  previewContainerMaxVh,
+  previewLayoutClass,
+} from "./aspect-layout";
 
 const LOGO_POSITION_LABELS: Array<{ id: LogoPosition; label: string }> = [
   { id: "top-left", label: "좌상" },
@@ -52,9 +57,10 @@ function presetToCoords(
   position: LogoPosition,
   widthRatio: number,
   logoAspect: number,
+  baseRatio: number,
   marginRatio: number = 0.04,
 ): { x: number; y: number } {
-  const logoHRatio = widthRatio * logoAspect;
+  const logoHRatio = widthRatio * baseRatio * logoAspect;
   let x: number;
   if (position.endsWith("center")) x = 0.5 - widthRatio / 2;
   else if (position.endsWith("right")) x = 1 - widthRatio - marginRatio;
@@ -74,12 +80,21 @@ function isCloseToPreset(
   y: number,
   width: number,
   logoAspect: number,
+  baseRatio: number,
 ): LogoPosition | null {
   for (const p of LOGO_POSITION_LABELS) {
-    const c = presetToCoords(p.id, width, logoAspect);
+    const c = presetToCoords(p.id, width, logoAspect, baseRatio);
     if (Math.abs(c.x - x) < 0.01 && Math.abs(c.y - y) < 0.01) return p.id;
   }
   return null;
+}
+
+function parseBaseRatio(baseAspectRatio: string | null): number {
+  if (!baseAspectRatio) return 1;
+  const parts = baseAspectRatio.split("/").map((s) => parseFloat(s.trim()));
+  const w = parts[0];
+  const h = parts[1];
+  return w && h ? w / h : 1;
 }
 
 export function ComposeStage({
@@ -110,6 +125,7 @@ export function ComposeStage({
   const [xRatio, setXRatio] = useState<number>(0);
   const [yRatio, setYRatio] = useState<number>(0);
   const [initialized, setInitialized] = useState(false);
+  const [baseAspectRatio, setBaseAspectRatio] = useState<string | null>(null);
 
   const previewRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<{
@@ -130,31 +146,65 @@ export function ComposeStage({
     img.onload = () => {
       const aspect = img.naturalHeight / img.naturalWidth || 1;
       setLogoAspect(aspect);
-      if (!initialized) {
-        const coords = presetToCoords(logoDefaults.position, logoDefaults.widthRatio, aspect);
+      if (!initialized && baseAspectRatio) {
+        const br = parseBaseRatio(baseAspectRatio);
+        const coords = presetToCoords(
+          logoDefaults.position,
+          logoDefaults.widthRatio,
+          aspect,
+          br,
+        );
         setXRatio(coords.x);
         setYRatio(coords.y);
         setInitialized(true);
       }
     };
     img.src = logoDefaults.logoUrl;
-  }, [logoDefaults.logoUrl, logoDefaults.position, logoDefaults.widthRatio, initialized]);
+  }, [
+    logoDefaults.logoUrl,
+    logoDefaults.position,
+    logoDefaults.widthRatio,
+    baseAspectRatio,
+    initialized,
+  ]);
+
+  useEffect(() => {
+    if (!baseImageUrl) {
+      setBaseAspectRatio(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setBaseAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+      }
+    };
+    img.src = baseImageUrl;
+  }, [baseImageUrl]);
+
+  const baseRatio = parseBaseRatio(baseAspectRatio);
 
   function snapToPreset(position: LogoPosition) {
-    const c = presetToCoords(position, widthRatio, logoAspect);
+    const c = presetToCoords(position, widthRatio, logoAspect, baseRatio);
     setXRatio(c.x);
     setYRatio(c.y);
   }
 
   function onSizeChange(newWidth: number) {
     setWidthRatio(newWidth);
-    const currentPreset = isCloseToPreset(xRatio, yRatio, widthRatio, logoAspect);
+    const currentPreset = isCloseToPreset(
+      xRatio,
+      yRatio,
+      widthRatio,
+      logoAspect,
+      baseRatio,
+    );
     if (currentPreset) {
-      const c = presetToCoords(currentPreset, newWidth, logoAspect);
+      const c = presetToCoords(currentPreset, newWidth, logoAspect, baseRatio);
       setXRatio(c.x);
       setYRatio(c.y);
     } else {
-      const logoHRatio = newWidth * logoAspect;
+      const logoHRatio = newWidth * baseRatio * logoAspect;
       setXRatio((prev) => clamp01(Math.min(prev, 1 - newWidth)));
       setYRatio((prev) => clamp01(Math.min(prev, 1 - logoHRatio)));
     }
@@ -176,7 +226,7 @@ export function ComposeStage({
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
     const d = draggingRef.current;
     if (!d) return;
-    const logoHRatio = widthRatio * logoAspect;
+    const logoHRatio = widthRatio * baseRatio * logoAspect;
     const dx = (e.clientX - d.startClientX) / d.rectW;
     const dy = (e.clientY - d.startClientY) / d.rectH;
     setXRatio(clamp01(Math.min(d.origX + dx, 1 - widthRatio)));
@@ -186,9 +236,20 @@ export function ComposeStage({
     draggingRef.current = null;
   }
 
-  const logoHRatio = widthRatio * logoAspect;
-  const currentPreset = isCloseToPreset(xRatio, yRatio, widthRatio, logoAspect);
-  const defaultCoords = presetToCoords(logoDefaults.position, logoDefaults.widthRatio, logoAspect);
+  const logoHRatio = widthRatio * baseRatio * logoAspect;
+  const currentPreset = isCloseToPreset(
+    xRatio,
+    yRatio,
+    widthRatio,
+    logoAspect,
+    baseRatio,
+  );
+  const defaultCoords = presetToCoords(
+    logoDefaults.position,
+    logoDefaults.widthRatio,
+    logoAspect,
+    baseRatio,
+  );
   const isDefault =
     Math.abs(xRatio - defaultCoords.x) < 0.005 &&
     Math.abs(yRatio - defaultCoords.y) < 0.005 &&
@@ -254,14 +315,30 @@ export function ComposeStage({
       </CardHeader>
       <CardContent className="space-y-4">
         {logoDefaults.hasLogo && baseImageUrl ? (
-          <div className="grid md:grid-cols-[1fr_280px] gap-4">
+          <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
             <div>
               <p className="text-xs text-muted-foreground mb-2">
                 미리보기 (드래그로 위치 이동 · 프리셋 클릭 · 슬라이더로 크기)
               </p>
               <div
                 ref={previewRef}
-                className={`relative w-full ${previewAspectClass} max-h-[70vh] mx-auto rounded-md border bg-muted/30 overflow-hidden select-none`}
+                style={(() => {
+                  const maxVh = previewContainerMaxVh(aspectRatio);
+                  if (!baseAspectRatio) return undefined;
+                  const parts = baseAspectRatio.split("/").map((s) => parseFloat(s.trim()));
+                  const w = parts[0];
+                  const h = parts[1];
+                  if (!w || !h) return { aspectRatio: baseAspectRatio };
+                  const ratio = w / h;
+                  return {
+                    aspectRatio: baseAspectRatio,
+                    maxHeight: maxVh,
+                    maxWidth: `calc(${maxVh} * ${ratio})`,
+                  };
+                })()}
+                className={`relative w-full ${
+                  baseAspectRatio ? "" : `${previewAspectClass}`
+                } mx-auto rounded-md border bg-muted/30 overflow-hidden select-none`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -352,7 +429,51 @@ export function ComposeStage({
               </div>
 
               <div className="text-[11px] text-muted-foreground">
-                좌표 x:{xRatio.toFixed(3)} · y:{yRatio.toFixed(3)}
+                좌표 x:{xRatio.toFixed(3)} · y:{yRatio.toFixed(3)} · 크기{" "}
+                {(widthRatio * 100).toFixed(1)}% × {(logoHRatio * 100).toFixed(1)}%
+              </div>
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="text-muted-foreground">미세 조정</span>
+                <button
+                  type="button"
+                  onClick={() => setXRatio((v) => clamp01(v - 0.005))}
+                  disabled={running}
+                  className="rounded border px-1.5 py-0.5 hover:bg-muted"
+                  aria-label="왼쪽"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setXRatio((v) => clamp01(Math.min(v + 0.005, 1 - widthRatio)))
+                  }
+                  disabled={running}
+                  className="rounded border px-1.5 py-0.5 hover:bg-muted"
+                  aria-label="오른쪽"
+                >
+                  →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setYRatio((v) => clamp01(v - 0.005))}
+                  disabled={running}
+                  className="rounded border px-1.5 py-0.5 hover:bg-muted"
+                  aria-label="위"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setYRatio((v) => clamp01(Math.min(v + 0.005, 1 - logoHRatio)))
+                  }
+                  disabled={running}
+                  className="rounded border px-1.5 py-0.5 hover:bg-muted"
+                  aria-label="아래"
+                >
+                  ↓
+                </button>
               </div>
 
               {!isDefault && (
@@ -365,6 +486,7 @@ export function ComposeStage({
                       logoDefaults.position,
                       logoDefaults.widthRatio,
                       logoAspect,
+                      baseRatio,
                     );
                     setXRatio(c.x);
                     setYRatio(c.y);
@@ -406,7 +528,7 @@ export function ComposeStage({
         </div>
 
         {variants.length > 0 && (
-          <div className="grid md:grid-cols-2 gap-3 pt-2">
+          <div className={`grid gap-3 pt-2 ${composeGridCols(aspectRatio)}`}>
             {[...variants].reverse().map((v) => {
               const c = v.content_json as unknown as ComposeContent;
               const isSelected = v.selected;
@@ -419,10 +541,12 @@ export function ComposeStage({
                       : "hover:border-primary/40 transition-colors"
                   }
                 >
-                  <div className={`${previewAspectClass} overflow-hidden rounded-t-md border-b`}>
+                  <div
+                    className={`${previewAspectClass} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                  >
                     <a href={c.url} target="_blank" rel="noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={c.url} alt="composed" className="w-full h-full object-cover" />
+                      <img src={c.url} alt="composed" className="w-full h-full object-contain" />
                     </a>
                   </div>
                   <CardContent className="pt-3 space-y-2">

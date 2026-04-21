@@ -20,12 +20,124 @@ const LOGO_VARIANTS: Array<{ id: LogoVariant; label: string; hint: string }> = [
 
 const COLOR_ROLES: BrandColorRole[] = ["primary", "secondary", "accent", "neutral", "semantic"];
 
+const TONE_OPTIONS = [
+  "신뢰감 있고 전문적인",
+  "친근하고 따뜻한",
+  "직설적이고 명확한",
+  "감성적이고 스토리 중심",
+  "실용적이고 간결한",
+  "혁신적이고 도전적인",
+  "고급스럽고 절제된",
+  "캐주얼하고 대화형",
+];
+
+const PERSONALITY_OPTIONS = [
+  "전문적",
+  "정확한",
+  "동기부여",
+  "공감적",
+  "혁신적",
+  "신뢰",
+  "친밀함",
+  "유머러스",
+  "진지한",
+  "격려하는",
+  "실용적",
+  "창의적",
+  "따뜻한",
+  "세련된",
+];
+
+const DO_OPTIONS = [
+  "구체적 수치 제시",
+  "증거·인증 병기",
+  "실사용자 후기",
+  "단계별 설명",
+  "개인 맞춤 제안",
+  "전문 용어 쉽게",
+  "즉시 사용 가능한 혜택",
+  "긴급성·한정성 표시",
+];
+
+const DONT_OPTIONS = [
+  "과장 표현",
+  "100% 확언",
+  "추상적 수사",
+  "격식 과잉",
+  "전문용어 남발",
+  "개인 속성 단정",
+  "before-after 비교",
+  "결과 확약",
+];
+
+const TABOO_DEFAULTS = [
+  "무조건",
+  "역대급",
+  "최고의",
+  "완벽한",
+  "100%",
+  "확실히",
+  "반드시",
+  "파격적",
+];
+
+function mergeUnique<T>(a: T[] | undefined, b: T[] | undefined): T[] {
+  const set = new Set<T>();
+  const out: T[] = [];
+  for (const x of [...(a ?? []), ...(b ?? [])]) {
+    if (!set.has(x)) {
+      set.add(x);
+      out.push(x);
+    }
+  }
+  return out;
+}
+
+function OptionChips({
+  options,
+  active,
+  onToggle,
+  disabled,
+}: {
+  options: readonly string[];
+  active: string[];
+  onToggle: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1 pt-1">
+      {options.map((o) => {
+        const on = active.includes(o);
+        return (
+          <button
+            key={o}
+            type="button"
+            onClick={() => onToggle(o)}
+            disabled={disabled}
+            className={`text-[11px] rounded-full border px-2 py-0.5 transition-colors ${
+              on ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+            }`}
+          >
+            {on ? "✓ " : "+ "}
+            {o}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 interface IdentityFormProps {
   brandId: string;
   initial: BrandIdentity | null;
+  brandWebsiteUrl: string | null;
 }
 
-export function IdentityForm({ brandId, initial }: IdentityFormProps) {
+export function IdentityForm({
+  brandId,
+  initial,
+  brandWebsiteUrl,
+}: IdentityFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
 
@@ -35,6 +147,66 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
     initial?.colors_json ?? [{ role: "primary", hex: "#1A2335" }],
   );
   const [logos, setLogos] = useState<BrandLogos>(initial?.logo_urls_json ?? {});
+
+  const [analyzing, setAnalyzing] = useState(false);
+  const [websiteOverride, setWebsiteOverride] = useState("");
+
+  function toggleList<T extends string>(arr: T[] | undefined, v: T): T[] {
+    const a = arr ?? [];
+    return a.includes(v) ? a.filter((x) => x !== v) : [...a, v];
+  }
+
+  async function runWebsiteAnalysis() {
+    const url = websiteOverride.trim() || brandWebsiteUrl || "";
+    if (!url) {
+      toast.error("브랜드의 홈페이지 URL을 먼저 등록해주세요");
+      return;
+    }
+    setAnalyzing(true);
+    toast.info("Claude가 홈페이지를 분석하는 중... (10~30초)");
+    try {
+      const res = await fetch(`/api/brands/${brandId}/analyze-website`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          website_url: websiteOverride.trim() || undefined,
+          save_brand_fields: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "분석 실패");
+
+      const a = data.analysis as {
+        voice?: BrandVoice;
+        taboos?: string[];
+        colors?: BrandColor[];
+      };
+      if (a.voice) {
+        setVoice((prev) => ({
+          tone: a.voice?.tone ?? prev.tone,
+          personality: mergeUnique(prev.personality, a.voice?.personality),
+          do: mergeUnique(prev.do, a.voice?.do),
+          dont: mergeUnique(prev.dont, a.voice?.dont),
+        }));
+      }
+      if (a.taboos) setTaboos((prev) => mergeUnique(prev, a.taboos));
+      if (a.colors) {
+        setColors((prev) => {
+          const existing = new Set(prev.map((c) => c.hex.toUpperCase()));
+          const fresh = (a.colors ?? []).filter(
+            (c) => !existing.has(c.hex.toUpperCase()),
+          );
+          return [...prev, ...fresh];
+        });
+      }
+      toast.success("자동 분석 완료 — 검토 후 저장 버튼을 눌러주세요");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
 
   function updateColor(index: number, patch: Partial<BrandColor>) {
     setColors((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
@@ -69,6 +241,34 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
 
   return (
     <div className="space-y-6">
+      <Card className="bg-muted/30 border-dashed">
+        <CardHeader>
+          <CardTitle className="text-base">홈페이지 자동 분석</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            홈페이지 URL을 입력하면 Claude가 본문을 읽고 Voice·Taboos·Colors를 추출해
+            아래 필드에 자동 반영합니다. 기존 값은 유지되고 <strong>새 항목만 추가</strong>됩니다.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={websiteOverride}
+              onChange={(e) => setWebsiteOverride(e.target.value)}
+              placeholder={brandWebsiteUrl ?? "https://example.com"}
+              disabled={analyzing}
+            />
+            <Button onClick={runWebsiteAnalysis} disabled={analyzing}>
+              {analyzing ? "분석 중..." : "자동 분석"}
+            </Button>
+          </div>
+          {brandWebsiteUrl && !websiteOverride && (
+            <p className="text-[11px] text-muted-foreground">
+              현재 브랜드 URL 사용: {brandWebsiteUrl}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">브랜드 보이스</CardTitle>
@@ -82,6 +282,14 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
               placeholder="예: 신뢰감 있고 친근한"
               disabled={saving}
             />
+            <OptionChips
+              options={TONE_OPTIONS}
+              active={voice.tone ? [voice.tone] : []}
+              onToggle={(t) =>
+                setVoice({ ...voice, tone: voice.tone === t ? "" : t })
+              }
+              disabled={saving}
+            />
           </div>
           <div className="space-y-2">
             <Label>성격 (personality)</Label>
@@ -89,6 +297,17 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
               value={voice.personality ?? []}
               onChange={(v) => setVoice({ ...voice, personality: v })}
               placeholder="예: 전문적, 따뜻함, 혁신적"
+              disabled={saving}
+            />
+            <OptionChips
+              options={PERSONALITY_OPTIONS}
+              active={voice.personality ?? []}
+              onToggle={(v) =>
+                setVoice({
+                  ...voice,
+                  personality: toggleList(voice.personality, v),
+                })
+              }
               disabled={saving}
             />
           </div>
@@ -101,6 +320,14 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
                 placeholder="권장 표현·태도"
                 disabled={saving}
               />
+              <OptionChips
+                options={DO_OPTIONS}
+                active={voice.do ?? []}
+                onToggle={(v) =>
+                  setVoice({ ...voice, do: toggleList(voice.do, v) })
+                }
+                disabled={saving}
+              />
             </div>
             <div className="space-y-2">
               <Label>Don&apos;t (지양)</Label>
@@ -108,6 +335,14 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
                 value={voice.dont ?? []}
                 onChange={(v) => setVoice({ ...voice, dont: v })}
                 placeholder="회피할 표현·태도"
+                disabled={saving}
+              />
+              <OptionChips
+                options={DONT_OPTIONS}
+                active={voice.dont ?? []}
+                onToggle={(v) =>
+                  setVoice({ ...voice, dont: toggleList(voice.dont, v) })
+                }
                 disabled={saving}
               />
             </div>
@@ -127,6 +362,12 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
             value={taboos}
             onChange={setTaboos}
             placeholder="예: 무조건, 최고의, 역대급"
+            disabled={saving}
+          />
+          <OptionChips
+            options={TABOO_DEFAULTS}
+            active={taboos}
+            onToggle={(v) => setTaboos(toggleList(taboos, v))}
             disabled={saving}
           />
         </CardContent>

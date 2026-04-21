@@ -8,8 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { CreativeRun, CreativeStageRow } from "@/lib/campaigns/types";
-
-type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
+import {
+  aspectClass,
+  maxHeightClass,
+  previewLayoutClass,
+  type ChannelAspectRatio,
+} from "./aspect-layout";
 
 interface ShipCardProps {
   campaignId: string;
@@ -20,19 +24,6 @@ interface ShipCardProps {
   aspectRatio?: ChannelAspectRatio;
   initialRun: CreativeRun | null;
   initialStage: CreativeStageRow | null;
-}
-
-function aspectClass(ar: ChannelAspectRatio | undefined): string {
-  switch (ar) {
-    case "9:16":
-      return "aspect-[9/16]";
-    case "4:5":
-      return "aspect-[4/5]";
-    case "16:9":
-      return "aspect-[16/9]";
-    default:
-      return "aspect-square";
-  }
 }
 
 export function ShipCard({
@@ -137,7 +128,7 @@ export function ShipCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">최종 소재</p>
             {composeUrl ? (
@@ -145,11 +136,11 @@ export function ShipCard({
                 <img
                   src={composeUrl}
                   alt="final"
-                  className={`w-full ${ac} rounded-md border object-cover max-h-[70vh]`}
+                  className={`w-full ${ac} rounded-md border object-contain bg-muted/20 ${maxHeightClass(aspectRatio)} mx-auto`}
                 />
               </a>
             ) : (
-              <div className={`w-full ${ac} rounded-md border max-h-[70vh]`} />
+              <div className={`w-full ${ac} rounded-md border ${maxHeightClass(aspectRatio)} mx-auto`} />
             )}
           </div>
 

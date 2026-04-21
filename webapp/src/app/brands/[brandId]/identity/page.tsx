@@ -28,7 +28,11 @@ export default async function IdentityPage({
           <Button variant="outline">← 대시보드</Button>
         </Link>
       </div>
-      <IdentityForm brandId={brandId} initial={identity} />
+      <IdentityForm
+        brandId={brandId}
+        initial={identity}
+        brandWebsiteUrl={brand.website_url}
+      />
     </div>
   );
 }

@@ -10,12 +10,47 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { TagInput } from "./TagInput";
+import { OptionChips, toggleInList } from "./OptionChips";
 import type { BrandOffer } from "@/lib/memory/types";
 
 interface OfferManagerProps {
   brandId: string;
   initial: BrandOffer[];
 }
+
+const BENEFIT_OPTIONS = [
+  "무료 체험",
+  "1:1 상담·피드백",
+  "AI 맞춤 기능",
+  "할인 혜택",
+  "멤버십 특전",
+  "24시간 지원",
+  "전문가 강의",
+  "모바일 앱",
+  "오프라인 참여",
+  "환불 보장",
+  "무료 배송",
+  "즉시 이용",
+];
+
+const URGENCY_TEMPLATES = [
+  "이번 주 한정",
+  "선착순 100명",
+  "한정 수량",
+  "오픈 이벤트",
+  "월말까지 한정",
+  "당일 발송",
+];
+
+const EVIDENCE_OPTIONS = [
+  "연속 1위",
+  "누적 이용자 N만명",
+  "만족도 95%",
+  "공식 인증",
+  "수상 경력",
+  "언론 보도",
+  "실사용 후기 N건",
+];
 
 const EMPTY: Omit<BrandOffer, "id" | "brand_id" | "created_at" | "updated_at"> = {
   title: "",
@@ -155,6 +190,14 @@ export function OfferManager({ brandId, initial }: OfferManagerProps) {
                 placeholder="구체적 혜택 항목"
                 disabled={saving}
               />
+              <OptionChips
+                options={BENEFIT_OPTIONS}
+                active={draft.benefits}
+                onToggle={(v) =>
+                  setDraft({ ...draft, benefits: toggleInList(draft.benefits, v) })
+                }
+                disabled={saving}
+              />
             </div>
             <div className="space-y-2">
               <Label>긴급성 (urgency)</Label>
@@ -165,6 +208,19 @@ export function OfferManager({ brandId, initial }: OfferManagerProps) {
                 rows={2}
                 disabled={saving}
               />
+              <div className="flex flex-wrap gap-1 pt-1">
+                {URGENCY_TEMPLATES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setDraft({ ...draft, urgency: t })}
+                    disabled={saving}
+                    className="text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted transition-colors"
+                  >
+                    + {t}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-2">
               <Label>증거 (evidence)</Label>
@@ -172,6 +228,14 @@ export function OfferManager({ brandId, initial }: OfferManagerProps) {
                 value={draft.evidence}
                 onChange={(v) => setDraft({ ...draft, evidence: v })}
                 placeholder="수치/인증/수상 등"
+                disabled={saving}
+              />
+              <OptionChips
+                options={EVIDENCE_OPTIONS}
+                active={draft.evidence}
+                onToggle={(v) =>
+                  setDraft({ ...draft, evidence: toggleInList(draft.evidence, v) })
+                }
                 disabled={saving}
               />
             </div>

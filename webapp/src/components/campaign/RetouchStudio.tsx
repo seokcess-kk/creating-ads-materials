@@ -8,8 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
-
-type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
+import {
+  aspectClass,
+  maxHeightClass,
+  retouchTurnCols,
+  previewLayoutClass,
+  type ChannelAspectRatio,
+} from "./aspect-layout";
 
 interface RetouchStudioProps {
   campaignId: string;
@@ -27,19 +32,6 @@ interface TurnContent {
   instruction: string;
   baseVariantId: string;
   baseLabel: string;
-}
-
-function aspectClass(ar: ChannelAspectRatio | undefined): string {
-  switch (ar) {
-    case "9:16":
-      return "aspect-[9/16]";
-    case "4:5":
-      return "aspect-[4/5]";
-    case "16:9":
-      return "aspect-[16/9]";
-    default:
-      return "aspect-square";
-  }
 }
 
 export function RetouchStudio({
@@ -130,7 +122,7 @@ export function RetouchStudio({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid md:grid-cols-2 gap-4">
+        <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
               현재 base {baseVariantId ? "(턴 이미지)" : "(원본 Visual)"}
@@ -139,10 +131,10 @@ export function RetouchStudio({
               <img
                 src={currentBaseUrl}
                 alt="base"
-                className={`w-full ${ac} rounded-md border object-cover max-h-[70vh]`}
+                className={`w-full ${ac} rounded-md border object-contain bg-muted/20 ${maxHeightClass(aspectRatio)} mx-auto`}
               />
             ) : (
-              <div className={`w-full ${ac} rounded-md border flex items-center justify-center text-xs text-muted-foreground max-h-[70vh]`}>
+              <div className={`w-full ${ac} rounded-md border flex items-center justify-center text-xs text-muted-foreground ${maxHeightClass(aspectRatio)} mx-auto`}>
                 base 이미지 없음
               </div>
             )}
@@ -205,7 +197,7 @@ export function RetouchStudio({
         {variants.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold mb-2">편집 이력 ({variants.length} turns)</h3>
-            <div className="grid md:grid-cols-3 gap-3">
+            <div className={`grid gap-3 ${retouchTurnCols(aspectRatio)}`}>
               {variants.map((v, i) => {
                 const c = v.content_json as unknown as TurnContent;
                 const isSelected = v.selected;
@@ -221,9 +213,11 @@ export function RetouchStudio({
                           : "hover:border-primary/30 transition-colors"
                     }
                   >
-                    <div className={`${ac} overflow-hidden rounded-t-md border-b`}>
+                    <div
+                      className={`${ac} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                    >
                       <a href={c.url} target="_blank" rel="noreferrer">
-                        <img src={c.url} alt={`turn ${i + 1}`} className="w-full h-full object-cover" />
+                        <img src={c.url} alt={`turn ${i + 1}`} className="w-full h-full object-contain" />
                       </a>
                     </div>
                     <CardContent className="pt-3 space-y-2">
