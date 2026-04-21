@@ -309,7 +309,7 @@ export function StrategyGate({
                     variant={isSelected ? "outline" : "default"}
                     className="w-full mt-2"
                     onClick={() => select(v.id)}
-                    disabled={selecting !== null || (selectedId !== null && !isSelected)}
+                    disabled={selecting !== null || isSelected}
                   >
                     {selecting === v.id
                       ? "선택 중..."

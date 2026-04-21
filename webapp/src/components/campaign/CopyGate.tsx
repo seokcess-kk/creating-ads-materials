@@ -343,7 +343,7 @@ export function CopyGate({
                     variant={isSelected ? "outline" : "default"}
                     className="w-full"
                     onClick={() => select(v.id)}
-                    disabled={selecting !== null || (selectedId !== null && !isSelected)}
+                    disabled={selecting !== null || isSelected}
                   >
                     {selecting === v.id
                       ? "선택 중..."
