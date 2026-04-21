@@ -4,9 +4,10 @@ import type { BrandMemory } from "@/lib/memory/types";
 import type { Playbook } from "@/lib/playbook/types";
 import type { StrategyAlternative } from "./strategy";
 import type { CopyVariant } from "./copy";
+import type { ChannelConfig } from "@/lib/channels";
 import { buildVisualPatternDigestEn } from "@/lib/vision/digest";
 
-export const VISUAL_PROMPT_VERSION = "visual@2.0.0";
+export const VISUAL_PROMPT_VERSION = "visual@3.1.0";
 export const VISUAL_VALIDATOR_TOOL = "record_visual_validator";
 
 export type VisualFocus = "product_focus" | "number_focus" | "persona_focus";
@@ -48,11 +49,32 @@ function colorHint(memory: BrandMemory): string {
 function focusInstruction(spec: VisualVariantSpec, strategy: StrategyAlternative): string {
   switch (spec.focus) {
     case "product_focus":
-      return `Primary focal: stylized product/UI screenshot or object representing the strategy "${strategy.angleName}". Large centered composition with negative space below for CTA overlay.`;
+      return `Primary focal: stylized product/UI screenshot or object representing the strategy "${strategy.angleName}".`;
     case "number_focus":
-      return `Primary focal: a bold oversized number or percentage pulled from the strategy/offer (e.g. "40%" or "99,000"). Typography-driven design. Supportive icon optional.`;
+      return `Primary focal: a bold oversized number or percentage pulled from the strategy/offer (e.g. "40%" or "99,000"). Typography-driven design.`;
     case "persona_focus":
-      return `Primary focal: lifestyle scene matching the target persona's context. NO individual facial close-ups. Avoid explicit identity/demographic labeling per Meta policy. Soft story composition.`;
+      return `Primary focal: lifestyle scene matching the target persona's context. NO individual facial close-ups. Avoid explicit identity/demographic labeling per Meta policy.`;
+  }
+}
+
+function compositionGuide(channel: ChannelConfig): string {
+  switch (channel.aspectRatio) {
+    case "1:1":
+      return `- Full-bleed 1:1 square, balanced top/center/bottom composition
+- Headline zone top-center, CTA near bottom-center
+- Leave natural breathing space around corners; do not fill every edge`;
+    case "4:5":
+      return `- Vertical 4:5, three-band layout (top headline / mid focal / bottom CTA)
+- Generous vertical spacing; corners should not be visually busy`;
+    case "9:16":
+      return `- Full-screen vertical 9:16 (story/reel format)
+- Upper 40% = headline + key number; middle 40% = focal subject; lower 20% = CTA with breathing room
+- Avoid placing critical elements within the bottom 10% (UI overlap risk)
+- Corners should remain visually quiet — no decorative elements near corners`;
+    case "16:9":
+      return `- Landscape 16:9, focus left-to-right reading
+- Headline on left half, focal/CTA on right
+- Keep corners visually quiet`;
   }
 }
 
@@ -61,6 +83,8 @@ export interface VisualPromptContext {
   strategy: StrategyAlternative;
   selectedCopy: CopyVariant;
   playbook: Playbook;
+  channel: ChannelConfig;
+  regenInstruction?: string;
 }
 
 export function buildGeminiPrompt(
@@ -72,12 +96,29 @@ export function buildGeminiPrompt(
   const colors = colorHint(ctx.memory);
   const focus = focusInstruction(spec, ctx.strategy);
   const visualDirection = ctx.strategy.visualDirection;
-  const playbookFocus = ctx.playbook.visualGuide.focus.join(", ");
   const playbookAvoid = ctx.playbook.visualGuide.avoid.join(", ");
-
   const bpPatterns = buildVisualPatternDigestEn(ctx.memory);
+  const composition = compositionGuide(ctx.channel);
 
-  return `Design a 1:1 (1080x1080) premium Instagram Feed paid ad background for a Korean ${category} brand "${brand}".
+  const headline = ctx.selectedCopy.headline;
+  const sub = ctx.selectedCopy.subCopy;
+  const cta = ctx.selectedCopy.cta;
+
+  return `Design a COMPLETE ${ctx.channel.aspectRatio} (${ctx.channel.width}x${ctx.channel.height}) premium ${ctx.channel.platform} paid ad for a Korean ${category} brand "${brand}". This is the final, ship-ready creative — render everything including typography.
+
+# CRITICAL — NO LOGO / NO BRAND MARK
+Absolutely do NOT draw, render, or imply any logo, brand mark, wordmark, icon, watermark, badge, emblem, or any brand-identifying graphic anywhere in the image — not in corners, not anywhere. The brand logo is overlaid later in a separate compose step. If the variant focus involves a product screenshot, the UI inside it is fine but remove any logo on the UI.
+
+# Channel
+- Platform: ${ctx.channel.platform} · ${ctx.channel.label}
+- Dimensions: ${ctx.channel.width}x${ctx.channel.height} (${ctx.channel.aspectRatio})
+
+# Text to render IN THE IMAGE (Korean, exact spelling, typography rendered as part of the image)
+- Headline: "${headline}"
+- Sub copy: "${sub}"
+- CTA button text: "${cta}"
+
+Render these as real typography (not placeholder boxes). Use premium Korean geometric sans-serif (Pretendard style). Ensure every character is legible, crisp, and properly kerned.
 
 # Strategy angle
 - ${ctx.strategy.angleName} (${ctx.strategy.hookType} hook, ${ctx.strategy.frameworkId})
@@ -89,25 +130,29 @@ ${spec.label} — ${focus}
 # Brand palette
 ${colors}
 
-# Past BP visual patterns (respect where aligned, vary subtly to avoid copy)
+# Past BP visual patterns (respect where aligned, vary subtly)
 ${bpPatterns}
 
-# Composition rules
-- Full-bleed 1:1, high contrast, feed-stopping composition
-- Reserve top-center (~40% height) for headline text overlay
-- Reserve bottom-right (~15% area) for CTA button
-- Keep center zone clear of fine detail
-- Playbook focus: ${playbookFocus}
+# Channel composition rules
+${composition}
 
 # Avoid
-- Heavy pre-rendered text (headline/CTA will be overlaid separately)
 - Before/after comparison (Meta policy)
 - Individual facial close-ups with demographic labeling
 - Generic stock photo feel, cluttered layout
+- AI-uncanny distortions in Korean characters
+- Drawing any logo, brand mark, wordmark, icon, watermark, badge, or emblem — anywhere
 - ${playbookAvoid}
 
 # Style
-Modern, premium, performance-advertising aesthetic, Korean market, 3-color palette, crisp edges, photographic or clean illustrative, NOT AI-uncanny.`;
+Modern, premium, performance-advertising aesthetic for the Korean market. Crisp typography, strong hierarchy, feed-stopping contrast.${
+    ctx.regenInstruction
+      ? `
+
+# User re-generation direction
+${ctx.regenInstruction}`
+      : ""
+  }`;
 }
 
 export const VisualValidatorSchema = z.object({
@@ -135,7 +180,7 @@ export const visualValidatorTool: Tool = {
       textReady: {
         type: "number",
         description:
-          "1~5. Canvas에서 헤드라인/서브/CTA 오버레이할 공간(상단·하단)이 충분한가",
+          "1~5. 헤드라인·CTA가 이미지 안에서 이미 잘 렌더되어 있는가 (loader/타이포 품질)",
       },
       brandConsistency: {
         type: "number",
@@ -166,7 +211,7 @@ export function buildValidatorSystem(): string {
 
 평가 기준:
 - hookStrength(1~5): 첫 3초 스크롤 멈춤. 수치·인물·제품 시선 유도·색 대비가 강할수록 높음
-- textReady(1~5): Canvas 오버레이할 공간이 상단(헤드라인)·하단(CTA)에 충분한가. 중앙이 복잡하면 낮음
+- textReady(1~5): 이미지 내에 이미 렌더된 한국어 타이포(헤드라인/서브/CTA)의 가독성·정확성
 - brandConsistency(1~5): 주어진 브랜드 컬러·톤과 일치 정도
 - policyClear(1~5): Meta/Google 광고 정책 준수 (before-after, 개인 속성 단정, 부적절 콘텐츠 없음)
 - overall: 4축 산술 평균
@@ -181,7 +226,7 @@ export function buildValidatorMessages(
 ): MessageParam[] {
   const brand = ctx.memory.brand.name;
   const palette = colorHint(ctx.memory);
-  const context = `이 이미지는 브랜드 "${brand}"의 IG Feed 1:1 BOFU 광고 후보(${spec.label})입니다.
+  const context = `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} BOFU 광고 후보(${spec.label})입니다.
 전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
 예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
 브랜드 컬러: ${palette}

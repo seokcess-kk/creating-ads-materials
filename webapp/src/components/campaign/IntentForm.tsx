@@ -11,6 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { BrandAudience, BrandOffer } from "@/lib/memory/types";
+import { listActiveChannels } from "@/lib/channels";
+
+const CHANNELS = listActiveChannels();
 
 interface IntentFormProps {
   brandId: string;
@@ -28,8 +31,11 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
   const [audienceId, setAudienceId] = useState<string | null>(
     audiences.find((a) => a.is_default)?.id ?? audiences[0]?.id ?? null,
   );
+  const [channelId, setChannelId] = useState<string>("ig_feed_square");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const selectedChannel = CHANNELS.find((c) => c.id === channelId) ?? CHANNELS[0];
 
   const canSubmit = offers.length > 0 && audiences.length > 0 && name.trim().length > 0;
 
@@ -45,7 +51,7 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
           goal: "BOFU",
           offer_id: offerId,
           audience_id: audienceId,
-          channel: "ig_feed_square",
+          channel: channelId,
           constraints: note.trim() ? { note: note.trim() } : {},
         }),
       });
@@ -73,12 +79,50 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
           </p>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">Goal: BOFU (전환)</Badge>
-            <Badge variant="secondary">Channel: Instagram Feed 1:1</Badge>
-            <Badge variant="outline">M2 고정값</Badge>
+            <Badge variant="outline">{selectedChannel.label}</Badge>
+            <Badge variant="outline">{selectedChannel.size}</Badge>
           </div>
-          <p className="text-xs text-muted-foreground">
-            다른 Goal·Channel은 M2 검증 후 확장됩니다.
-          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">채널 *</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-3 items-start">
+            <div className="flex-1">
+              <select
+                value={channelId}
+                onChange={(e) => setChannelId(e.target.value)}
+                disabled={saving}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {CHANNELS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label} · {c.size}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                {selectedChannel.description}
+              </p>
+            </div>
+            <div
+              className={`shrink-0 border rounded-md bg-muted/40 ${
+                selectedChannel.aspectRatio === "9:16"
+                  ? "w-10 h-[71px]"
+                  : selectedChannel.aspectRatio === "4:5"
+                    ? "w-14 h-[70px]"
+                    : selectedChannel.aspectRatio === "16:9"
+                      ? "w-20 h-[45px]"
+                      : "w-16 h-16"
+              } flex items-center justify-center text-[10px] text-muted-foreground`}
+              title={`${selectedChannel.aspectRatio} · ${selectedChannel.size}`}
+            >
+              {selectedChannel.aspectRatio}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -10,9 +10,10 @@ import {
   upsertStage,
 } from "@/lib/campaigns";
 import { loadBrandMemory } from "@/lib/memory";
-import { generateImage } from "@/lib/engines/gemini-image";
+import { generateImage, type AspectRatio } from "@/lib/engines/gemini-image";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { getPlaybook } from "@/lib/playbook";
+import { getChannel } from "@/lib/channels";
 import {
   VISUAL_PROMPT_VERSION,
   VISUAL_VARIANT_SPECS,
@@ -23,6 +24,11 @@ import { validateVisualImage } from "@/lib/validators/visual-hook";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
 import type { CopyVariant } from "@/lib/prompts/copy";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
+import { z } from "zod";
+
+const Body = z
+  .object({ instruction: z.string().max(500).optional() })
+  .optional();
 
 export const maxDuration = 240;
 
@@ -43,13 +49,18 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
     const { campaignId } = await params;
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
+
+    let body: { instruction?: string } = {};
+    try {
+      body = Body.parse(await request.json()) ?? {};
+    } catch {}
 
     const run = await getLatestRun(campaignId);
     if (!run) throw new ApiError(400, "실행이 없습니다");
@@ -71,22 +82,33 @@ export async function POST(
 
     try {
       const playbook = getPlaybook(campaign.channel, campaign.goal);
+      const channel = getChannel(campaign.channel);
+      if (!channel) throw new Error(`알 수 없는 채널: ${campaign.channel}`);
       const promptCtx: VisualPromptContext = {
         memory,
         strategy: selectedStrategy.content_json as unknown as StrategyAlternative,
         selectedCopy: selectedCopy.content_json as unknown as CopyVariant,
         playbook,
+        channel,
+        regenInstruction: body.instruction,
       };
+
+      const existingVariants = await listVariants(stage.id);
+      const batchIndex = Math.floor(existingVariants.length / 3) + 1;
 
       const results = await Promise.allSettled(
         VISUAL_VARIANT_SPECS.map(async (spec) => {
           const prompt = buildGeminiPrompt(promptCtx, spec);
           const image = await generateImage({
             prompt,
-            aspectRatio: "1:1",
+            aspectRatio: channel.aspectRatio as AspectRatio,
             imageSize: "2K",
           });
-          const { url, path } = await uploadGeneratedImage(campaignId, spec.id, image);
+          const { url, path } = await uploadGeneratedImage(
+            campaignId,
+            `${spec.id}_b${batchIndex}`,
+            image,
+          );
 
           let validator: Record<string, unknown> = {};
           try {
@@ -99,13 +121,15 @@ export async function POST(
           }
 
           return {
-            label: spec.id,
+            label: `${spec.id}_b${batchIndex}`,
             content: {
               url,
               path,
               focus: spec.focus,
               focusLabel: spec.label,
               prompt,
+              batchIndex,
+              regenInstruction: body.instruction ?? null,
             } as Record<string, unknown>,
             scores: validator,
             promptVersion: VISUAL_PROMPT_VERSION,

@@ -27,7 +27,7 @@ ${ctx.instruction}
 - If the instruction does NOT mention text, keep existing copy text exactly unchanged
 - ${strictness}
 - Brand palette to maintain: ${colors || "(unspecified)"}
-- Do NOT draw a logo in the top-left logo area (a logo will be overlaid later in compose)
+- Do NOT add, draw, or enhance any logo, brand mark, icon, watermark, badge, or emblem anywhere (logos are overlaid in the compose step)
 - Avoid before/after comparison, individual facial close-ups with demographic labeling
 - Keep premium performance-ad aesthetic`;
 }

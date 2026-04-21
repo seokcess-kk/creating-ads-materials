@@ -13,7 +13,8 @@ import {
 } from "@/lib/campaigns";
 import type { CreativeVariant } from "@/lib/campaigns/types";
 import { loadBrandMemory } from "@/lib/memory";
-import { editImage } from "@/lib/engines/gemini-image";
+import { editImage, type AspectRatio } from "@/lib/engines/gemini-image";
+import { getChannel } from "@/lib/channels";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
 import { RETOUCH_PROMPT_VERSION, buildRetouchPrompt } from "@/lib/prompts/retouch";
@@ -94,6 +95,8 @@ export async function POST(
     });
 
     try {
+      const channel = getChannel(campaign.channel);
+      const aspectRatio = (channel?.aspectRatio ?? "1:1") as AspectRatio;
       const base = await fetchAsBase64(baseUrl);
       const edited = await editImage({
         prompt: buildRetouchPrompt({
@@ -102,7 +105,7 @@ export async function POST(
           keepCompositionStrict: input.keepCompositionStrict,
         }),
         baseImage: base,
-        aspectRatio: "1:1",
+        aspectRatio,
         imageSize: "2K",
       });
 

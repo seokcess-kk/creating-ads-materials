@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeRun, CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
+import { RegenerateBox } from "./RegenerateBox";
 
 interface StrategyGateProps {
   campaignId: string;
@@ -33,19 +34,27 @@ export function StrategyGate({
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
 
-  async function generate() {
+  async function generate(instruction?: string) {
     setGenerating(true);
-    toast.info("Claude Opus가 3대안 설계 중 (30~60초)");
+    toast.info(
+      instruction
+        ? "방향성 반영 재생성 (30~60초)"
+        : "Claude Opus가 3대안 설계 중 (30~60초)",
+    );
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/strategy`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(instruction ? { instruction } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
       setRun(data.run);
       setStage(data.stage);
-      setVariants(data.variants);
-      toast.success("3대안 생성 완료");
+      setVariants((prev) =>
+        instruction ? [...prev, ...data.variants] : data.variants,
+      );
+      toast.success(instruction ? "추가 대안 생성 완료" : "3대안 생성 완료");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -88,7 +97,7 @@ export function StrategyGate({
           <p className="text-sm text-muted-foreground">
             Brand Memory + 플레이북 + 프레임워크 기반 3대안 설계
           </p>
-          <Button onClick={generate} disabled={generating}>
+          <Button onClick={() => generate()} disabled={generating}>
             {generating ? "생성 중..." : "Strategy 생성"}
           </Button>
         </CardContent>
@@ -104,7 +113,7 @@ export function StrategyGate({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-destructive">{stage.error}</p>
-          <Button onClick={generate} disabled={generating}>
+          <Button onClick={() => generate()} disabled={generating}>
             {generating ? "재생성 중..." : "다시 시도"}
           </Button>
         </CardContent>
@@ -224,6 +233,20 @@ export function StrategyGate({
               </Card>
             );
           })}
+        </div>
+        <div className="pt-2">
+          <RegenerateBox
+            label="다른 방향으로 3대안 추가"
+            placeholder="예: 더 공격적으로 / 선호도 무시하고 새 조합 / 감성 중심으로"
+            suggestions={[
+              "더 공격적·도전적으로",
+              "숫자·수치를 더 강조",
+              "감성·스토리 중심으로",
+              "선호도 무시하고 새 조합",
+            ]}
+            running={generating}
+            onRegenerate={generate}
+          />
         </div>
       </CardContent>
     </Card>

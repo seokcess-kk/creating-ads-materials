@@ -19,12 +19,18 @@ import {
   COPY_PROMPT_VERSION,
   COPY_TOOL_NAME,
   CopyOutputSchema,
+  type CopyVariant,
   buildCopyMessages,
   buildCopySystem,
   copyTool,
 } from "@/lib/prompts/copy";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
+import { z } from "zod";
+
+const Body = z
+  .object({ instruction: z.string().max(500).optional() })
+  .optional();
 
 export const maxDuration = 120;
 
@@ -45,13 +51,18 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
     const { campaignId } = await params;
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
+
+    let body: { instruction?: string } = {};
+    try {
+      body = Body.parse(await request.json()) ?? {};
+    } catch {}
 
     const run = await getLatestRun(campaignId);
     if (!run) throw new ApiError(400, "실행이 없습니다. Strategy부터 시작하세요.");
@@ -65,6 +76,11 @@ export async function POST(
     const stage = await upsertStage(run.id, "copy", {
       strategy_variant_id: selectedStrategy.id,
     });
+
+    const existingVariants = await listVariants(stage.id);
+    const previousHeadlines = existingVariants
+      .map((v) => (v.content_json as unknown as CopyVariant).headline)
+      .filter((h): h is string => Boolean(h));
 
     try {
       const strategyContent = selectedStrategy.content_json as unknown as StrategyAlternative;
@@ -88,6 +104,8 @@ export async function POST(
           playbook,
           framework,
           funnel,
+          regenInstruction: body.instruction,
+          previousHeadlines,
         }),
         tools: [copyTool],
         toolChoice: { type: "tool", name: COPY_TOOL_NAME },
@@ -105,13 +123,19 @@ export async function POST(
         parsed.data.critiques.map((c) => [c.variantId, c]),
       );
 
+      const batchIndex =
+        Math.floor(existingVariants.length / 5) + 1;
       const variants = await createVariants(
         stage.id,
         parsed.data.variants.map((v) => {
           const critique = critiqueMap.get(v.id);
           return {
-            label: v.id,
-            content: v as unknown as Record<string, unknown>,
+            label: `${v.id}_b${batchIndex}`,
+            content: {
+              ...(v as unknown as Record<string, unknown>),
+              batchIndex,
+              regenInstruction: body.instruction ?? null,
+            },
             scores: critique
               ? {
                   ...critique.scores,

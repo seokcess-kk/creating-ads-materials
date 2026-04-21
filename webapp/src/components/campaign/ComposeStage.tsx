@@ -31,6 +31,7 @@ interface ComposeStageProps {
   previousReady: boolean;
   baseImageUrl: string | null;
   logoDefaults: LogoDefaultsProp;
+  aspectRatio?: "1:1" | "4:5" | "9:16" | "16:9";
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
 }
@@ -86,9 +87,18 @@ export function ComposeStage({
   previousReady,
   baseImageUrl,
   logoDefaults,
+  aspectRatio = "1:1",
   initialStage,
   initialVariants,
 }: ComposeStageProps) {
+  const previewAspectClass =
+    aspectRatio === "9:16"
+      ? "aspect-[9/16]"
+      : aspectRatio === "4:5"
+        ? "aspect-[4/5]"
+        : aspectRatio === "16:9"
+          ? "aspect-[16/9]"
+          : "aspect-square";
   const router = useRouter();
   const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
@@ -251,7 +261,7 @@ export function ComposeStage({
               </p>
               <div
                 ref={previewRef}
-                className="relative w-full aspect-square rounded-md border bg-muted/30 overflow-hidden select-none"
+                className={`relative w-full ${previewAspectClass} max-h-[70vh] mx-auto rounded-md border bg-muted/30 overflow-hidden select-none`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -409,7 +419,7 @@ export function ComposeStage({
                       : "hover:border-primary/40 transition-colors"
                   }
                 >
-                  <div className="aspect-square overflow-hidden rounded-t-md border-b">
+                  <div className={`${previewAspectClass} overflow-hidden rounded-t-md border-b`}>
                     <a href={c.url} target="_blank" rel="noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={c.url} alt="composed" className="w-full h-full object-cover" />

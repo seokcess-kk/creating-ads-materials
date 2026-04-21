@@ -9,11 +9,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 
+type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
+
 interface RetouchStudioProps {
   campaignId: string;
   visualReady: boolean;
   baseImageUrl: string | null;
   visualSuggestions: string[];
+  aspectRatio?: ChannelAspectRatio;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
 }
@@ -26,15 +29,30 @@ interface TurnContent {
   baseLabel: string;
 }
 
+function aspectClass(ar: ChannelAspectRatio | undefined): string {
+  switch (ar) {
+    case "9:16":
+      return "aspect-[9/16]";
+    case "4:5":
+      return "aspect-[4/5]";
+    case "16:9":
+      return "aspect-[16/9]";
+    default:
+      return "aspect-square";
+  }
+}
+
 export function RetouchStudio({
   campaignId,
   visualReady,
   baseImageUrl,
   visualSuggestions,
+  aspectRatio,
   initialStage,
   initialVariants,
 }: RetouchStudioProps) {
   const router = useRouter();
+  const ac = aspectClass(aspectRatio);
   const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
   const [instruction, setInstruction] = useState("");
@@ -121,10 +139,10 @@ export function RetouchStudio({
               <img
                 src={currentBaseUrl}
                 alt="base"
-                className="w-full aspect-square rounded-md border object-cover"
+                className={`w-full ${ac} rounded-md border object-cover max-h-[70vh]`}
               />
             ) : (
-              <div className="w-full aspect-square rounded-md border flex items-center justify-center text-xs text-muted-foreground">
+              <div className={`w-full ${ac} rounded-md border flex items-center justify-center text-xs text-muted-foreground max-h-[70vh]`}>
                 base 이미지 없음
               </div>
             )}
@@ -203,7 +221,7 @@ export function RetouchStudio({
                           : "hover:border-primary/30 transition-colors"
                     }
                   >
-                    <div className="aspect-square overflow-hidden rounded-t-md border-b">
+                    <div className={`${ac} overflow-hidden rounded-t-md border-b`}>
                       <a href={c.url} target="_blank" rel="noreferrer">
                         <img src={c.url} alt={`turn ${i + 1}`} className="w-full h-full object-cover" />
                       </a>

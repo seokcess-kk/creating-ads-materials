@@ -140,6 +140,8 @@ export interface CopyContext {
   playbook: Playbook;
   framework: Framework;
   funnel: FunnelGuide;
+  regenInstruction?: string;
+  previousHeadlines?: string[];
 }
 
 export function buildCopySystem(): string {
@@ -285,6 +287,22 @@ ${formatFramework(ctx.framework)}
 ## Funnel Guide
 ${formatFunnel(ctx.funnel)}
 
+${
+    ctx.previousHeadlines && ctx.previousHeadlines.length > 0
+      ? `## Previous headlines (avoid repeating these exact phrasings)
+${ctx.previousHeadlines.map((h) => `  - "${h}"`).join("\n")}
+`
+      : ""
+  }${
+    ctx.regenInstruction
+      ? `
+## Re-generation direction (사용자 요청)
+${ctx.regenInstruction}
+
+이 방향성을 전체 변형에 반영하되 서로 다른 진입점을 유지.
+`
+      : ""
+  }
 # TASK
 선택된 전략의 각도 안에서, 서로 다른 진입점을 사용한 카피 변형 5~8개를 작성하고 각각을 self-critique 하세요.
 도구 ${COPY_TOOL_NAME}로 variants·critiques를 한 번에 기록하세요.`;

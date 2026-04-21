@@ -8,12 +8,29 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { VisualValidatorResult } from "@/lib/prompts/visual";
+import { RegenerateBox } from "./RegenerateBox";
+
+type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
 
 interface VisualStageProps {
   campaignId: string;
   copyReady: boolean;
+  aspectRatio?: ChannelAspectRatio;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
+}
+
+function aspectClass(ar: ChannelAspectRatio | undefined): string {
+  switch (ar) {
+    case "9:16":
+      return "aspect-[9/16]";
+    case "4:5":
+      return "aspect-[4/5]";
+    case "16:9":
+      return "aspect-[16/9]";
+    default:
+      return "aspect-square";
+  }
 }
 
 function scoreRow(label: string, value: number | undefined) {
@@ -33,9 +50,11 @@ function scoreRow(label: string, value: number | undefined) {
 export function VisualStage({
   campaignId,
   copyReady,
+  aspectRatio,
   initialStage,
   initialVariants,
 }: VisualStageProps) {
+  const ac = aspectClass(aspectRatio);
   const router = useRouter();
   const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
@@ -45,21 +64,33 @@ export function VisualStage({
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
 
-  async function generate() {
+  async function generate(instruction?: string) {
     setGenerating(true);
-    toast.info("Gemini 3 Pro Image × 3 생성 + Claude Vision 검증 (90~180초)");
+    toast.info(
+      instruction
+        ? "방향성 반영 Visual 재생성 (90~180초)"
+        : "Gemini 3 Pro Image × 3 생성 + Claude Vision 검증 (90~180초)",
+    );
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/visual`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(instruction ? { instruction } : {}),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
       setStage(data.stage);
-      setVariants(data.variants);
+      setVariants((prev) =>
+        instruction ? [...prev, ...data.variants] : data.variants,
+      );
       if (data.failures?.length) {
         toast.warning(`${data.variants.length}개 성공, ${data.failures.length}개 실패`);
       } else {
-        toast.success(`${data.variants.length}개 비주얼 생성 완료`);
+        toast.success(
+          instruction
+            ? `${data.variants.length}개 추가 생성`
+            : `${data.variants.length}개 비주얼 생성 완료`,
+        );
       }
       router.refresh();
     } catch (e) {
@@ -102,7 +133,7 @@ export function VisualStage({
           <p className="text-sm text-muted-foreground">
             Gemini 3 Pro Image로 3변형(제품·숫자·인물 포커스) 병렬 생성 + Claude Vision 4축 검증
           </p>
-          <Button onClick={generate} disabled={generating}>
+          <Button onClick={() => generate()} disabled={generating}>
             {generating ? "생성 중..." : "Visual 생성"}
           </Button>
         </CardContent>
@@ -118,7 +149,7 @@ export function VisualStage({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-destructive">{stage.error}</p>
-          <Button onClick={generate} disabled={generating}>
+          <Button onClick={() => generate()} disabled={generating}>
             {generating ? "재생성 중..." : "다시 시도"}
           </Button>
         </CardContent>
@@ -180,7 +211,7 @@ export function VisualStage({
                     : "hover:border-primary/40 transition-colors"
                 }
               >
-                <div className="aspect-square overflow-hidden rounded-t-md border-b">
+                <div className={`${ac} overflow-hidden rounded-t-md border-b`}>
                   <a href={c.url} target="_blank" rel="noreferrer">
                     <img src={c.url} alt={c.focusLabel} className="w-full h-full object-cover" />
                   </a>
@@ -234,6 +265,21 @@ export function VisualStage({
               </Card>
             );
           })}
+        </div>
+        <div className="pt-2">
+          <RegenerateBox
+            label="다른 방향으로 Visual 추가"
+            placeholder="예: 더 미니멀 / 제품 위주 / 더 밝은 톤 / 인물 강조"
+            suggestions={[
+              "더 미니멀·여백 많이",
+              "제품·UI 중심으로",
+              "숫자를 훨씬 크게",
+              "더 밝은 톤",
+              "따뜻한 컬러 팔레트",
+            ]}
+            running={generating}
+            onRegenerate={generate}
+          />
         </div>
       </CardContent>
     </Card>

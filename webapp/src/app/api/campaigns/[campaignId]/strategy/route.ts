@@ -18,11 +18,17 @@ import {
   STRATEGY_PROMPT_VERSION,
   STRATEGY_TOOL_NAME,
   StrategyOutputSchema,
+  type StrategyAlternative,
   buildStrategyMessages,
   buildStrategySystem,
   strategyTool,
 } from "@/lib/prompts/strategy";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
+import { z } from "zod";
+
+const Body = z
+  .object({ instruction: z.string().max(500).optional() })
+  .optional();
 
 export const maxDuration = 90;
 
@@ -43,13 +49,18 @@ export async function GET(
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
     const { campaignId } = await params;
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
+
+    let body: { instruction?: string } = {};
+    try {
+      body = Body.parse(await request.json()) ?? {};
+    } catch {}
 
     const memory = await loadBrandMemory(campaign.brand_id);
     if (!memory) throw new ApiError(404, "브랜드를 찾을 수 없습니다");
@@ -64,6 +75,16 @@ export async function POST(
       offer_id: campaign.offer_id,
       audience_id: campaign.audience_id,
       channel: campaign.channel,
+    });
+
+    const existingVariants = await listVariants(stage.id);
+    const previousAngles = existingVariants.map((v) => {
+      const c = v.content_json as unknown as StrategyAlternative;
+      return {
+        angleName: c.angleName,
+        hookType: c.hookType,
+        frameworkId: c.frameworkId,
+      };
     });
 
     try {
@@ -87,6 +108,8 @@ export async function POST(
           playbook,
           frameworks,
           funnel,
+          regenInstruction: body.instruction,
+          previousAngles,
         }),
         tools: [strategyTool],
         toolChoice: { type: "tool", name: STRATEGY_TOOL_NAME },
@@ -100,11 +123,16 @@ export async function POST(
         throw new Error(`전략 스키마 검증 실패: ${parsed.error.message}`);
       }
 
+      const batchIndex = existingVariants.length / 3 + 1;
       const variants = await createVariants(
         stage.id,
         parsed.data.alternatives.map((a) => ({
-          label: a.id,
-          content: a as unknown as Record<string, unknown>,
+          label: `${a.id}_b${batchIndex}`,
+          content: {
+            ...(a as unknown as Record<string, unknown>),
+            batchIndex,
+            regenInstruction: body.instruction ?? null,
+          },
           promptVersion: STRATEGY_PROMPT_VERSION,
         })),
       );

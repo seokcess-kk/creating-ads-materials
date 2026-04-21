@@ -9,14 +9,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import type { CreativeRun, CreativeStageRow } from "@/lib/campaigns/types";
 
+type ChannelAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
+
 interface ShipCardProps {
   campaignId: string;
   campaignName: string;
   campaignStatus: string;
   composeReady: boolean;
   composeUrl: string | null;
+  aspectRatio?: ChannelAspectRatio;
   initialRun: CreativeRun | null;
   initialStage: CreativeStageRow | null;
+}
+
+function aspectClass(ar: ChannelAspectRatio | undefined): string {
+  switch (ar) {
+    case "9:16":
+      return "aspect-[9/16]";
+    case "4:5":
+      return "aspect-[4/5]";
+    case "16:9":
+      return "aspect-[16/9]";
+    default:
+      return "aspect-square";
+  }
 }
 
 export function ShipCard({
@@ -25,9 +41,11 @@ export function ShipCard({
   campaignStatus,
   composeReady,
   composeUrl,
+  aspectRatio,
   initialRun,
   initialStage,
 }: ShipCardProps) {
+  const ac = aspectClass(aspectRatio);
   const router = useRouter();
   const [run, setRun] = useState<CreativeRun | null>(initialRun);
   const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
@@ -127,11 +145,11 @@ export function ShipCard({
                 <img
                   src={composeUrl}
                   alt="final"
-                  className="w-full aspect-square rounded-md border object-cover"
+                  className={`w-full ${ac} rounded-md border object-cover max-h-[70vh]`}
                 />
               </a>
             ) : (
-              <div className="w-full aspect-square rounded-md border" />
+              <div className={`w-full ${ac} rounded-md border max-h-[70vh]`} />
             )}
           </div>
 

@@ -124,6 +124,12 @@ export interface StrategyContext {
   playbook: Playbook;
   frameworks: Framework[];
   funnel: FunnelGuide;
+  regenInstruction?: string;
+  previousAngles?: Array<{
+    angleName: string;
+    hookType: string;
+    frameworkId: string;
+  }>;
 }
 
 export function buildStrategySystem(): string {
@@ -271,6 +277,24 @@ ${formatFunnel(ctx.funnel)}
 ## Available Frameworks
 ${formatFrameworks(ctx.frameworks)}
 
+${
+    ctx.previousAngles && ctx.previousAngles.length > 0
+      ? `## Previous attempts (avoid duplicating these exact angles)
+${ctx.previousAngles
+  .map((p) => `  - "${p.angleName}" (${p.hookType} / ${p.frameworkId})`)
+  .join("\n")}
+`
+      : ""
+  }${
+    ctx.regenInstruction
+      ? `
+## Re-generation direction (사용자 요청)
+${ctx.regenInstruction}
+
+이 방향성을 3대안 모두에 반영하되 역할 분화(safe/explore/challenge)는 유지.
+`
+      : ""
+  }
 # TASK
 3대안을 **역할별로** 설계하세요:
 - alt_1 (safe): 검증된 방향

@@ -18,6 +18,7 @@ import { VisualStage } from "@/components/campaign/VisualStage";
 import { RetouchStudio } from "@/components/campaign/RetouchStudio";
 import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
+import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -123,6 +124,12 @@ export default async function CampaignPage({
             {run && <Badge variant="outline">run: {run.status}</Badge>}
           </div>
         </div>
+        {copyReady && (
+          <ForkChannelMenu
+            campaignId={campaignId}
+            currentChannel={campaign.channel}
+          />
+        )}
       </div>
 
       <Card>
@@ -190,6 +197,7 @@ export default async function CampaignPage({
       <VisualStage
         campaignId={campaignId}
         copyReady={copyReady}
+        aspectRatio={channel?.aspectRatio ?? "1:1"}
         initialStage={visualStage}
         initialVariants={visualVariants}
       />
@@ -199,6 +207,7 @@ export default async function CampaignPage({
         visualReady={visualReady}
         baseImageUrl={baseImageUrl}
         visualSuggestions={visualSuggestions}
+        aspectRatio={channel?.aspectRatio ?? "1:1"}
         initialStage={retouchStage}
         initialVariants={retouchVariants}
       />
@@ -208,6 +217,7 @@ export default async function CampaignPage({
         previousReady={composeReadyGate}
         baseImageUrl={composeBaseUrl}
         logoDefaults={logoDefaults}
+        aspectRatio={channel?.aspectRatio ?? "1:1"}
         initialStage={composeStage}
         initialVariants={composeVariants}
       />
@@ -218,6 +228,7 @@ export default async function CampaignPage({
         campaignStatus={campaign.status}
         composeReady={composeReady}
         composeUrl={composeUrl}
+        aspectRatio={channel?.aspectRatio ?? "1:1"}
         initialRun={run}
         initialStage={shipStage}
       />
