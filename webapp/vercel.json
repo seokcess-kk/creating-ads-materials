@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "src/app/api/campaigns/[campaignId]/strategy/route.ts": { "maxDuration": 90 },
+    "src/app/api/campaigns/[campaignId]/copy/route.ts": { "maxDuration": 120 },
+    "src/app/api/campaigns/[campaignId]/visual/route.ts": { "maxDuration": 240 },
+    "src/app/api/campaigns/[campaignId]/retouch/route.ts": { "maxDuration": 180 },
+    "src/app/api/campaigns/[campaignId]/compose/route.ts": { "maxDuration": 60 },
+    "src/app/api/campaigns/[campaignId]/ship/promote-to-bp/route.ts": { "maxDuration": 60 },
+    "src/app/api/brands/[brandId]/references/route.ts": { "maxDuration": 60 },
+    "src/app/api/brands/[brandId]/references/[referenceId]/reanalyze/route.ts": { "maxDuration": 60 },
+    "src/app/api/brands/[brandId]/analyze-website/route.ts": { "maxDuration": 60 }
+  }
+}

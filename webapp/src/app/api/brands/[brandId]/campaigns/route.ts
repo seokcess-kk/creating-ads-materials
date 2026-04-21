@@ -31,7 +31,10 @@ export async function POST(
   try {
     const { brandId } = await params;
     const input = await parseJson(request, CreateSchema);
-    const campaign = await createCampaign(brandId, input);
+    const campaign = await createCampaign(brandId, {
+      ...input,
+      goal: input.goal ?? "BOFU",
+    });
     return ok({ campaign });
   } catch (e) {
     return serverError(e);

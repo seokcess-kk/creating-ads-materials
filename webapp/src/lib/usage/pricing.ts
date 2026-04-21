@@ -24,7 +24,9 @@ export function estimateClaudeCost(
     cacheRead?: number;
   },
 ): number {
-  const p = (model && CLAUDE_PRICING[model]) ?? CLAUDE_PRICING["claude-opus-4-7"];
+  const p: ClaudePricing =
+    (model ? CLAUDE_PRICING[model] : undefined) ??
+    CLAUDE_PRICING["claude-opus-4-7"];
   const input = (usage.input * p.input) / 1_000_000;
   const output = (usage.output * p.output) / 1_000_000;
   const cacheRead = ((usage.cacheRead ?? 0) * p.cacheRead) / 1_000_000;
@@ -35,7 +37,8 @@ export function estimateGeminiImageCost(
   model: string | null | undefined,
   count: number,
 ): number {
-  const p = (model && GEMINI_IMAGE_PRICING[model]) ?? 0.04;
+  const p: number =
+    (model ? GEMINI_IMAGE_PRICING[model] : undefined) ?? 0.04;
   return p * count;
 }
 

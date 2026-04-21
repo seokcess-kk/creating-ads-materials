@@ -58,7 +58,7 @@ export function RetouchStudio({
 
   const currentBaseUrl =
     (baseVariantId
-      ? (variants.find((v) => v.id === baseVariantId)?.content_json as TurnContent)?.url
+      ? (variants.find((v) => v.id === baseVariantId)?.content_json as unknown as TurnContent | undefined)?.url
       : null) ?? baseImageUrl;
 
   async function run() {
