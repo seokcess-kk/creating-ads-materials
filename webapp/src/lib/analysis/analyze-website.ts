@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 
-export const BRAND_ANALYSIS_VERSION = "brand-analyze@2.0.0";
+export const BRAND_ANALYSIS_VERSION = "brand-analyze@3.0.0";
 export const ANALYSIS_TOOL = "record_brand_analysis";
 
 export const BrandAnalysisSchema = z.object({
@@ -109,7 +109,7 @@ export const analysisTool: Tool = {
       offers: {
         type: "array",
         description:
-          "홈페이지에서 관찰 가능한 주력 Offer 1~3개. 제품/서비스명, 혜택, 가격, 긴박성, 증거 등이 명시되어 있을 때만 추출. 없으면 빈 배열.",
+          "사이트에서 관찰 가능한 주력 Offer 1~3개. 제품/서비스명, 혜택, 가격, 긴박성, 증거 등이 명시되어 있을 때만 추출. 없으면 빈 배열.",
         items: {
           type: "object",
           properties: {
@@ -148,7 +148,7 @@ export const analysisTool: Tool = {
       audiences: {
         type: "array",
         description:
-          "타겟 고객 페르소나 1~2개. 홈페이지 카피·후기·CTA에서 유추. 확실한 정보만, 추측은 피함.",
+          "타겟 고객 페르소나 1~2개. 후기·CTA 문구·지역·업종으로부터 유추 가능한 구체적 인물상.",
         items: {
           type: "object",
           properties: {
@@ -181,10 +181,17 @@ export const analysisTool: Tool = {
           required: ["persona_name"],
         },
       },
-      notes: { type: "string", description: "관찰 사항·주의점" },
+      notes: { type: "string", description: "관찰 사항·추정 근거" },
     },
   },
 };
+
+// ── 공통 유틸 ────────────────────────────────────────────────────────────────
+
+const USER_AGENT =
+  "Mozilla/5.0 (compatible; AdStudio/1.0; +https://ad-studio.local)";
+const PAGE_FETCH_TIMEOUT_MS = 8000;
+const SITEMAP_FETCH_TIMEOUT_MS = 6000;
 
 function decodeEntities(s: string): string {
   return s
@@ -201,6 +208,21 @@ function stripTags(s: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+async function fetchHtml(url: string, timeoutMs: number): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+    },
+    redirect: "follow",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+// ── 메타·본문 추출 ───────────────────────────────────────────────────────────
 
 function extractMetaSignals(html: string): {
   title: string;
@@ -227,7 +249,6 @@ function extractMetaSignals(html: string): {
     ])[1];
     if (!key || !content) continue;
     const k = key.toLowerCase();
-    // 의미 있는 것만 수집 — viewport, charset 등 잡음 제외
     if (
       k === "description" ||
       k === "keywords" ||
@@ -251,7 +272,6 @@ function extractMetaSignals(html: string): {
       const parsed = JSON.parse(raw);
       jsonLd.push(JSON.stringify(parsed));
     } catch {
-      // 비정상 JSON-LD는 원문 그대로 (텍스트 신호로 사용)
       jsonLd.push(raw.slice(0, 4000));
     }
   }
@@ -270,29 +290,28 @@ function extractMetaSignals(html: string): {
   };
 }
 
-async function fetchPageText(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; AdStudio/1.0; +https://ad-studio.local)",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`홈페이지 fetch 실패: HTTP ${res.status}`);
-  const html = await res.text();
-
-  const { title, metas, jsonLd, noscript } = extractMetaSignals(html);
-
+function extractBodyText(html: string): string {
   const body = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
     .replace(/<!--[\s\S]*?-->/g, " ");
-  const bodyText = stripTags(body);
+  return stripTags(body);
+}
 
+interface PageSections {
+  url: string;
+  pathLabel: string;
+  title: string;
+  metaLines: string[];
+  jsonLd: string[];
+  noscript: string[];
+  bodyText: string;
+}
+
+function buildPageSections(url: string, html: string): PageSections {
+  const { title, metas, jsonLd, noscript } = extractMetaSignals(html);
   const metaLines: string[] = [];
-  if (title) metaLines.push(`Title: ${title}`);
   const metaOrder = [
     "description",
     "og:title",
@@ -309,36 +328,282 @@ async function fetchPageText(url: string): Promise<string> {
     const v = metas[k];
     if (v) metaLines.push(`${k}: ${v}`);
   }
-
-  const sections: string[] = [];
-  if (metaLines.length > 0) sections.push(`[META]\n${metaLines.join("\n")}`);
-  if (jsonLd.length > 0) {
-    // JSON-LD는 길 수 있으니 개별 3000자 / 합계 6000자로 자름
-    const joined = jsonLd.map((s) => s.slice(0, 3000)).join("\n").slice(0, 6000);
-    sections.push(`[JSON-LD]\n${joined}`);
-  }
-  if (noscript.length > 0) {
-    sections.push(`[NOSCRIPT]\n${noscript.join("\n").slice(0, 3000)}`);
-  }
-  if (bodyText) sections.push(`[BODY]\n${bodyText}`);
-
-  const combined = sections.join("\n\n").slice(0, 16000);
-  return combined;
+  let pathLabel = "/";
+  try {
+    const u = new URL(url);
+    pathLabel = u.pathname || "/";
+  } catch {}
+  return {
+    url,
+    pathLabel,
+    title,
+    metaLines,
+    jsonLd,
+    noscript,
+    bodyText: extractBodyText(html),
+  };
 }
+
+function renderPageSection(p: PageSections, bodyLimit: number): string {
+  const parts: string[] = [];
+  parts.push(`=== PAGE: ${p.pathLabel} (${p.url}) ===`);
+  if (p.title) parts.push(`Title: ${p.title}`);
+  if (p.metaLines.length > 0) parts.push(`[META]\n${p.metaLines.join("\n")}`);
+  if (p.jsonLd.length > 0) {
+    const joined = p.jsonLd.map((s) => s.slice(0, 2500)).join("\n").slice(0, 5000);
+    parts.push(`[JSON-LD]\n${joined}`);
+  }
+  if (p.noscript.length > 0) {
+    parts.push(`[NOSCRIPT]\n${p.noscript.join("\n").slice(0, 2000)}`);
+  }
+  if (p.bodyText) parts.push(`[BODY]\n${p.bodyText.slice(0, bodyLimit)}`);
+  return parts.join("\n\n");
+}
+
+// ── 후보 URL 수집 ────────────────────────────────────────────────────────────
+
+function sameOrigin(a: URL, b: URL): boolean {
+  return a.protocol === b.protocol && a.host === b.host;
+}
+
+function extractInternalLinks(html: string, baseUrl: URL): string[] {
+  const found = new Set<string>();
+  for (const m of html.matchAll(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi)) {
+    const href = decodeEntities(m[1]).trim();
+    if (!href) continue;
+    if (href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) continue;
+    try {
+      const abs = new URL(href, baseUrl);
+      if (!sameOrigin(abs, baseUrl)) continue;
+      abs.hash = "";
+      // 확장자 필터: 이미지·파일 제외
+      if (/\.(png|jpe?g|gif|svg|webp|ico|pdf|zip|mp4|mov|webm|css|js|json|xml)$/i.test(abs.pathname)) continue;
+      found.add(abs.toString());
+    } catch {}
+  }
+  return Array.from(found);
+}
+
+async function fetchSitemapUrls(baseUrl: URL): Promise<string[]> {
+  const candidates = [
+    new URL("/sitemap.xml", baseUrl).toString(),
+    new URL("/sitemap_index.xml", baseUrl).toString(),
+  ];
+  for (const sm of candidates) {
+    try {
+      const res = await fetch(sm, {
+        headers: { "User-Agent": USER_AGENT, Accept: "application/xml,text/xml" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(SITEMAP_FETCH_TIMEOUT_MS),
+      });
+      if (!res.ok) continue;
+      const xml = await res.text();
+      const urls: string[] = [];
+      for (const m of xml.matchAll(/<loc>\s*([\s\S]*?)\s*<\/loc>/gi)) {
+        const u = decodeEntities(m[1]).trim();
+        if (!u) continue;
+        try {
+          const abs = new URL(u);
+          if (sameOrigin(abs, baseUrl)) {
+            abs.hash = "";
+            urls.push(abs.toString());
+          }
+        } catch {}
+      }
+      if (urls.length > 0) return urls;
+    } catch {
+      // 다음 후보
+    }
+  }
+  return [];
+}
+
+const KEYWORD_GROUPS: Array<{ priority: number; keywords: RegExp }> = [
+  // 가격·요금 — 최우선 (Offer 추출에 직결)
+  { priority: 1, keywords: /(pricing|price|plan|cost|fee|요금|가격|이용료|이용권|회원권)/i },
+  // 이벤트·프로모션·전시
+  {
+    priority: 2,
+    keywords:
+      /(event|promotion|promo|sale|discount|coupon|campaign|exhibition|이벤트|프로모션|할인|쿠폰|혜택|전시|특가)/i,
+  },
+  // 제품·서비스·메뉴·시술
+  {
+    priority: 3,
+    keywords:
+      /(service|product|treatment|menu|course|catalog|collection|시술|메뉴|서비스|프로그램|상품|제품|컬렉션)/i,
+  },
+  // 소개·회사·브랜드·스태프
+  {
+    priority: 4,
+    keywords:
+      /(about|company|brand|branding|story|team|staff|doctor|introduce|소개|브랜드|회사|우리|의료진|의사|원장)/i,
+  },
+  // 후기·리뷰·사례·포트폴리오 (페르소나 추출 보강)
+  {
+    priority: 5,
+    keywords:
+      /(review|testimonial|case|portfolio|gallery|before-?after|후기|리뷰|사례|체험|갤러리|포트폴리오)/i,
+  },
+  // 일정·예약·상담 (운영 정보 → Audience 간접 신호)
+  {
+    priority: 6,
+    keywords:
+      /(schedule|booking|reservation|consult|contact|location|notice|news|faq|일정|예약|상담|공지|문의)/i,
+  },
+];
+
+interface RankedCandidate {
+  url: string;
+  priority: number; // 낮을수록 우선
+  pathDepth: number; // 낮을수록 상위
+}
+
+const UNRANKED_FALLBACK_PRIORITY = 90; // 키워드 매치 없음 — 얕은 depth일 때만 후순위로
+const EXCLUDE_PATH =
+  /(terms|policy|privacy|login|logout|signin|signup|register|cart|checkout|robots|sitemap|약관|개인정보|로그인|회원가입)/i;
+
+function rankCandidates(urls: string[], baseUrl: URL): RankedCandidate[] {
+  const ranked: RankedCandidate[] = [];
+  const rootStr = new URL("/", baseUrl).toString();
+  for (const url of urls) {
+    try {
+      const u = new URL(url);
+      if (u.toString() === rootStr) continue;
+      if (u.pathname === "/" || u.pathname === "") continue;
+
+      const path = u.pathname.toLowerCase();
+      if (EXCLUDE_PATH.test(path)) continue;
+
+      const depth = path.split("/").filter(Boolean).length;
+
+      let priority = UNRANKED_FALLBACK_PRIORITY;
+      for (const g of KEYWORD_GROUPS) {
+        if (g.keywords.test(path)) {
+          priority = Math.min(priority, g.priority);
+        }
+      }
+      // fallback 후보는 depth가 너무 깊으면(>2) 제외 — 디테일 페이지·상세글일 확률 큼
+      if (priority === UNRANKED_FALLBACK_PRIORITY && depth > 2) continue;
+
+      ranked.push({ url: u.toString(), priority, pathDepth: depth });
+    } catch {}
+  }
+  ranked.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    if (a.pathDepth !== b.pathDepth) return a.pathDepth - b.pathDepth;
+    return a.url.localeCompare(b.url);
+  });
+  const seen = new Set<string>();
+  const out: RankedCandidate[] = [];
+  for (const r of ranked) {
+    if (seen.has(r.url)) continue;
+    seen.add(r.url);
+    out.push(r);
+  }
+  return out;
+}
+
+// ── 크롤링 메인 ──────────────────────────────────────────────────────────────
+
+const MAX_EXTRA_PAGES = 4; // 홈 + 4 = 총 5 페이지
+
+async function crawlSite(rootUrlStr: string): Promise<{
+  pages: PageSections[];
+  fetchedChars: number;
+  errors: Array<{ url: string; reason: string }>;
+}> {
+  const baseUrl = new URL(rootUrlStr);
+  const errors: Array<{ url: string; reason: string }> = [];
+
+  // 1. 홈 fetch
+  let homeHtml: string;
+  try {
+    homeHtml = await fetchHtml(baseUrl.toString(), PAGE_FETCH_TIMEOUT_MS);
+  } catch (e) {
+    throw new Error(
+      `홈페이지 fetch 실패: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  const homeSections = buildPageSections(baseUrl.toString(), homeHtml);
+
+  // 2. sitemap + 내부링크 병합 → 후보 수집
+  const [sitemapUrls, homeLinks] = await Promise.all([
+    fetchSitemapUrls(baseUrl).catch(() => [] as string[]),
+    Promise.resolve(extractInternalLinks(homeHtml, baseUrl)),
+  ]);
+  const allUrls = Array.from(new Set([...sitemapUrls, ...homeLinks]));
+  const ranked = rankCandidates(allUrls, baseUrl);
+
+  // 3. 우선순위 그룹별로 최대 MAX_EXTRA_PAGES 개 선택, 한 priority당 최대 2개
+  const selected: string[] = [];
+  const perPriorityCap = 2;
+  const perPriorityCount = new Map<number, number>();
+  for (const r of ranked) {
+    if (selected.length >= MAX_EXTRA_PAGES) break;
+    const cnt = perPriorityCount.get(r.priority) ?? 0;
+    if (cnt >= perPriorityCap) continue;
+    selected.push(r.url);
+    perPriorityCount.set(r.priority, cnt + 1);
+  }
+
+  // 4. 병렬 fetch + sections
+  const extraSections = await Promise.all(
+    selected.map(async (url) => {
+      try {
+        const html = await fetchHtml(url, PAGE_FETCH_TIMEOUT_MS);
+        return buildPageSections(url, html);
+      } catch (e) {
+        errors.push({
+          url,
+          reason: e instanceof Error ? e.message : String(e),
+        });
+        return null;
+      }
+    }),
+  );
+
+  const pages: PageSections[] = [homeSections];
+  for (const s of extraSections) {
+    if (s) pages.push(s);
+  }
+
+  const fetchedChars = pages.reduce(
+    (sum, p) => sum + p.bodyText.length + p.metaLines.join("").length,
+    0,
+  );
+
+  return { pages, fetchedChars, errors };
+}
+
+function renderCrawlText(pages: PageSections[]): string {
+  // 전체 상한 32000자, 페이지당 BODY 상한은 페이지 수에 따라 가변
+  const perPageBodyLimit =
+    pages.length <= 2 ? 6000 : pages.length <= 4 ? 4000 : 2800;
+  const rendered = pages.map((p) => renderPageSection(p, perPageBodyLimit));
+  return rendered.join("\n\n").slice(0, 32000);
+}
+
+// ── 공개 API ─────────────────────────────────────────────────────────────────
 
 export interface AnalyzeWebsiteResult {
   analysis: BrandAnalysis;
   version: string;
   fetchedChars: number;
+  pagesCrawled: number;
+  pagesAttempted: number;
+  errors?: Array<{ url: string; reason: string }>;
 }
 
 export async function analyzeWebsite(
   url: string,
   usageContext?: import("@/lib/usage/record").UsageContext,
 ): Promise<AnalyzeWebsiteResult> {
-  const text = await fetchPageText(url);
+  const crawl = await crawlSite(url);
+  const combinedText = renderCrawlText(crawl.pages);
 
-  if (text.trim().length < 80) {
+  if (combinedText.trim().length < 80) {
     throw new Error(
       "홈페이지에서 분석 가능한 텍스트를 거의 찾지 못했습니다 (SPA 또는 접근 차단 가능성). Identity 페이지에서 수동 입력을 사용해주세요.",
     );
@@ -348,22 +613,33 @@ export async function analyzeWebsite(
     usageContext,
     model: "opus",
     maxTokens: 5000,
-    system: `당신은 한국어 브랜드 분석가입니다. 주어진 웹사이트의 텍스트 신호(META·JSON-LD·NOSCRIPT·BODY 섹션)에서 브랜드의 category, description, voice, taboos, colors, offers, audiences를 추출합니다.
+    system: `당신은 한국어 브랜드 분석가입니다. 주어진 **여러 페이지의 텍스트 신호**에서 브랜드 정보를 추출합니다. 각 페이지는 \`=== PAGE: /path (url) ===\` 헤더로 구분되며, 섹션은 [META] / [JSON-LD] / [NOSCRIPT] / [BODY] 중 일부가 포함됩니다.
 
-입력 포맷 안내:
-- [META]: <title>, meta description/keywords, og:*, twitter:* 등 — 가장 압축된 브랜드 메시지. 우선순위 최상.
-- [JSON-LD]: schema.org 구조화 데이터 (Organization·Product·Service·LocalBusiness 등) — 공식 정보.
-- [NOSCRIPT]: JS 없이 노출되는 SSR fallback 텍스트.
-- [BODY]: 나머지 본문. SPA 사이트는 이 부분이 얇을 수 있음.
+섹션 해석:
+- [META]: <title>, description, og:*, twitter:*, keywords — 브랜드 메시지의 압축본. 신뢰도 최상.
+- [JSON-LD]: schema.org 구조화 데이터 — 공식 정보 (Organization·Product·Service·LocalBusiness·Offer).
+- [NOSCRIPT]: JS 없이 노출되는 SSR fallback.
+- [BODY]: 본문. SPA는 홈이 얇고, 하위 페이지는 종종 서버 렌더되어 더 풍부함.
 
-규칙:
-- 관찰 가능한 정보 위주로 보수적으로 채우고, 불확실한 필드는 생략.
-- SPA라 BODY가 짧아도, META·JSON-LD·keywords만으로 category/description/voice는 반드시 추출 시도.
-- voice.tone은 한 줄, 나머지는 3~5개 태그.
-- colors는 홈페이지 CTA·헤더 등에 명확히 쓰인 경우에만 (HTML/CSS에서 식별 가능한 HEX만). META·BODY 어디에도 HEX가 없으면 빈 배열.
-- description은 1~2문장, 광고 카피가 아닌 브랜드 소개 톤. META description이 있으면 이를 다듬어 사용.
-- offers: 홈페이지에서 제품·서비스명/가격/혜택/긴박성이 명시된 것만. 최대 3개. 없으면 빈 배열. 가장 주력 Offer를 1번째로.
-- audiences: 타겟 페르소나 1~2개. 후기·CTA 문구·해결하려는 문제로부터 유추 가능한 구체적 인물상. "모든 사람" 같은 추상적 표현 금지. pains·desires는 홈페이지 카피에서 직접 찾은 것만.
+페이지별 힌트:
+- \`/pricing\`·\`/price\`·\`/plan\`·가격 관련 경로 → offers 추출 핵심 소스.
+- \`/event\`·\`/promotion\` → urgency·할인 정보.
+- \`/service\`·\`/menu\`·\`/treatment\`·\`/product\` → offer 타이틀·benefits.
+- \`/about\` → voice·description·회사 규모.
+- \`/review\`·\`/testimonial\` → audiences의 pains·desires.
+
+출력 원칙 — **가능한 정보 최대한 채우기 (추정 초안 허용)**:
+- 빈 필드보다 **관찰 신호 기반의 불완전한 초안이 낫다**. 사용자가 이후 수정할 수 있음.
+- 확신이 낮으면 값은 채우되 \`notes\`에 "추정 근거" 1~2줄 기록.
+- \`category\`: 반드시 추출. META·keywords·업종 관련 용어로 판단.
+- \`description\`: 반드시 1~2문장 작성. META description이 있으면 그대로 다듬어 사용.
+- \`voice.tone\`: 반드시 한 줄 작성 (예: "전문적이고 신뢰감 있는"). 업종·톤 용어에서 추정 허용.
+- \`voice.personality\`: 최소 3개 태그. 업종 특성에서 추정 허용.
+- \`voice.do\` / \`voice.dont\`: 관찰 가능할 때만. 없으면 생략 가능.
+- \`taboos\`: 업종별로 흔히 회피하는 표현이 있다면 2~3개 기록 가능. 확신 없으면 빈 배열.
+- \`colors\`: HEX(#RRGGBB)가 META·BODY·JSON-LD 어디에도 명시되지 않았다면 **빈 배열**. 추측 금지 (정확도가 가장 중요한 필드).
+- \`offers\`: pricing/event/service 페이지에서 관찰 가능한 것만. 최대 3개. 없으면 빈 배열. 가격·혜택·urgency는 페이지에서 직접 인용.
+- \`audiences\`: **최소 1개 페르소나 필수**. category + description + 지역·키워드에서 유추 허용. persona_name은 구체적으로 (예: "강남 거주 30대 직장인 여성, 자연스러운 피부 관리 선호"). "모든 사람" 금지. pains·desires는 업종 일반 통념으로 추정 가능하되 홈페이지 신호가 있으면 인용.
 - 모든 출력은 한국어.
 - 도구 ${ANALYSIS_TOOL} 호출로만 결과 기록.`,
     messages: [
@@ -372,12 +648,14 @@ export async function analyzeWebsite(
         content: [
           {
             type: "text",
-            text: `URL: ${url}
+            text: `루트 URL: ${url}
+수집된 페이지 수: ${crawl.pages.length}
 
-페이지 신호 (섹션별로 구분되어 있음):
-${text}
+페이지별 신호:
 
-위 내용으로 브랜드 정보를 추출하여 ${ANALYSIS_TOOL} 도구로 기록하세요.`,
+${combinedText}
+
+위 내용에서 category/description/voice/taboos/colors/offers/audiences를 추출하여 ${ANALYSIS_TOOL} 도구로 기록하세요. 빈 필드보다는 관찰 신호 기반 초안을 우선합니다.`,
           },
         ],
       },
@@ -397,6 +675,9 @@ ${text}
   return {
     analysis: parsed.data,
     version: BRAND_ANALYSIS_VERSION,
-    fetchedChars: text.length,
+    fetchedChars: combinedText.length,
+    pagesCrawled: crawl.pages.length,
+    pagesAttempted: crawl.pages.length + crawl.errors.length,
+    errors: crawl.errors.length > 0 ? crawl.errors : undefined,
   };
 }
