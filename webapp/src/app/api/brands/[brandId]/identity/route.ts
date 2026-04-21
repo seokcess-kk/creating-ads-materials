@@ -28,18 +28,18 @@ const VoiceSchema = z.object({
   dont: z.array(z.string()).optional(),
 });
 
-const LogosSchema = z.object({
-  full: z.string().url().optional(),
-  icon: z.string().url().optional(),
-  light: z.string().url().optional(),
-  dark: z.string().url().optional(),
+const LogoSchema = z.object({
+  id: z.string().uuid(),
+  url: z.string().url(),
+  label: z.string().optional(),
+  is_primary: z.boolean().optional(),
 });
 
 const PutSchema = z.object({
   voice: VoiceSchema.optional(),
   taboos: z.array(z.string()).optional(),
   colors: z.array(ColorSchema).optional(),
-  logos: LogosSchema.optional(),
+  logos: z.array(LogoSchema).optional(),
 });
 
 export async function PUT(

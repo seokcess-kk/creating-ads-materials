@@ -92,9 +92,14 @@ export default async function CampaignPage({
   const logoDefaults = memoryForDefaults
     ? (() => {
         const d = computeLogoDefaults(memoryForDefaults);
-        const logos = memoryForDefaults.identity?.logo_urls_json ?? {};
-        const logoUrl = logos.full ?? logos.light ?? logos.icon ?? null;
-        return { ...d, hasLogo: Boolean(logoUrl), logoUrl };
+        const logos = memoryForDefaults.identity?.logos_json ?? [];
+        const primary = logos.find((l) => l.is_primary) ?? logos[0] ?? null;
+        return {
+          ...d,
+          hasLogo: Boolean(primary),
+          logoUrl: primary?.url ?? null,
+          logos,
+        };
       })()
     : {
         position: "top-left" as const,
@@ -102,6 +107,7 @@ export default async function CampaignPage({
         source: "fallback" as const,
         hasLogo: false,
         logoUrl: null,
+        logos: [],
       };
 
   const composeBaseUrl =

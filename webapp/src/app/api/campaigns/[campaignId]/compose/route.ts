@@ -19,6 +19,8 @@ const BodySchema = z
     logoSizeRatio: z.number().min(0.06).max(0.3).optional(),
     logoXRatio: z.number().min(0).max(1).optional(),
     logoYRatio: z.number().min(0).max(1).optional(),
+    logoId: z.string().uuid().optional(),
+    logoUrl: z.string().url().optional(),
   })
   .optional();
 
@@ -58,6 +60,8 @@ export async function POST(
       logoSizeRatio?: number;
       logoXRatio?: number;
       logoYRatio?: number;
+      logoId?: string;
+      logoUrl?: string;
     } = {};
     try {
       const raw = await request.json();
@@ -72,8 +76,23 @@ export async function POST(
 
     try {
       const identity = source.memory.identity;
-      const logos = identity?.logo_urls_json ?? {};
-      const logoUrl = logos.full ?? logos.light ?? logos.icon ?? null;
+      const logos = identity?.logos_json ?? [];
+      // Override > primary > first
+      let logoUrl: string | null = null;
+      let selectedLogoId: string | null = null;
+      if (overrides.logoUrl) {
+        logoUrl = overrides.logoUrl;
+        selectedLogoId =
+          logos.find((l) => l.url === overrides.logoUrl)?.id ?? null;
+      } else if (overrides.logoId) {
+        const found = logos.find((l) => l.id === overrides.logoId);
+        logoUrl = found?.url ?? null;
+        selectedLogoId = found?.id ?? null;
+      } else {
+        const primary = logos.find((l) => l.is_primary) ?? logos[0] ?? null;
+        logoUrl = primary?.url ?? null;
+        selectedLogoId = primary?.id ?? null;
+      }
       const position: LogoPosition = overrides.logoPosition ?? source.logoDefaults.position;
       const widthRatio = overrides.logoSizeRatio ?? source.logoDefaults.widthRatio;
       const isCustomCoords =
@@ -125,6 +144,8 @@ export async function POST(
               logoXRatio: logoApplied && isCustomCoords ? overrides.logoXRatio : null,
               logoYRatio: logoApplied && isCustomCoords ? overrides.logoYRatio : null,
               logoSource: defaultsSource,
+              logoId: selectedLogoId,
+              logoUrl: logoApplied ? logoUrl : null,
             },
             promptVersion: COMPOSE_PROMPT_VERSION,
           },

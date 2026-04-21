@@ -6,17 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { TagInput } from "./TagInput";
-import type { BrandColor, BrandColorRole, BrandIdentity, BrandLogos, BrandVoice } from "@/lib/memory/types";
-
-type LogoVariant = "full" | "icon" | "light" | "dark";
-const LOGO_VARIANTS: Array<{ id: LogoVariant; label: string; hint: string }> = [
-  { id: "full", label: "Full", hint: "기본 워드마크" },
-  { id: "icon", label: "Icon", hint: "아이콘/심볼 단독" },
-  { id: "light", label: "Light", hint: "밝은 배경용" },
-  { id: "dark", label: "Dark", hint: "어두운 배경용" },
-];
+import type { BrandColor, BrandColorRole, BrandIdentity, BrandLogo, BrandVoice } from "@/lib/memory/types";
 
 const COLOR_ROLES: BrandColorRole[] = ["primary", "secondary", "accent", "neutral", "semantic"];
 
@@ -146,7 +139,7 @@ export function IdentityForm({
   const [colors, setColors] = useState<BrandColor[]>(
     initial?.colors_json ?? [{ role: "primary", hex: "#1A2335" }],
   );
-  const [logos, setLogos] = useState<BrandLogos>(initial?.logo_urls_json ?? {});
+  const [logos, setLogos] = useState<BrandLogo[]>(initial?.logos_json ?? []);
 
   const [analyzing, setAnalyzing] = useState(false);
   const [websiteOverride, setWebsiteOverride] = useState("");
@@ -425,24 +418,19 @@ export function IdentityForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">로고 업로드</CardTitle>
+          <CardTitle className="text-base">로고</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {LOGO_VARIANTS.map((v) => (
-            <LogoSlot
-              key={v.id}
-              brandId={brandId}
-              variant={v.id}
-              label={v.label}
-              hint={v.hint}
-              url={logos[v.id]}
-              disabled={saving}
-              onChange={(url) => setLogos((prev) => ({ ...prev, [v.id]: url ?? undefined }))}
-            />
-          ))}
-          <p className="col-span-2 md:col-span-4 text-xs text-muted-foreground">
-            PNG 투명 배경 권장 · 최대 10MB · 업로드 즉시 Storage에 저장됩니다.
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            자유롭게 업로드하세요. ⭐ 기본 로고는 Compose 단계에서 자동 선택되며,
+            다른 로고를 원하면 Compose에서 썸네일 클릭으로 교체할 수 있습니다.
           </p>
+          <LogoGallery
+            brandId={brandId}
+            logos={logos}
+            onChange={setLogos}
+            disabled={saving}
+          />
         </CardContent>
       </Card>
 
@@ -458,21 +446,19 @@ export function IdentityForm({
   );
 }
 
-interface LogoSlotProps {
+interface LogoGalleryProps {
   brandId: string;
-  variant: LogoVariant;
-  label: string;
-  hint: string;
-  url: string | undefined;
-  disabled: boolean;
-  onChange: (url: string | null) => void;
+  logos: BrandLogo[];
+  onChange: (logos: BrandLogo[]) => void;
+  disabled?: boolean;
 }
 
-function LogoSlot({ brandId, variant, label, hint, url, disabled, onChange }: LogoSlotProps) {
-  const [busy, setBusy] = useState<"upload" | "delete" | null>(null);
+function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function upload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -483,93 +469,177 @@ function LogoSlot({ brandId, variant, label, hint, url, disabled, onChange }: Lo
       toast.error("10MB를 초과합니다");
       return;
     }
-    setBusy("upload");
+    setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("variant", variant);
       const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
         method: "POST",
         body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "업로드 실패");
-      onChange(data.url);
-      toast.success(`${label} 업로드 완료`);
+      onChange(data.identity?.logos_json ?? []);
+      toast.success("로고 업로드 완료");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "오류");
     } finally {
-      setBusy(null);
+      setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  async function remove() {
-    if (!confirm(`${label} 로고를 삭제할까요?`)) return;
-    setBusy("delete");
+  async function setPrimary(id: string) {
+    setBusyId(id);
     try {
-      const res = await fetch(
-        `/api/brands/${brandId}/identity/logos?variant=${variant}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) throw new Error((await res.json()).error ?? "삭제 실패");
-      onChange(null);
-      toast.success(`${label} 삭제 완료`);
+      const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logo_id: id, is_primary: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "변경 실패");
+      onChange(data.identity?.logos_json ?? []);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "오류");
     } finally {
-      setBusy(null);
+      setBusyId(null);
     }
   }
 
-  const isBusy = busy !== null;
-  const controlsDisabled = disabled || isBusy;
+  async function saveLabel(id: string, label: string) {
+    try {
+      const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logo_id: id, label: label.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "저장 실패");
+      onChange(data.identity?.logos_json ?? []);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "오류");
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("이 로고를 삭제할까요?")) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(
+        `/api/brands/${brandId}/identity/logos?logo_id=${id}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "삭제 실패");
+      onChange(data.identity?.logos_json ?? []);
+      toast.success("삭제 완료");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "오류");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
-    <div className="border rounded-md p-2 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="text-[10px] text-muted-foreground">{hint}</span>
-      </div>
-      <div className="aspect-square rounded bg-muted/40 border flex items-center justify-center overflow-hidden">
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt={`${label} logo`} className="max-w-full max-h-full object-contain p-2" />
-        ) : (
-          <span className="text-xs text-muted-foreground">없음</span>
-        )}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {logos.map((logo) => (
+          <LogoCard
+            key={logo.id}
+            logo={logo}
+            busy={busyId === logo.id}
+            disabled={disabled}
+            onSetPrimary={() => setPrimary(logo.id)}
+            onLabelChange={(label) => saveLabel(logo.id, label)}
+            onRemove={() => remove(logo.id)}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={disabled || uploading}
+          className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-40"
+        >
+          <span className="text-2xl">+</span>
+          <span>{uploading ? "업로드 중..." : "로고 추가"}</span>
+        </button>
       </div>
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
-        onChange={handleFile}
-        disabled={controlsDisabled}
+        onChange={upload}
         className="hidden"
+      />
+      <p className="text-[11px] text-muted-foreground">
+        PNG 투명 배경 권장 · 최대 10MB · ⭐ 기본 로고 1개 지정 (Compose에서 자동 선택)
+      </p>
+    </div>
+  );
+}
+
+interface LogoCardProps {
+  logo: BrandLogo;
+  busy: boolean;
+  disabled?: boolean;
+  onSetPrimary: () => void;
+  onLabelChange: (label: string) => void;
+  onRemove: () => void;
+}
+
+function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove }: LogoCardProps) {
+  const [labelDraft, setLabelDraft] = useState(logo.label ?? "");
+
+  return (
+    <div
+      className={
+        "border rounded-md p-2 space-y-2 " +
+        (logo.is_primary ? "border-primary bg-primary/5" : "")
+      }
+    >
+      <div className="aspect-square rounded bg-muted/40 border flex items-center justify-center overflow-hidden relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={logo.url}
+          alt={logo.label ?? "logo"}
+          className="max-w-full max-h-full object-contain p-2"
+        />
+        {logo.is_primary && (
+          <Badge className="absolute top-1 left-1 text-[9px]">⭐ 기본</Badge>
+        )}
+      </div>
+      <Input
+        value={labelDraft}
+        onChange={(e) => setLabelDraft(e.target.value)}
+        onBlur={() => {
+          if (labelDraft !== (logo.label ?? "")) onLabelChange(labelDraft);
+        }}
+        placeholder="라벨 (선택)"
+        disabled={disabled || busy}
+        className="h-7 text-xs"
       />
       <div className="flex gap-1">
         <Button
           type="button"
           size="sm"
-          variant="outline"
-          className="flex-1"
-          onClick={() => fileRef.current?.click()}
-          disabled={controlsDisabled}
+          variant={logo.is_primary ? "secondary" : "outline"}
+          onClick={onSetPrimary}
+          disabled={disabled || busy || logo.is_primary}
+          className="flex-1 text-xs"
         >
-          {busy === "upload" ? "업로드 중..." : url ? "교체" : "업로드"}
+          {logo.is_primary ? "⭐ 기본" : "기본으로"}
         </Button>
-        {url && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={remove}
-            disabled={controlsDisabled}
-            className="text-destructive"
-          >
-            {busy === "delete" ? "..." : "삭제"}
-          </Button>
-        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onRemove}
+          disabled={disabled || busy}
+          className="text-destructive text-xs"
+        >
+          {busy ? "..." : "삭제"}
+        </Button>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
+import type { BrandLogo } from "@/lib/memory/types";
 import type { LogoPosition } from "@/lib/canvas/compositor";
 import {
   composeGridCols,
@@ -32,6 +33,7 @@ export interface LogoDefaultsProp {
   source: "bp" | "fallback";
   hasLogo: boolean;
   logoUrl?: string | null;
+  logos?: BrandLogo[];
 }
 
 interface ComposeStageProps {
@@ -129,6 +131,9 @@ export function ComposeStage({
   const [yRatio, setYRatio] = useState<number>(0);
   const [initialized, setInitialized] = useState(false);
   const [baseAspectRatio, setBaseAspectRatio] = useState<string | null>(null);
+  const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(
+    logoDefaults.logoUrl ?? null,
+  );
 
   const previewRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef<{
@@ -155,7 +160,8 @@ export function ComposeStage({
   });
 
   useEffect(() => {
-    if (!logoDefaults.logoUrl) return;
+    const activeUrl = selectedLogoUrl ?? logoDefaults.logoUrl;
+    if (!activeUrl) return;
     const img = new Image();
     img.onload = () => {
       const aspect = img.naturalHeight / img.naturalWidth || 1;
@@ -173,8 +179,9 @@ export function ComposeStage({
         setInitialized(true);
       }
     };
-    img.src = logoDefaults.logoUrl;
+    img.src = activeUrl;
   }, [
+    selectedLogoUrl,
     logoDefaults.logoUrl,
     logoDefaults.position,
     logoDefaults.widthRatio,
@@ -278,6 +285,7 @@ export function ComposeStage({
             logoSizeRatio: widthRatio,
             logoXRatio: xRatio,
             logoYRatio: yRatio,
+            logoUrl: selectedLogoUrl ?? undefined,
           }
         : {};
       const res = await fetch(`/api/campaigns/${campaignId}/compose`, {
@@ -358,6 +366,42 @@ export function ComposeStage({
         {logoDefaults.hasLogo && baseImageUrl ? (
           <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
             <div>
+              {(logoDefaults.logos?.length ?? 0) > 1 && (
+                <div className="mb-3">
+                  <p className="text-xs font-medium mb-1.5">로고 선택</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {logoDefaults.logos!.map((logo) => {
+                      const isSelected =
+                        (selectedLogoUrl ?? logoDefaults.logoUrl) === logo.url;
+                      return (
+                        <button
+                          key={logo.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedLogoUrl(logo.url);
+                            setInitialized(false);
+                          }}
+                          disabled={running}
+                          className={
+                            "shrink-0 w-14 h-14 rounded border-2 flex items-center justify-center bg-muted/40 overflow-hidden transition-all " +
+                            (isSelected
+                              ? "border-primary ring-2 ring-primary/30"
+                              : "border-transparent hover:border-muted-foreground/40")
+                          }
+                          title={logo.label ?? (logo.is_primary ? "기본" : "")}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={logo.url}
+                            alt={logo.label ?? "logo"}
+                            className="max-w-full max-h-full object-contain p-1"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground mb-2">
                 미리보기 (드래그로 위치 이동 · 프리셋 클릭 · 슬라이더로 크기)
               </p>
@@ -388,7 +432,7 @@ export function ComposeStage({
                   className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                   draggable={false}
                 />
-                {logoDefaults.logoUrl && (
+                {(selectedLogoUrl ?? logoDefaults.logoUrl) && (
                   <div
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
@@ -404,7 +448,7 @@ export function ComposeStage({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={logoDefaults.logoUrl}
+                      src={selectedLogoUrl ?? logoDefaults.logoUrl ?? ""}
                       alt="logo"
                       draggable={false}
                       className="w-full h-full object-contain pointer-events-none"

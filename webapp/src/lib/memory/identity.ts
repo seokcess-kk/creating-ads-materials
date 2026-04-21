@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { BrandIdentity, BrandVoice, BrandColor, BrandLogos } from "./types";
+import type { BrandIdentity, BrandVoice, BrandColor, BrandLogo } from "./types";
 
 export async function getIdentity(brandId: string): Promise<BrandIdentity | null> {
   const supabase = createAdminClient();
@@ -16,7 +16,7 @@ export interface IdentityInput {
   voice?: BrandVoice;
   taboos?: string[];
   colors?: BrandColor[];
-  logos?: BrandLogos;
+  logos?: BrandLogo[];
 }
 
 export async function upsertIdentity(
@@ -29,7 +29,7 @@ export async function upsertIdentity(
     voice_json: input.voice ?? {},
     taboos: input.taboos ?? [],
     colors_json: input.colors ?? [],
-    logo_urls_json: input.logos ?? {},
+    logos_json: input.logos ?? [],
   };
   const { data, error } = await supabase
     .from("brand_identity")
@@ -38,4 +38,9 @@ export async function upsertIdentity(
     .single();
   if (error) throw error;
   return data as BrandIdentity;
+}
+
+export function getPrimaryLogo(logos: BrandLogo[]): BrandLogo | null {
+  if (logos.length === 0) return null;
+  return logos.find((l) => l.is_primary) ?? logos[0];
 }

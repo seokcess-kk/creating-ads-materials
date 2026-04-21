@@ -109,7 +109,7 @@ export async function POST(
           voice: mergedVoice,
           taboos: mergedTaboos,
           colors: mergedColors,
-          logos: existing?.logo_urls_json,
+          logos: existing?.logos_json ?? [],
         });
         identitySaved = true;
       }

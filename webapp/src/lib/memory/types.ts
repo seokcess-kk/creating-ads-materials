@@ -23,11 +23,11 @@ export interface BrandColor {
   usage?: string;
 }
 
-export interface BrandLogos {
-  full?: string;
-  icon?: string;
-  light?: string;
-  dark?: string;
+export interface BrandLogo {
+  id: string;
+  url: string;
+  label?: string;
+  is_primary?: boolean;
 }
 
 export interface BrandIdentity {
@@ -35,7 +35,7 @@ export interface BrandIdentity {
   voice_json: BrandVoice;
   taboos: string[];
   colors_json: BrandColor[];
-  logo_urls_json: BrandLogos;
+  logos_json: BrandLogo[];
   updated_at: string;
 }
 
