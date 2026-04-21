@@ -7,6 +7,7 @@ export interface FontQueryOptions {
   toneTags?: string[];
   family?: string;
   search?: string;
+  ids?: string[];
   limit?: number;
 }
 
@@ -27,6 +28,9 @@ export async function listFonts(options: FontQueryOptions = {}): Promise<FontRow
   const supabase = createAdminClient();
   let query = supabase.from("fonts").select("*");
 
+  if (options.ids && options.ids.length > 0) {
+    query = query.in("id", options.ids);
+  }
   if (options.tier) {
     if (Array.isArray(options.tier)) query = query.in("tier", options.tier);
     else query = query.eq("tier", options.tier);

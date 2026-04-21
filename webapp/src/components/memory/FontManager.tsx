@@ -47,14 +47,23 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
   useEffect(() => {
     const ids = pairs.map((p) => p.font_id).filter((id) => !fontIndex[id]);
     if (ids.length === 0) return;
+    let cancelled = false;
     (async () => {
-      const res = await fetch(`/api/fonts?limit=200`);
-      if (!res.ok) return;
+      const res = await fetch(
+        `/api/fonts?ids=${encodeURIComponent(ids.join(","))}&limit=${ids.length}`,
+      );
+      if (!res.ok || cancelled) return;
       const { fonts } = await res.json();
-      const next: Record<string, FontRow> = { ...fontIndex };
-      for (const f of fonts as FontRow[]) next[f.id] = f;
-      setFontIndex(next);
+      if (cancelled) return;
+      setFontIndex((prev) => {
+        const next: Record<string, FontRow> = { ...prev };
+        for (const f of fonts as FontRow[]) next[f.id] = f;
+        return next;
+      });
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [pairs, fontIndex]);
 
   async function runSearch() {

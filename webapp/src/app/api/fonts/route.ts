@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const tierParam = url.searchParams.get("tier");
     const category = url.searchParams.get("category") || undefined;
     const search = url.searchParams.get("search") || undefined;
+    const idsParam = url.searchParams.get("ids");
     const limit = Number(url.searchParams.get("limit")) || 100;
 
     let tier: FontTier | FontTier[] | undefined;
@@ -20,7 +21,11 @@ export async function GET(request: Request) {
       tier = parts.length === 1 ? parts[0] : parts.length > 1 ? parts : undefined;
     }
 
-    const fonts = await listFonts({ tier, category, search, limit });
+    const ids = idsParam
+      ? idsParam.split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
+    const fonts = await listFonts({ tier, category, search, ids, limit });
     return ok({ fonts });
   } catch (e) {
     return serverError(e);
