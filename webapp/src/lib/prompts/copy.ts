@@ -6,6 +6,7 @@ import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
 import type { StrategyAlternative } from "./strategy";
 import { buildCopyPatternDigest, buildVisionDigest } from "@/lib/vision/digest";
+import { buildPreferenceDigest } from "@/lib/learning/digest";
 
 export const COPY_PROMPT_VERSION = "copy@1.0.0";
 export const COPY_TOOL_NAME = "record_copy_drafts";
@@ -268,6 +269,10 @@ ${buildCopyPatternDigest(ctx.memory)}
 
 ## Brand Patterns (BP Vision digest)
 ${buildVisionDigest(ctx.memory, 3)}
+
+## Brand Preferences (과거 선택·평가)
+${buildPreferenceDigest(ctx.memory)}
+(5~8개 변형은 진입점을 다양하게 유지하되, 선호 훅과 "자주 수정한 영역"을 의식적으로 반영)
 
 # RULES
 

@@ -5,12 +5,16 @@ import type { Playbook } from "@/lib/playbook/types";
 import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
 import { buildVisionDigest } from "@/lib/vision/digest";
+import { buildPreferenceDigest } from "@/lib/learning/digest";
 
-export const STRATEGY_PROMPT_VERSION = "strategy@1.0.0";
+export const STRATEGY_PROMPT_VERSION = "strategy@2.0.0";
 export const STRATEGY_TOOL_NAME = "record_strategy_alternatives";
+
+export type StrategyRole = "safe" | "explore" | "challenge";
 
 export const StrategyAlternativeSchema = z.object({
   id: z.string(),
+  role: z.enum(["safe", "explore", "challenge"]),
   hookType: z.enum([
     "empathy",
     "problem",
@@ -37,17 +41,23 @@ export type StrategyOutput = z.infer<typeof StrategyOutputSchema>;
 
 export const strategyTool: Tool = {
   name: STRATEGY_TOOL_NAME,
-  description: "BOFU 광고 소재용 전략 대안 3개를 구조화하여 기록",
+  description: "BOFU 광고 소재용 전략 대안 3개 (safe / explore / challenge)",
   input_schema: {
     type: "object",
     properties: {
       alternatives: {
         type: "array",
-        description: "서로 다른 훅×프레임워크 조합 3개",
+        description: "서로 다른 역할·훅·프레임워크 조합 3개",
         items: {
           type: "object",
           properties: {
             id: { type: "string", description: "alt_1 | alt_2 | alt_3" },
+            role: {
+              type: "string",
+              enum: ["safe", "explore", "challenge"],
+              description:
+                "safe=검증된 방향, explore=새 각도, challenge=반대/도전 방향",
+            },
             hookType: {
               type: "string",
               enum: [
@@ -90,6 +100,7 @@ export const strategyTool: Tool = {
           },
           required: [
             "id",
+            "role",
             "hookType",
             "frameworkId",
             "angleName",
@@ -116,14 +127,19 @@ export interface StrategyContext {
 }
 
 export function buildStrategySystem(): string {
-  return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. 브랜드 자산을 바탕으로 BOFU(전환) 광고 소재의 전략 대안 3개를 설계합니다.
+  return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. 브랜드 자산을 바탕으로 BOFU(전환) 광고 소재의 전략 대안 3개를 **명확히 다른 역할**로 설계합니다.
+
+역할 분화 (필수):
+- alt_1 role="safe": **검증된 방향**. Brand Preferences(있으면)와 BP 패턴에서 승률 높은 조합을 재현. 학습 데이터가 없으면 플레이북 recommended hooks 중 가장 자연스러운 것.
+- alt_2 role="explore": **새로운 각도**. safe와 다른 훅×프레임워크 조합으로 타겟 페르소나의 아직 시도 안 한 진입점을 탐색.
+- alt_3 role="challenge": **도전적 방향**. safe와 반대되는 훅(예: safe=benefit ↔ challenge=problem, safe=urgency ↔ challenge=insight)으로 가설을 검증. 플레이북 recommended 밖의 훅 사용도 OK.
 
 원칙:
-- 3대안은 서로 다른 훅 타입 × 프레임워크 조합이어야 한다 (중복 금지).
+- 3대안의 hookType과 frameworkId는 모두 달라야 한다 (중복 금지).
 - 각 대안은 타겟 페르소나의 pains/desires와 직접 연결되어야 한다.
 - 플레이북의 taboos·금지 표현을 절대 사용하지 않는다.
 - 수치·긴급성·구체적 혜택을 담는다. 추상적 수사·과장·before-after는 피한다.
-- 각 대안은 카피(헤드·서브·CTA)와 비주얼을 둘 다 설계할 수 있을 만큼 구체적이어야 한다.
+- Brand Preferences는 **참고 정보일 뿐 강제 조건이 아니다**. safe에서만 주로 반영.
 - 한국어로 출력. 도구 호출(${STRATEGY_TOOL_NAME})로만 결과를 기록.`;
 }
 
@@ -234,6 +250,16 @@ ${ctx.intentNote ?? "(없음)"}
 ## Brand Patterns (BP Vision digest)
 ${formatVisionDigest(ctx.memory)}
 
+## Brand Preferences (이 브랜드의 과거 선택·평가)
+${buildPreferenceDigest(ctx.memory)}
+
+Preference 활용 규칙:
+- Preferences는 **참고 정보**다. 강제 반영 금지.
+- safe 대안에서만 주로 반영 — 그래도 100% 복제는 지양하고 조금은 새로운 요소 추가.
+- explore·challenge는 Preferences에 **구애받지 않고** 다양성을 우선.
+- "자주 수정한 영역"은 어느 대안이든 해당 요소를 선제적으로 명시 (예: retouch=size 빈번 → visualDirection에 수치 크기 구체화).
+- 학습 데이터가 비어있으면 플레이북·BP 패턴만 참고.
+
 # RULES
 
 ## Playbook — ${ctx.playbook.channel} / ${ctx.playbook.funnelStage}
@@ -246,7 +272,12 @@ ${formatFunnel(ctx.funnel)}
 ${formatFrameworks(ctx.frameworks)}
 
 # TASK
-서로 다른 훅 타입 × 프레임워크 조합으로 전략 대안 3개를 설계하세요. 각 대안은 후속 단계(Copy·Visual)에서 바로 확장될 수 있어야 합니다.
+3대안을 **역할별로** 설계하세요:
+- alt_1 (safe): 검증된 방향
+- alt_2 (explore): 새로운 각도
+- alt_3 (challenge): 반대·도전 방향
+
+각 대안의 hookType과 frameworkId는 모두 서로 달라야 합니다. 후속 단계(Copy·Visual)에서 바로 확장될 수 있도록 구체적으로 작성하세요.
 도구 ${STRATEGY_TOOL_NAME}로 결과를 기록하세요.`;
 
   return [

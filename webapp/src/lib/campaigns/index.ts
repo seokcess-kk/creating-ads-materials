@@ -112,6 +112,26 @@ export async function getLatestRun(campaignId: string): Promise<CreativeRun | nu
   return (data as CreativeRun | null) ?? null;
 }
 
+export async function rateRun(
+  runId: string,
+  rating: number | null,
+  note: string | null,
+): Promise<CreativeRun> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .update({
+      rating,
+      note,
+      rated_at: rating != null ? new Date().toISOString() : null,
+    })
+    .eq("id", runId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CreativeRun;
+}
+
 export async function updateRunStatus(
   runId: string,
   status: RunStatus,

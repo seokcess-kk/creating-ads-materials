@@ -89,6 +89,11 @@ export default async function BrandDetailPage({
           )}
         </div>
         <div className="flex gap-2 shrink-0">
+          <Link href={`/brands/${brandId}/insights`}>
+            <Button variant="outline" size="sm">
+              Insights
+            </Button>
+          </Link>
           <DeleteBrandButton brandId={brandId} brandName={brand.name} />
         </div>
       </div>

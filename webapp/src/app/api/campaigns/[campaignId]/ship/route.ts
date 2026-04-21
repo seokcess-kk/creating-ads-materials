@@ -10,6 +10,7 @@ import {
   upsertStage,
 } from "@/lib/campaigns";
 import { getBrand } from "@/lib/memory";
+import { recomputeLearnings } from "@/lib/learning";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
 
 export async function GET(
@@ -106,6 +107,12 @@ export async function POST(
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "complete");
       await updateCampaign(campaignId, { status: "completed" });
+
+      try {
+        await recomputeLearnings(campaign.brand_id);
+      } catch (learnErr) {
+        console.warn("Learnings 재계산 실패:", (learnErr as Error).message);
+      }
 
       return ok({ snapshot, campaign: { ...campaign, status: "completed" } });
     } catch (shipErr) {

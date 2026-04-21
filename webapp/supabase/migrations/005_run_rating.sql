@@ -1,0 +1,5 @@
+-- M4: Ship 주관 평가 필드
+ALTER TABLE creative_runs
+  ADD COLUMN IF NOT EXISTS rating INT CHECK (rating BETWEEN 1 AND 5),
+  ADD COLUMN IF NOT EXISTS note TEXT,
+  ADD COLUMN IF NOT EXISTS rated_at TIMESTAMPTZ;

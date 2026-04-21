@@ -145,6 +145,14 @@ export function StrategyGate({
           {variants.map((v) => {
             const c = v.content_json as unknown as StrategyAlternative;
             const isSelected = v.selected;
+            const roleLabel =
+              c.role === "safe"
+                ? "🛡 Safe"
+                : c.role === "explore"
+                  ? "🧭 Explore"
+                  : c.role === "challenge"
+                    ? "⚡ Challenge"
+                    : null;
             return (
               <Card
                 key={v.id}
@@ -155,7 +163,21 @@ export function StrategyGate({
                 }
               >
                 <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {roleLabel && (
+                      <Badge
+                        variant={
+                          c.role === "safe"
+                            ? "secondary"
+                            : c.role === "challenge"
+                              ? "destructive"
+                              : "outline"
+                        }
+                        className="text-[10px]"
+                      >
+                        {roleLabel}
+                      </Badge>
+                    )}
                     <CardTitle className="text-sm">{c.angleName}</CardTitle>
                     {isSelected && <Badge variant="secondary">selected</Badge>}
                   </div>
