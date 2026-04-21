@@ -17,11 +17,11 @@ import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
+import { CampaignStepper } from "@/components/campaign/CampaignStepper";
 import {
-  CampaignStepper,
   pickInitialStage,
   type StepDef,
-} from "@/components/campaign/CampaignStepper";
+} from "@/components/campaign/stepper-utils";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 
 export const dynamic = "force-dynamic";

@@ -11,14 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StageStatus } from "@/lib/campaigns/types";
+import type { StepDef } from "./stepper-utils";
 
-export interface StepDef {
-  key: string;
-  label: string;
-  status: StageStatus | undefined;
-  locked: boolean;
-  optional?: boolean;
-}
+export type { StepDef } from "./stepper-utils";
 
 interface CampaignStepperProps {
   steps: StepDef[];
@@ -280,18 +275,3 @@ function stepTooltip(step: StepDef): string {
   }
 }
 
-export function pickInitialStage(steps: StepDef[]): string {
-  const running = steps.find((s) => s.status === "running");
-  if (running) return running.key;
-  const stale = steps.find((s) => s.status === "stale" && !s.locked);
-  if (stale) return stale.key;
-  const failed = steps.find((s) => s.status === "failed" && !s.locked);
-  if (failed) return failed.key;
-  const todo = steps.find(
-    (s) => !s.locked && (s.status === undefined || s.status === "pending"),
-  );
-  if (todo) return todo.key;
-  const readys = steps.filter((s) => s.status === "ready");
-  if (readys.length > 0) return readys[readys.length - 1].key;
-  return steps[0]?.key ?? "strategy";
-}
