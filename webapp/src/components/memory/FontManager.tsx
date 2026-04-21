@@ -22,6 +22,12 @@ const ROLES: Array<{ id: FontRole; label: string; hint: string }> = [
   { id: "slogan", label: "Slogan", hint: "슬로건 / 감성 카피" },
 ];
 
+const SOURCE_LABEL: Record<string, string> = {
+  bp_typography: "BP 분석",
+  voice_tone: "Voice Tone",
+  category: "카테고리",
+};
+
 interface FontManagerProps {
   brandId: string;
   initialPairs: BrandFontPair[];
@@ -35,6 +41,7 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
   const [tier, setTier] = useState<FontTier | "all">("all");
   const [results, setResults] = useState<FontRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [prefilling, setPrefilling] = useState(false);
   const [editingRole, setEditingRole] = useState<FontRole | null>(null);
 
   useEffect(() => {
@@ -97,6 +104,65 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
     }
   }
 
+  async function autoPrefill(force: boolean) {
+    setPrefilling(true);
+    try {
+      const res = await fetch(`/api/brands/${brandId}/font-pairs/prefill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "추천 실패");
+      const { result, presetLabel } = data as {
+        result: {
+          skipped: boolean;
+          reason?: string;
+          presetId?: string;
+          source?: string;
+          filled: Array<{ role: FontRole; fontId: string }>;
+          missing: Array<{ role: FontRole; family: string; weight: string }>;
+        };
+        presetLabel: string | null;
+      };
+
+      if (result.skipped) {
+        if (result.reason === "has_existing_pairs") {
+          toast.info(
+            "이미 설정된 폰트가 있습니다. 덮어쓰려면 '다시 추천'을 누르세요.",
+          );
+        } else {
+          toast.warning(
+            "voice.tone·BP·카테고리에서 프리셋을 결정할 신호를 찾지 못했습니다",
+          );
+        }
+        return;
+      }
+
+      const sourceLabel = result.source ? SOURCE_LABEL[result.source] : null;
+      toast.success(
+        `${presetLabel ?? result.presetId} 프리셋 적용 — ${result.filled.length}개 role${sourceLabel ? ` · ${sourceLabel} 기반` : ""}`,
+      );
+      if (result.missing.length > 0) {
+        toast.warning(
+          `일부 폰트 미등록: ${result.missing.map((m) => `${m.role}(${m.family})`).join(", ")}`,
+        );
+      }
+
+      // pair 목록 새로고침
+      const refreshed = await fetch(`/api/brands/${brandId}/font-pairs`);
+      if (refreshed.ok) {
+        const { pairs: nextPairs } = await refreshed.json();
+        setPairs(nextPairs);
+      }
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setPrefilling(false);
+    }
+  }
+
   async function unassign(role: FontRole) {
     try {
       const res = await fetch(`/api/brands/${brandId}/font-pairs/${role}`, {
@@ -115,8 +181,38 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
     return `${font.family}${font.weight ? ` · ${font.weight}` : ""} [${font.tier}]`;
   }
 
+  const hasAnyPair = pairs.length > 0;
+
   return (
     <div className="space-y-6">
+      <Card className="bg-muted/20">
+        <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl" aria-hidden>
+              ✨
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium">자동 추천</p>
+              <p className="text-xs text-muted-foreground">
+                BP 분석 · Voice Tone · 카테고리로 5개 role을 한 번에 설정합니다
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant={hasAnyPair ? "outline" : "default"}
+            onClick={() => autoPrefill(hasAnyPair)}
+            disabled={prefilling}
+          >
+            {prefilling
+              ? "추천 중..."
+              : hasAnyPair
+                ? "다시 추천 (덮어쓰기)"
+                : "자동 추천"}
+          </Button>
+        </CardContent>
+      </Card>
+
       <div>
         <h2 className="text-sm font-semibold mb-3">역할별 폰트 조합</h2>
         <div className="space-y-2">
