@@ -10,7 +10,7 @@ import {
   TONE_PRESETS,
   type TonePresetId,
 } from "@/lib/fonts/tone-pairs";
-import { findFont } from "@/lib/fonts/queries";
+import { resolveFontForPresetRole, type ResolveSource } from "@/lib/fonts/resolver";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 import type { FontRole } from "@/lib/memory/types";
 
@@ -57,24 +57,31 @@ export async function POST(
     const preset = getPresetById(body.preset_id);
     if (!preset) throw new ApiError(400, "알 수 없는 프리셋");
 
-    const filled: Array<{ role: FontRole; family: string; weight: string }> = [];
+    const filled: Array<{
+      role: FontRole;
+      family: string;
+      weight: string;
+      source: ResolveSource;
+      requested: { family: string; weight: string };
+    }> = [];
     const missing: Array<{ role: FontRole; family: string; weight: string }> = [];
 
-    for (const [role, spec] of Object.entries(preset.roles) as Array<
-      [FontRole, { family: string; weight: string }]
-    >) {
-      const font = await findFont(spec.family, spec.weight);
-      if (!font) {
+    for (const role of Object.keys(preset.roles) as FontRole[]) {
+      const resolved = await resolveFontForPresetRole(preset, role);
+      if (!resolved) {
+        const spec = preset.roles[role];
         missing.push({ role, family: spec.family, weight: spec.weight });
         continue;
       }
-      await upsertFontPair(campaign.brand_id, role, font.id, {
+      await upsertFontPair(campaign.brand_id, role, resolved.font.id, {
         campaignId,
       });
       filled.push({
         role,
-        family: font.family,
-        weight: font.weight ?? spec.weight,
+        family: resolved.font.family,
+        weight: resolved.font.weight ?? resolved.requested.weight,
+        source: resolved.source,
+        requested: resolved.requested,
       });
     }
 

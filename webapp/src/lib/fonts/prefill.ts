@@ -1,7 +1,7 @@
 import type { BrandIdentity, BrandReference, FontRole } from "@/lib/memory/types";
 import { listFontPairs, upsertFontPair } from "@/lib/memory/fonts";
-import { findFont } from "./queries";
 import { getPresetById, TONE_PRESETS, type TonePreset, type TonePresetId } from "./tone-pairs";
+import { resolveFontForPresetRole, type ResolveSource } from "./resolver";
 
 export interface PrefillSignals {
   voiceTone?: string | null;
@@ -153,7 +153,14 @@ export interface PrefillResult {
   reason?: "has_existing_pairs" | "no_preset_resolved";
   presetId?: TonePresetId;
   source?: ResolveResult["source"];
-  filled: Array<{ role: FontRole; fontId: string; family: string; weight: string }>;
+  filled: Array<{
+    role: FontRole;
+    fontId: string;
+    family: string;
+    weight: string;
+    source: ResolveSource;
+    requested: { family: string; weight: string };
+  }>;
   missing: Array<{ role: FontRole; family: string; weight: string }>;
 }
 
@@ -176,20 +183,21 @@ export async function prefillFontPairs(
   const filled: PrefillResult["filled"] = [];
   const missing: PrefillResult["missing"] = [];
 
-  for (const [role, spec] of Object.entries(preset.roles) as Array<
-    [FontRole, { family: string; weight: string }]
-  >) {
-    const font = await findFont(spec.family, spec.weight);
-    if (!font) {
+  for (const role of Object.keys(preset.roles) as FontRole[]) {
+    const resolved = await resolveFontForPresetRole(preset, role);
+    if (!resolved) {
+      const spec = preset.roles[role];
       missing.push({ role, family: spec.family, weight: spec.weight });
       continue;
     }
-    await upsertFontPair(brandId, role, font.id);
+    await upsertFontPair(brandId, role, resolved.font.id);
     filled.push({
       role,
-      fontId: font.id,
-      family: font.family,
-      weight: font.weight ?? spec.weight,
+      fontId: resolved.font.id,
+      family: resolved.font.family,
+      weight: resolved.font.weight ?? resolved.requested.weight,
+      source: resolved.source,
+      requested: resolved.requested,
     });
   }
 
