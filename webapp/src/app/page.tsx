@@ -2,11 +2,12 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { listBrands } from "@/lib/memory";
+import { getDashboardStats } from "@/lib/campaigns";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const brands = await listBrands();
+  const [brands, stats] = await Promise.all([listBrands(), getDashboardStats()]);
 
   return (
     <div className="space-y-6">
@@ -34,20 +35,24 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Campaigns</CardDescription>
-            <CardTitle className="text-3xl text-muted-foreground">—</CardTitle>
+            <CardTitle className="text-3xl">{stats.campaigns}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">M2에서 활성화</p>
+            <p className="text-xs text-muted-foreground">
+              진행 중 {stats.running} · 완료 {stats.completed}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Creatives</CardDescription>
-            <CardTitle className="text-3xl text-muted-foreground">—</CardTitle>
+            <CardDescription>완료된 소재</CardDescription>
+            <CardTitle className="text-3xl">{stats.completed}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">M3에서 활성화</p>
+            <p className="text-xs text-muted-foreground">
+              Ship 단계까지 완주한 캠페인
+            </p>
           </CardContent>
         </Card>
       </div>

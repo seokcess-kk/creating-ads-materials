@@ -25,6 +25,24 @@ export async function listCampaigns(brandId: string): Promise<Campaign[]> {
   return (data ?? []) as Campaign[];
 }
 
+export interface DashboardStats {
+  campaigns: number;
+  completed: number;
+  running: number;
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from("campaigns").select("status");
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{ status: Campaign["status"] }>;
+  return {
+    campaigns: rows.length,
+    completed: rows.filter((r) => r.status === "completed").length,
+    running: rows.filter((r) => r.status === "running").length,
+  };
+}
+
 export async function getCampaign(campaignId: string): Promise<Campaign | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
