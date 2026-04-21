@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { z } from "zod";
 import {
   createReference,
   listReferences,
@@ -7,7 +7,7 @@ import {
   type ReferenceSource,
 } from "@/lib/memory";
 import { analyzeBP } from "@/lib/vision";
-import { ApiError, ok, serverError } from "@/lib/api-utils";
+import { ok, parseJson, serverError } from "@/lib/api-utils";
 
 export const maxDuration = 60;
 
@@ -24,63 +24,37 @@ export async function GET(
   }
 }
 
+const PostSchema = z.object({
+  file_url: z.string().url(),
+  file_name: z.string().max(255).optional(),
+  source_type: z
+    .enum(["bp_upload", "own_archive", "competitor", "industry"])
+    .optional(),
+  source_note: z.string().max(500).nullable().optional(),
+  is_negative: z.boolean().optional(),
+  weight: z.number().min(0).max(100).optional(),
+});
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ brandId: string }> },
 ) {
   try {
     const { brandId } = await params;
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File)) throw new ApiError(400, "file이 필요합니다");
-
-    const sourceTypeRaw = (formData.get("source_type") as string | null) ?? "bp_upload";
-    const validSources: ReferenceSource[] = ["bp_upload", "own_archive", "competitor", "industry"];
-    const sourceType = validSources.includes(sourceTypeRaw as ReferenceSource)
-      ? (sourceTypeRaw as ReferenceSource)
-      : "bp_upload";
-
-    const sourceNote = formData.get("source_note") as string | null;
-    const isNegative = formData.get("is_negative") === "true";
-    const weightRaw = formData.get("weight");
-    const weight = weightRaw != null ? Math.max(0, Math.min(100, Number(weightRaw))) : 50;
-
-    const supabase = createAdminClient();
-    // Supabase Storage keys는 ASCII 안전 문자만 허용 — 한글 포함 시 400 Invalid key
-    const dotIdx = file.name.lastIndexOf(".");
-    const ext =
-      dotIdx >= 0
-        ? file.name.slice(dotIdx + 1).replace(/[^\w]+/g, "").toLowerCase()
-        : "";
-    const stem = (dotIdx >= 0 ? file.name.slice(0, dotIdx) : file.name)
-      .replace(/[^\w\-]+/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/^_+|_+$/g, "")
-      .slice(0, 60);
-    const safeName = `${stem || "file"}${ext ? `.${ext}` : ""}`;
-    const fileName = `${Date.now()}_${safeName}`;
-    const path = `${brandId}/references/${fileName}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    const { error: upErr } = await supabase.storage
-      .from("brand-assets")
-      .upload(path, buffer, { contentType: file.type || "application/octet-stream", upsert: false });
-    if (upErr) throw upErr;
-
-    const { data: urlData } = supabase.storage.from("brand-assets").getPublicUrl(path);
+    const input = await parseJson(request, PostSchema);
 
     const ref = await createReference(brandId, {
-      file_url: urlData.publicUrl,
-      file_name: file.name,
-      source_type: sourceType,
-      source_note: sourceNote,
-      is_negative: isNegative,
-      weight,
+      file_url: input.file_url,
+      file_name: input.file_name ?? null,
+      source_type: (input.source_type ?? "bp_upload") as ReferenceSource,
+      source_note: input.source_note ?? null,
+      is_negative: input.is_negative ?? false,
+      weight: input.weight ?? 50,
     });
 
     try {
       const result = await analyzeBP({
-        source: { type: "url", url: urlData.publicUrl },
+        source: { type: "url", url: input.file_url },
         usageContext: {
           operation: "vision_bp",
           brandId,

@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { TagInput } from "./TagInput";
+import { directUpload } from "@/lib/upload/direct-upload";
+import { resizeImageFile } from "@/lib/upload/resize-image";
 import type { BrandColor, BrandColorRole, BrandIdentity, BrandLogo, BrandVoice } from "@/lib/memory/types";
 
 const COLOR_ROLES: BrandColorRole[] = ["primary", "secondary", "accent", "neutral", "semantic"];
@@ -487,11 +489,12 @@ function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
       const file = files[i];
       setUploadProgress({ current: i + 1, total: files.length });
       try {
-        const fd = new FormData();
-        fd.append("file", file);
+        const resized = await resizeImageFile(file, { maxEdge: 2048, quality: 0.9 });
+        const uploaded = await directUpload(brandId, "logo", resized);
         const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
           method: "POST",
-          body: fd,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file_url: uploaded.publicUrl }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "업로드 실패");

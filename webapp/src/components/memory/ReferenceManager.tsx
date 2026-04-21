@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { BrandReference, ReferenceSource } from "@/lib/memory/types";
+import { directUpload } from "@/lib/upload/direct-upload";
+import { resizeImageFile } from "@/lib/upload/resize-image";
 import { VisionAnalysisCard } from "./VisionAnalysisCard";
 
 interface ReferenceManagerProps {
@@ -35,13 +37,20 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function uploadOne(file: File): Promise<BrandReference | null> {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("source_type", sourceType);
-    if (sourceNote) fd.append("source_note", sourceNote);
-    fd.append("is_negative", String(isNegative));
-    fd.append("weight", String(weight));
-    const res = await fetch(`/api/brands/${brandId}/references`, { method: "POST", body: fd });
+    const resized = await resizeImageFile(file, { maxEdge: 2048, quality: 0.9 });
+    const uploaded = await directUpload(brandId, "reference", resized);
+    const res = await fetch(`/api/brands/${brandId}/references`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        file_url: uploaded.publicUrl,
+        file_name: file.name,
+        source_type: sourceType,
+        source_note: sourceNote || null,
+        is_negative: isNegative,
+        weight,
+      }),
+    });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error ?? "업로드 실패");

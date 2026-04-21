@@ -15,48 +15,29 @@ function randomId(): string {
   return globalThis.crypto.randomUUID();
 }
 
-// POST: 새 로고 업로드 → logos 배열에 추가
+// POST: 새 로고 등록 — 파일은 클라이언트가 Storage에 직접 업로드하고 메타만 전달
+const PostSchema = z.object({
+  file_url: z.string().url(),
+  label: z.string().max(50).nullable().optional(),
+});
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ brandId: string }> },
 ) {
   try {
     const { brandId } = await params;
-    const formData = await request.formData();
-    const file = formData.get("file");
-    const labelRaw = formData.get("label");
+    const input = await parseJson(request, PostSchema);
 
-    if (!(file instanceof File)) throw new ApiError(400, "file이 필요합니다");
-    if (!file.type.startsWith("image/")) {
-      throw new ApiError(400, "이미지 파일만 허용됩니다");
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      throw new ApiError(400, "파일 크기는 10MB 이하여야 합니다");
-    }
-
-    const label = typeof labelRaw === "string" && labelRaw.trim() ? labelRaw.trim() : undefined;
-
-    const supabase = createAdminClient();
-    const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
-    const id = randomId();
-    const path = `${brandId}/logos/${id}.${ext}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    const { error: upErr } = await supabase.storage
-      .from("brand-assets")
-      .upload(path, buffer, { contentType: file.type, upsert: false });
-    if (upErr) throw upErr;
-
-    const { data: urlData } = supabase.storage.from("brand-assets").getPublicUrl(path);
-    const publicUrl = urlData.publicUrl;
+    const label = input.label && input.label.trim() ? input.label.trim() : undefined;
 
     const existing = await getIdentity(brandId);
     const prev: BrandLogo[] = existing?.logos_json ?? [];
 
     // 첫 로고라면 자동으로 primary
     const newLogo: BrandLogo = {
-      id,
-      url: publicUrl,
+      id: randomId(),
+      url: input.file_url,
       label,
       is_primary: prev.length === 0,
     };
