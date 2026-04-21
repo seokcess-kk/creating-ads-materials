@@ -18,6 +18,7 @@ import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
 import { CampaignFontOverride } from "@/components/campaign/CampaignFontOverride";
+import { FontSuggestionsPanel } from "@/components/campaign/FontSuggestionsPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
 import { inferPresetFromCampaignPairs } from "@/lib/fonts/infer-preset";
 import { getPresetById } from "@/lib/fonts/tone-pairs";
@@ -237,6 +238,12 @@ export default async function CampaignPage({
         campaignId={campaignId}
         initialPresetId={overridePresetId}
         initialPresetLabel={overridePresetLabel}
+      />
+
+      <FontSuggestionsPanel
+        campaignId={campaignId}
+        currentPresetId={overridePresetId}
+        visualReady={visualReady}
       />
 
       <CampaignStepper steps={steps} initialStage={initialStage}>
