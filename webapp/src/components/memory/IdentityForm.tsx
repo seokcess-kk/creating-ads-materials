@@ -455,38 +455,67 @@ interface LogoGalleryProps {
 
 function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function upload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("이미지 파일만 업로드 가능");
-      return;
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+
+    // 사전 검증 (전체 일괄 차단)
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) {
+        toast.error(`${f.name}: 이미지 파일이 아님`);
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        toast.error(`${f.name}: 10MB 초과`);
+        if (fileRef.current) fileRef.current.value = "";
+        return;
+      }
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error("10MB를 초과합니다");
-      return;
+
+    setUploadProgress({ current: 0, total: files.length });
+    let ok = 0;
+    let latestIdentity: { logos_json?: BrandLogo[] } | undefined;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      setUploadProgress({ current: i + 1, total: files.length });
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
+          method: "POST",
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "업로드 실패");
+        latestIdentity = data.identity;
+        ok += 1;
+      } catch (err) {
+        toast.error(
+          `${file.name}: ${err instanceof Error ? err.message : "오류"}`,
+        );
+      }
     }
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "업로드 실패");
-      onChange(data.identity?.logos_json ?? []);
-      toast.success("로고 업로드 완료");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "오류");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
+
+    if (latestIdentity?.logos_json) {
+      onChange(latestIdentity.logos_json);
     }
+    if (ok > 0) {
+      toast.success(
+        ok === files.length
+          ? `${ok}개 로고 업로드 완료`
+          : `${ok}/${files.length}개 완료 (나머지 실패)`,
+      );
+    }
+    setUploadProgress(null);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   async function setPrimary(id: string) {
@@ -558,22 +587,28 @@ function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          disabled={disabled || uploading}
+          disabled={disabled || uploadProgress !== null}
           className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-40"
         >
           <span className="text-2xl">+</span>
-          <span>{uploading ? "업로드 중..." : "로고 추가"}</span>
+          <span>
+            {uploadProgress
+              ? `업로드 ${uploadProgress.current}/${uploadProgress.total}`
+              : "로고 추가"}
+          </span>
         </button>
       </div>
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={upload}
         className="hidden"
       />
       <p className="text-[11px] text-muted-foreground">
-        PNG 투명 배경 권장 · 최대 10MB · ⭐ 기본 로고 1개 지정 (Compose에서 자동 선택)
+        PNG 투명 배경 권장 · 최대 10MB · 여러 파일 동시 선택 가능 ·
+        ⭐ 기본 로고 1개 지정 (Compose에서 자동 선택)
       </p>
     </div>
   );
