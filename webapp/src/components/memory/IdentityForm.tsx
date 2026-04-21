@@ -1,15 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { TagInput } from "./TagInput";
 import type { BrandColor, BrandColorRole, BrandIdentity, BrandLogos, BrandVoice } from "@/lib/memory/types";
+
+type LogoVariant = "full" | "icon" | "light" | "dark";
+const LOGO_VARIANTS: Array<{ id: LogoVariant; label: string; hint: string }> = [
+  { id: "full", label: "Full", hint: "기본 워드마크" },
+  { id: "icon", label: "Icon", hint: "아이콘/심볼 단독" },
+  { id: "light", label: "Light", hint: "밝은 배경용" },
+  { id: "dark", label: "Dark", hint: "어두운 배경용" },
+];
 
 const COLOR_ROLES: BrandColorRole[] = ["primary", "secondary", "accent", "neutral", "semantic"];
 
@@ -177,22 +184,23 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">로고 URL</CardTitle>
+          <CardTitle className="text-base">로고 업로드</CardTitle>
         </CardHeader>
-        <CardContent className="grid md:grid-cols-2 gap-3">
-          {(["full", "icon", "light", "dark"] as const).map((key) => (
-            <div key={key} className="space-y-1">
-              <Label className="text-xs capitalize">{key}</Label>
-              <Input
-                value={logos[key] ?? ""}
-                onChange={(e) => setLogos({ ...logos, [key]: e.target.value || undefined })}
-                placeholder="https://..."
-                disabled={saving}
-              />
-            </div>
+        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {LOGO_VARIANTS.map((v) => (
+            <LogoSlot
+              key={v.id}
+              brandId={brandId}
+              variant={v.id}
+              label={v.label}
+              hint={v.hint}
+              url={logos[v.id]}
+              disabled={saving}
+              onChange={(url) => setLogos((prev) => ({ ...prev, [v.id]: url ?? undefined }))}
+            />
           ))}
-          <p className="md:col-span-2 text-xs text-muted-foreground">
-            Storage 업로드 UI는 M2에서 추가 예정. 지금은 공개 URL 직접 입력.
+          <p className="col-span-2 md:col-span-4 text-xs text-muted-foreground">
+            PNG 투명 배경 권장 · 최대 10MB · 업로드 즉시 Storage에 저장됩니다.
           </p>
         </CardContent>
       </Card>
@@ -204,6 +212,123 @@ export function IdentityForm({ brandId, initial }: IdentityFormProps) {
         <Button onClick={save} disabled={saving}>
           {saving ? "저장 중..." : "저장"}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+interface LogoSlotProps {
+  brandId: string;
+  variant: LogoVariant;
+  label: string;
+  hint: string;
+  url: string | undefined;
+  disabled: boolean;
+  onChange: (url: string | null) => void;
+}
+
+function LogoSlot({ brandId, variant, label, hint, url, disabled, onChange }: LogoSlotProps) {
+  const [busy, setBusy] = useState<"upload" | "delete" | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("이미지 파일만 업로드 가능");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("10MB를 초과합니다");
+      return;
+    }
+    setBusy("upload");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("variant", variant);
+      const res = await fetch(`/api/brands/${brandId}/identity/logos`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "업로드 실패");
+      onChange(data.url);
+      toast.success(`${label} 업로드 완료`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "오류");
+    } finally {
+      setBusy(null);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function remove() {
+    if (!confirm(`${label} 로고를 삭제할까요?`)) return;
+    setBusy("delete");
+    try {
+      const res = await fetch(
+        `/api/brands/${brandId}/identity/logos?variant=${variant}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error((await res.json()).error ?? "삭제 실패");
+      onChange(null);
+      toast.success(`${label} 삭제 완료`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "오류");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const isBusy = busy !== null;
+  const controlsDisabled = disabled || isBusy;
+
+  return (
+    <div className="border rounded-md p-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-[10px] text-muted-foreground">{hint}</span>
+      </div>
+      <div className="aspect-square rounded bg-muted/40 border flex items-center justify-center overflow-hidden">
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt={`${label} logo`} className="max-w-full max-h-full object-contain p-2" />
+        ) : (
+          <span className="text-xs text-muted-foreground">없음</span>
+        )}
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFile}
+        disabled={controlsDisabled}
+        className="hidden"
+      />
+      <div className="flex gap-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="flex-1"
+          onClick={() => fileRef.current?.click()}
+          disabled={controlsDisabled}
+        >
+          {busy === "upload" ? "업로드 중..." : url ? "교체" : "업로드"}
+        </Button>
+        {url && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={remove}
+            disabled={controlsDisabled}
+            className="text-destructive"
+          >
+            {busy === "delete" ? "..." : "삭제"}
+          </Button>
+        )}
       </div>
     </div>
   );

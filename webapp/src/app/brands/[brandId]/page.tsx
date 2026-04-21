@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadBrandMemory } from "@/lib/memory";
+import { listCampaigns } from "@/lib/campaigns";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,8 +17,10 @@ export default async function BrandDetailPage({
   const { brandId } = await params;
   const memory = await loadBrandMemory(brandId);
   if (!memory) notFound();
+  const campaigns = await listCampaigns(brandId);
 
   const { brand, identity, offers, audiences, references, fontPairs } = memory;
+  const memoryReady = Boolean(identity) && offers.length > 0 && audiences.length > 0;
   const readyRefs = references.filter((r) => r.vision_status === "ready").length;
   const pendingRefs = references.filter((r) => r.vision_status === "pending").length;
   const failedRefs = references.filter((r) => r.vision_status === "failed").length;
@@ -112,19 +115,59 @@ export default async function BrandDetailPage({
         </div>
       </div>
 
-      <Card className="bg-muted/30">
-        <CardHeader>
-          <CardTitle className="text-base">다음 단계</CardTitle>
-          <CardDescription>
-            M2에서 캠페인 Intent → Strategy → Copy → Visual 파이프라인이 추가됩니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button disabled variant="outline">
-            + 캠페인 시작 (M2에서 활성화)
-          </Button>
-        </CardContent>
-      </Card>
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold">Campaigns</h2>
+          <div className="flex gap-2">
+            {campaigns.length > 0 && (
+              <Link href={`/brands/${brandId}/campaigns`}>
+                <Button variant="ghost" size="sm">
+                  전체 보기
+                </Button>
+              </Link>
+            )}
+            <Link href={`/brands/${brandId}/campaigns/new`}>
+              <Button size="sm" disabled={!memoryReady}>
+                + 캠페인 시작
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        {!memoryReady && (
+          <Card className="bg-muted/30">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              캠페인 시작 전에 Identity · Offer · Audience 최소 1개씩 설정해주세요.
+            </CardContent>
+          </Card>
+        )}
+
+        {memoryReady && campaigns.length === 0 && (
+          <Card className="bg-muted/30">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              아직 캠페인이 없습니다. Intent 입력으로 Strategy → Copy → Visual 파이프라인을 시작하세요.
+            </CardContent>
+          </Card>
+        )}
+
+        {campaigns.length > 0 && (
+          <div className="space-y-2">
+            {campaigns.slice(0, 5).map((c) => (
+              <Link key={c.id} href={`/campaigns/${c.id}`}>
+                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardContent className="py-3 flex items-center gap-2">
+                    <span className="text-sm font-medium flex-1">{c.name}</span>
+                    <Badge variant="outline">{c.goal}</Badge>
+                    <Badge variant={c.status === "completed" ? "secondary" : "outline"}>
+                      {c.status}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
