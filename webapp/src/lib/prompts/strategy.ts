@@ -29,8 +29,8 @@ export const StrategyAlternativeSchema = z.object({
   angleName: z.string().min(1).max(40),
   angleSummary: z.string().min(1).max(160),
   keyMessage: z.string().min(1).max(100),
-  visualDirection: z.string().min(1).max(200),
-  whyItWorks: z.string().min(1).max(200),
+  visualDirection: z.string().min(1).max(400),
+  whyItWorks: z.string().min(1).max(400),
 });
 export type StrategyAlternative = z.infer<typeof StrategyAlternativeSchema>;
 
@@ -91,11 +91,13 @@ export const strategyTool: Tool = {
             },
             visualDirection: {
               type: "string",
-              description: "비주얼 생성 단계에 전달할 디렉션 (구성·대상·숫자·대비)",
+              description:
+                "비주얼 생성 단계에 전달할 디렉션 (구성·대상·숫자·대비). 최대 400자, 2~3문장 권장.",
             },
             whyItWorks: {
               type: "string",
-              description: "페르소나의 pains·desires와 어떻게 연결되는지 근거",
+              description:
+                "페르소나의 pains·desires와 어떻게 연결되는지 근거. 최대 400자, 2~3문장 권장.",
             },
           },
           required: [
