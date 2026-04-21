@@ -4,7 +4,7 @@ import type { BrandMemory } from "@/lib/memory/types";
 import type { Playbook } from "@/lib/playbook/types";
 import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
-import { buildVisionDigest } from "@/lib/vision/digest";
+import { buildVisionDigest, buildStrategyRoleHints, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
 
 export const STRATEGY_PROMPT_VERSION = "strategy@2.0.0";
@@ -165,9 +165,6 @@ function formatIdentity(memory: BrandMemory): string {
   if (voice.do?.length) lines.push(`- do: ${voice.do.join(", ")}`);
   if (voice.dont?.length) lines.push(`- dont: ${voice.dont.join(", ")}`);
   if (id.taboos.length) lines.push(`- taboos: ${id.taboos.join(", ")}`);
-  if (id.colors_json.length) {
-    lines.push(`- colors: ${id.colors_json.map((c) => `${c.role}=${c.hex}`).join(", ")}`);
-  }
   return lines.join("\n") || "(빈 Identity)";
 }
 

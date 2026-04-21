@@ -40,12 +40,6 @@ export const VISUAL_VARIANT_SPECS: VisualVariantSpec[] = [
   },
 ];
 
-function colorHint(memory: BrandMemory): string {
-  const colors = memory.identity?.colors_json ?? [];
-  if (colors.length === 0) return "balanced modern palette";
-  return colors.map((c) => `${c.role} ${c.hex}`).join(", ");
-}
-
 function focusInstruction(spec: VisualVariantSpec, strategy: StrategyAlternative): string {
   switch (spec.focus) {
     case "product_focus":
@@ -93,7 +87,6 @@ export function buildGeminiPrompt(
 ): string {
   const brand = ctx.memory.brand.name;
   const category = ctx.memory.brand.category ?? "business";
-  const colors = colorHint(ctx.memory);
   const focus = focusInstruction(spec, ctx.strategy);
   const visualDirection = ctx.strategy.visualDirection;
   const playbookAvoid = ctx.playbook.visualGuide.avoid.join(", ");
@@ -126,9 +119,6 @@ Render these as real typography (not placeholder boxes). Use premium Korean geom
 
 # Variant focus
 ${spec.label} — ${focus}
-
-# Brand palette
-${colors}
 
 # Past BP visual patterns (respect where aligned, vary subtly)
 ${bpPatterns}
@@ -225,11 +215,9 @@ export function buildValidatorMessages(
   spec: VisualVariantSpec,
 ): MessageParam[] {
   const brand = ctx.memory.brand.name;
-  const palette = colorHint(ctx.memory);
   const context = `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} BOFU 광고 후보(${spec.label})입니다.
 전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
 예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
-브랜드 컬러: ${palette}
 이 맥락에서 4축으로 평가해주세요.`;
 
   return [
