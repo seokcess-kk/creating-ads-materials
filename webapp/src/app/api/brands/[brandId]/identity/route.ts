@@ -1,5 +1,11 @@
 import { z } from "zod";
-import { getIdentity, upsertIdentity } from "@/lib/memory";
+import {
+  getBrand,
+  getIdentity,
+  listReferences,
+  upsertIdentity,
+} from "@/lib/memory";
+import { collectSignalsForPrefill, prefillFontPairs } from "@/lib/fonts/prefill";
 import { ok, parseJson, serverError } from "@/lib/api-utils";
 
 export async function GET(
@@ -50,6 +56,24 @@ export async function PUT(
     const { brandId } = await params;
     const input = await parseJson(request, PutSchema);
     const identity = await upsertIdentity(brandId, input);
+    // voice.tone 또는 BP typography가 확정되면 폰트 프리셋 프리필 시도.
+    // 기존 font_pairs가 있으면 건드리지 않음 (사용자 선택 보존).
+    try {
+      const [brand, references] = await Promise.all([
+        getBrand(brandId),
+        listReferences(brandId),
+      ]);
+      await prefillFontPairs(
+        brandId,
+        collectSignalsForPrefill({
+          category: brand?.category ?? null,
+          identity,
+          references,
+        }),
+      );
+    } catch (e) {
+      console.warn("[identity] font prefill failed:", e);
+    }
     return ok({ identity });
   } catch (e) {
     return serverError(e);
