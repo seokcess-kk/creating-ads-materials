@@ -154,6 +154,7 @@ export interface FontRow {
 export interface BrandFontPair {
   id: string;
   brand_id: string;
+  campaign_id: string | null;
   role: FontRole;
   font_id: string;
   hierarchy_ratio: number;

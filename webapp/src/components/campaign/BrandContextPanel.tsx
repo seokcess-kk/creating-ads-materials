@@ -23,7 +23,7 @@ export function BrandContextPanel({
 }: BrandContextPanelProps) {
   const [open, setOpen] = useState(false);
   const voice = identity?.voice_json as
-    | { tone?: string[]; personality?: string[] }
+    | { tone?: string; personality?: string[] }
     | undefined;
 
   return (
@@ -65,8 +65,8 @@ export function BrandContextPanel({
               </div>
               {identity ? (
                 <div className="space-y-1 text-muted-foreground">
-                  {voice?.tone && voice.tone.length > 0 && (
-                    <p>Tone: {voice.tone.slice(0, 3).join(", ")}</p>
+                  {voice?.tone && (
+                    <p>Tone: {voice.tone}</p>
                   )}
                   {voice?.personality && voice.personality.length > 0 && (
                     <p>Personality: {voice.personality.slice(0, 3).join(", ")}</p>

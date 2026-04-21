@@ -17,6 +17,10 @@ import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
+import { CampaignFontOverride } from "@/components/campaign/CampaignFontOverride";
+import { listCampaignFontPairs } from "@/lib/memory/fonts";
+import { inferPresetFromCampaignPairs } from "@/lib/fonts/infer-preset";
+import { getPresetById } from "@/lib/fonts/tone-pairs";
 import { CampaignStepper } from "@/components/campaign/CampaignStepper";
 import {
   pickInitialStage,
@@ -113,6 +117,16 @@ export default async function CampaignPage({
 
   const composeBaseUrl =
     ((selectedRetouch ?? selectedVisual)?.content_json as UrlContent | undefined)?.url ?? null;
+
+  // 캠페인 폰트 오버라이드 현재 상태 추론
+  const campaignFontPairs = await listCampaignFontPairs(
+    campaign.brand_id,
+    campaignId,
+  );
+  const overridePresetId = await inferPresetFromCampaignPairs(campaignFontPairs);
+  const overridePresetLabel = overridePresetId
+    ? (getPresetById(overridePresetId)?.label ?? null)
+    : null;
 
   const steps: StepDef[] = [
     {
@@ -218,6 +232,12 @@ export default async function CampaignPage({
           }
         />
       )}
+
+      <CampaignFontOverride
+        campaignId={campaignId}
+        initialPresetId={overridePresetId}
+        initialPresetLabel={overridePresetLabel}
+      />
 
       <CampaignStepper steps={steps} initialStage={initialStage}>
         <StrategyGate

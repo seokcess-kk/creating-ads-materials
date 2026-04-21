@@ -4,6 +4,7 @@ import {
   getSelectedVariant,
 } from "@/lib/campaigns";
 import { loadBrandMemory } from "@/lib/memory";
+import { resolveFontPairsForCampaign } from "@/lib/memory/fonts";
 import { getFont } from "@/lib/fonts/queries";
 import type { BrandMemory, FontRole, FontRow } from "@/lib/memory/types";
 import type { CopyVariant } from "@/lib/prompts/copy";
@@ -115,12 +116,20 @@ export async function buildComposeSource(
   const baseUrl = (base.content_json as { url?: string }).url;
   if (!baseUrl) throw new Error("base 이미지 URL 없음");
 
+  // 캠페인 오버라이드가 있으면 그것을 우선, 없으면 브랜드 기본.
+  const effectivePairs = await resolveFontPairsForCampaign(
+    campaign.brand_id,
+    campaignId,
+  );
   const fontSet: ComposeFontSet = {};
-  for (const pair of memory.fontPairs) {
+  for (const [role, pair] of Object.entries(effectivePairs) as Array<
+    [FontRole, (typeof effectivePairs)[FontRole]]
+  >) {
+    if (!pair) continue;
     const font = await getFont(pair.font_id);
     if (!font) continue;
     const entry = resolveCanvasFont(font);
-    if (entry) fontSet[pair.role as FontRole] = entry;
+    if (entry) fontSet[role] = entry;
   }
 
   return {
