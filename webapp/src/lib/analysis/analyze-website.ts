@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 
-export const BRAND_ANALYSIS_VERSION = "brand-analyze@1.0.0";
+export const BRAND_ANALYSIS_VERSION = "brand-analyze@2.0.0";
 export const ANALYSIS_TOOL = "record_brand_analysis";
 
 export const BrandAnalysisSchema = z.object({
@@ -23,6 +23,29 @@ export const BrandAnalysisSchema = z.object({
         role: z.enum(["primary", "secondary", "accent", "neutral", "semantic"]),
         hex: z.string().regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/),
         usage: z.string().optional(),
+      }),
+    )
+    .optional(),
+  offers: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        usp: z.string().optional(),
+        price: z.string().optional(),
+        benefits: z.array(z.string()).optional(),
+        urgency: z.string().optional(),
+        evidence: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
+  audiences: z
+    .array(
+      z.object({
+        persona_name: z.string().min(1),
+        pains: z.array(z.string()).optional(),
+        desires: z.array(z.string()).optional(),
+        demographics: z.record(z.string(), z.unknown()).optional(),
+        language_level: z.string().optional(),
       }),
     )
     .optional(),
@@ -83,6 +106,81 @@ export const analysisTool: Tool = {
           required: ["role", "hex"],
         },
       },
+      offers: {
+        type: "array",
+        description:
+          "홈페이지에서 관찰 가능한 주력 Offer 1~3개. 제품/서비스명, 혜택, 가격, 긴박성, 증거 등이 명시되어 있을 때만 추출. 없으면 빈 배열.",
+        items: {
+          type: "object",
+          properties: {
+            title: {
+              type: "string",
+              description: "제품·서비스 이름 (예: 'STUDYCORE 프리미엄 플랜')",
+            },
+            usp: {
+              type: "string",
+              description:
+                "고유 가치 제안 한 줄 (예: '하루 15분으로 영어 실력 2배')",
+            },
+            price: {
+              type: "string",
+              description: "가격·요금제 표기 (예: '월 19,900원', '연 99,000원')",
+            },
+            benefits: {
+              type: "array",
+              items: { type: "string" },
+              description: "구체적 혜택 3~5개",
+            },
+            urgency: {
+              type: "string",
+              description: "긴박성·한정성 (예: '선착순 100명', '2월 말까지')",
+            },
+            evidence: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "신뢰 증거 (예: '10만 명 수강', '전문가 추천', '인증서')",
+            },
+          },
+          required: ["title"],
+        },
+      },
+      audiences: {
+        type: "array",
+        description:
+          "타겟 고객 페르소나 1~2개. 홈페이지 카피·후기·CTA에서 유추. 확실한 정보만, 추측은 피함.",
+        items: {
+          type: "object",
+          properties: {
+            persona_name: {
+              type: "string",
+              description:
+                "페르소나 이름 (예: '취업 준비 중인 직장인 3년차')",
+            },
+            pains: {
+              type: "array",
+              items: { type: "string" },
+              description: "이 페르소나가 겪는 고민·문제점 3~5개",
+            },
+            desires: {
+              type: "array",
+              items: { type: "string" },
+              description: "원하는 결과·상태 3~5개",
+            },
+            demographics: {
+              type: "object",
+              description:
+                "인구통계 정보 (예: { age: '25-34', gender: '여성', occupation: '직장인' })",
+            },
+            language_level: {
+              type: "string",
+              description:
+                "언어 수준·친숙도 (예: '일상 대화 수준', '전문 용어 익숙')",
+            },
+          },
+          required: ["persona_name"],
+        },
+      },
       notes: { type: "string", description: "관찰 사항·주의점" },
     },
   },
@@ -133,14 +231,16 @@ export async function analyzeWebsite(
   const response = await callClaude({
     usageContext,
     model: "opus",
-    maxTokens: 3000,
-    system: `당신은 한국어 브랜드 분석가입니다. 주어진 웹사이트의 본문 텍스트에서 브랜드의 category, description, voice(tone/personality/do/dont), taboos, colors를 추출합니다.
+    maxTokens: 5000,
+    system: `당신은 한국어 브랜드 분석가입니다. 주어진 웹사이트의 본문 텍스트에서 브랜드의 category, description, voice, taboos, colors, offers, audiences를 추출합니다.
 
 규칙:
 - 관찰 가능한 정보 위주로 보수적으로 채우고, 불확실한 필드는 생략.
 - voice.tone은 한 줄, 나머지는 3~5개 태그.
 - colors는 홈페이지 CTA·헤더 등에 명확히 쓰인 경우에만 (HTML/CSS에서 식별 가능한 HEX만).
 - description은 1~2문장, 광고 카피가 아닌 브랜드 소개 톤.
+- offers: 홈페이지에서 제품·서비스명/가격/혜택/긴박성이 명시된 것만. 최대 3개. 없으면 빈 배열. 가장 주력 Offer를 1번째로.
+- audiences: 타겟 페르소나 1~2개. 후기·CTA 문구·해결하려는 문제로부터 유추 가능한 구체적 인물상. "모든 사람" 같은 추상적 표현 금지. pains·desires는 홈페이지 카피에서 직접 찾은 것만.
 - 모든 출력은 한국어.
 - 도구 ${ANALYSIS_TOOL} 호출로만 결과 기록.`,
     messages: [

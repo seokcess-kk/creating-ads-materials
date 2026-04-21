@@ -43,7 +43,7 @@ export default function NewBrandPage() {
       const { brand } = await res.json();
       toast.success("브랜드가 생성되었습니다");
 
-      // 자동 분석 (URL 제공 + 체크박스 on) — Identity까지 자동 채움
+      // 자동 분석 (URL 제공 + 체크박스 on) — Identity/Offer/Audience까지 자동 채움
       if (autoAnalyze && websiteUrl.trim()) {
         toast.info("홈페이지 분석 중 (최대 60초)...");
         try {
@@ -56,15 +56,24 @@ export default function NewBrandPage() {
                 website_url: websiteUrl.trim(),
                 save_brand_fields: true,
                 save_identity: true,
+                save_offers: true,
+                save_audiences: true,
               }),
             },
           );
           const analyzeData = await analyzeRes.json();
           if (analyzeRes.ok) {
-            const msg = analyzeData.identitySaved
-              ? "홈페이지 분석 완료 — Identity 자동 반영됨"
-              : "분석 완료 (추출된 Identity 정보 없음)";
-            toast.success(msg);
+            const parts: string[] = [];
+            if (analyzeData.identitySaved) parts.push("Identity");
+            if ((analyzeData.offersSaved ?? 0) > 0)
+              parts.push(`Offer ${analyzeData.offersSaved}개`);
+            if ((analyzeData.audiencesSaved ?? 0) > 0)
+              parts.push(`Audience ${analyzeData.audiencesSaved}개`);
+            toast.success(
+              parts.length > 0
+                ? `분석 완료 — ${parts.join(" · ")} 자동 생성됨`
+                : "분석 완료 (추출 가능한 정보 없음)",
+            );
           } else {
             toast.warning(
               `분석 실패: ${analyzeData.error ?? "알 수 없는 오류"}. 브랜드는 생성됐습니다.`,
@@ -129,8 +138,9 @@ export default function NewBrandPage() {
                   />
                   <span>
                     <strong className="text-foreground">✨ 자동 분석:</strong> 홈페이지를
-                    분석해 카테고리·설명 + Identity(voice/taboos/colors)를 자동
-                    작성합니다. 생성 완료까지 최대 60초 대기.
+                    분석해 카테고리·설명 + Identity(voice/taboos/colors) +
+                    Offer(가격/혜택) + Audience(페르소나) 초안을 자동 작성합니다.
+                    생성 완료까지 최대 60초 대기.
                   </span>
                 </label>
               )}
