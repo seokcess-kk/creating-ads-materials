@@ -1,5 +1,6 @@
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import type { VisionAnalysis } from "@/lib/memory/types";
+import type { UsageContext } from "@/lib/usage/record";
 import {
   BP_VISION_PROMPT_VERSION,
   buildVisionMessages,
@@ -13,6 +14,7 @@ import {
 export interface AnalyzeBPInput {
   source: ImageSource;
   context?: string;
+  usageContext?: UsageContext;
 }
 
 export interface AnalyzeBPResult {
@@ -28,6 +30,7 @@ export async function analyzeBP(input: AnalyzeBPInput): Promise<AnalyzeBPResult>
     messages: buildVisionMessages(input.source, input.context),
     tools: [visionTool],
     toolChoice: { type: "tool", name: VISION_TOOL_NAME },
+    usageContext: input.usageContext,
   });
 
   const raw = extractToolUse(response, VISION_TOOL_NAME);

@@ -103,6 +103,12 @@ export async function POST(
             prompt,
             aspectRatio: channel.aspectRatio as AspectRatio,
             imageSize: "2K",
+            usageContext: {
+              operation: "visual_gen",
+              brandId: campaign.brand_id,
+              campaignId,
+              metadata: { focus: spec.focus },
+            },
           });
           const { url, path } = await uploadGeneratedImage(
             campaignId,
@@ -112,10 +118,12 @@ export async function POST(
 
           let validator: Record<string, unknown> = {};
           try {
-            validator = (await validateVisualImage(url, promptCtx, spec)) as unknown as Record<
-              string,
-              unknown
-            >;
+            validator = (await validateVisualImage(url, promptCtx, spec, {
+              operation: "visual_validator",
+              brandId: campaign.brand_id,
+              campaignId,
+              metadata: { focus: spec.focus },
+            })) as unknown as Record<string, unknown>;
           } catch (vErr) {
             validator = { validatorError: (vErr as Error).message };
           }

@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { serverEnv } from "@/lib/env";
+import { recordUsage, type UsageContext } from "@/lib/usage/record";
 
 let client: GoogleGenAI | null = null;
 
@@ -22,6 +23,7 @@ export interface GenerateImageInput {
   prompt: string;
   aspectRatio?: AspectRatio;
   imageSize?: ImageSize;
+  usageContext?: UsageContext;
 }
 
 export async function generateImage(input: GenerateImageInput): Promise<ImagePart> {
@@ -36,7 +38,27 @@ export async function generateImage(input: GenerateImageInput): Promise<ImagePar
       },
     },
   });
-  return extractImagePart(response);
+  const part = extractImagePart(response);
+
+  if (input.usageContext) {
+    recordUsage({
+      provider: "gemini",
+      operation: input.usageContext.operation,
+      model: GEMINI_IMAGE_MODEL,
+      brandId: input.usageContext.brandId,
+      campaignId: input.usageContext.campaignId,
+      metadata: {
+        ...(input.usageContext.metadata ?? {}),
+        aspectRatio: input.aspectRatio,
+        imageSize: input.imageSize,
+      },
+      imageCount: 1,
+    }).catch((err) =>
+      console.warn("Gemini usage 기록 실패:", (err as Error).message),
+    );
+  }
+
+  return part;
 }
 
 export interface EditImageInput {
@@ -44,6 +66,7 @@ export interface EditImageInput {
   baseImage: ImagePart;
   aspectRatio?: AspectRatio;
   imageSize?: ImageSize;
+  usageContext?: UsageContext;
 }
 
 export async function editImage(input: EditImageInput): Promise<ImagePart> {
@@ -66,7 +89,28 @@ export async function editImage(input: EditImageInput): Promise<ImagePart> {
       },
     },
   });
-  return extractImagePart(response);
+  const part = extractImagePart(response);
+
+  if (input.usageContext) {
+    recordUsage({
+      provider: "gemini",
+      operation: input.usageContext.operation,
+      model: GEMINI_IMAGE_MODEL,
+      brandId: input.usageContext.brandId,
+      campaignId: input.usageContext.campaignId,
+      metadata: {
+        ...(input.usageContext.metadata ?? {}),
+        aspectRatio: input.aspectRatio,
+        imageSize: input.imageSize,
+        edit: true,
+      },
+      imageCount: 1,
+    }).catch((err) =>
+      console.warn("Gemini usage 기록 실패:", (err as Error).message),
+    );
+  }
+
+  return part;
 }
 
 type GenAIResponse = Awaited<ReturnType<ReturnType<typeof getClient>["models"]["generateContent"]>>;

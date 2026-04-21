@@ -29,7 +29,10 @@ export async function POST(
     const url = body.website_url?.trim() || brand.website_url;
     if (!url) throw new ApiError(400, "홈페이지 URL이 필요합니다");
 
-    const result = await analyzeWebsite(url);
+    const result = await analyzeWebsite(url, {
+      operation: "analyze_website",
+      brandId,
+    });
 
     if (body.save_brand_fields) {
       const updates: { category?: string; description?: string; website_url?: string } = {};

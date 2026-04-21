@@ -124,10 +124,14 @@ export interface AnalyzeWebsiteResult {
   fetchedChars: number;
 }
 
-export async function analyzeWebsite(url: string): Promise<AnalyzeWebsiteResult> {
+export async function analyzeWebsite(
+  url: string,
+  usageContext?: import("@/lib/usage/record").UsageContext,
+): Promise<AnalyzeWebsiteResult> {
   const text = await fetchPageText(url);
 
   const response = await callClaude({
+    usageContext,
     model: "opus",
     maxTokens: 3000,
     system: `당신은 한국어 브랜드 분석가입니다. 주어진 웹사이트의 본문 텍스트에서 브랜드의 category, description, voice(tone/personality/do/dont), taboos, colors를 추출합니다.

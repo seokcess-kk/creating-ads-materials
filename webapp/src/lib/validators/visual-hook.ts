@@ -1,4 +1,5 @@
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
+import type { UsageContext } from "@/lib/usage/record";
 import {
   VISUAL_VALIDATOR_TOOL,
   VisualValidatorSchema,
@@ -14,6 +15,7 @@ export async function validateVisualImage(
   imageUrl: string,
   ctx: VisualPromptContext,
   spec: VisualVariantSpec,
+  usageContext?: UsageContext,
 ): Promise<VisualValidatorResult> {
   const response = await callClaude({
     model: "opus",
@@ -22,6 +24,7 @@ export async function validateVisualImage(
     messages: buildValidatorMessages(imageUrl, ctx, spec),
     tools: [visualValidatorTool],
     toolChoice: { type: "tool", name: VISUAL_VALIDATOR_TOOL },
+    usageContext,
   });
 
   const raw = extractToolUse(response, VISUAL_VALIDATOR_TOOL);

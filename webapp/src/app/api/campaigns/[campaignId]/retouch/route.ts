@@ -107,6 +107,11 @@ export async function POST(
         baseImage: base,
         aspectRatio,
         imageSize: "2K",
+        usageContext: {
+          operation: "retouch",
+          brandId: campaign.brand_id,
+          campaignId,
+        },
       });
 
       const turnLabel = `turn_${Date.now()}`;

@@ -100,6 +100,11 @@ export async function POST(
         model: "opus",
         maxTokens: 4000,
         system: buildStrategySystem(),
+        usageContext: {
+          operation: "strategy",
+          brandId: campaign.brand_id,
+          campaignId,
+        },
         messages: buildStrategyMessages({
           memory,
           offerId: campaign.offer_id,

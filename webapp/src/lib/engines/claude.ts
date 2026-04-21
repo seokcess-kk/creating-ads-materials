@@ -8,6 +8,7 @@ import type {
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { serverEnv } from "@/lib/env";
+import { recordUsage, type UsageContext } from "@/lib/usage/record";
 
 let client: Anthropic | null = null;
 
@@ -32,6 +33,7 @@ export interface ClaudeCallInput {
   temperature?: number;
   tools?: Tool[];
   toolChoice?: MessageCreateParams["tool_choice"];
+  usageContext?: UsageContext;
 }
 
 function resolveModel(m: ClaudeCallInput["model"]): string {
@@ -41,8 +43,9 @@ function resolveModel(m: ClaudeCallInput["model"]): string {
 }
 
 export async function callClaude(input: ClaudeCallInput): Promise<Message> {
-  return getClient().messages.create({
-    model: resolveModel(input.model),
+  const resolvedModel = resolveModel(input.model);
+  const response = await getClient().messages.create({
+    model: resolvedModel,
     max_tokens: input.maxTokens ?? 4000,
     temperature: input.temperature,
     system: input.system,
@@ -50,6 +53,25 @@ export async function callClaude(input: ClaudeCallInput): Promise<Message> {
     tools: input.tools,
     tool_choice: input.toolChoice,
   });
+
+  if (input.usageContext) {
+    const u = response.usage;
+    recordUsage({
+      provider: "anthropic",
+      operation: input.usageContext.operation,
+      model: resolvedModel,
+      brandId: input.usageContext.brandId,
+      campaignId: input.usageContext.campaignId,
+      metadata: input.usageContext.metadata,
+      inputTokens: u?.input_tokens,
+      outputTokens: u?.output_tokens,
+      cacheReadTokens: u?.cache_read_input_tokens ?? undefined,
+    }).catch((err) =>
+      console.warn("Claude usage 기록 실패:", (err as Error).message),
+    );
+  }
+
+  return response;
 }
 
 export function extractText(response: Message): string {

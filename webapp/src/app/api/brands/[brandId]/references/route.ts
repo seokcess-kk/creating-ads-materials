@@ -70,6 +70,10 @@ export async function POST(
     try {
       const result = await analyzeBP({
         source: { type: "url", url: urlData.publicUrl },
+        usageContext: {
+          operation: "vision_bp",
+          brandId,
+        },
       });
       await setVisionResult(ref.id, result.analysis, result.promptVersion);
       return ok({

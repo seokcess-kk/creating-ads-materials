@@ -23,6 +23,10 @@ export async function POST(
     try {
       const result = await analyzeBP({
         source: { type: "url", url: ref.file_url },
+        usageContext: {
+          operation: "vision_bp_reanalyze",
+          brandId: ref.brand_id,
+        },
       });
       await setVisionResult(referenceId, result.analysis, result.promptVersion);
       return ok({

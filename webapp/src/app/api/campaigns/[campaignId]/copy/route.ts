@@ -95,6 +95,11 @@ export async function POST(
         model: "opus",
         maxTokens: 5000,
         system: buildCopySystem(),
+        usageContext: {
+          operation: "copy",
+          brandId: campaign.brand_id,
+          campaignId,
+        },
         messages: buildCopyMessages({
           memory,
           offerId: campaign.offer_id,

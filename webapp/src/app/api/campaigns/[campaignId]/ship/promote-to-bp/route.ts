@@ -41,7 +41,14 @@ export async function POST(
     });
 
     try {
-      const result = await analyzeBP({ source: { type: "url", url } });
+      const result = await analyzeBP({
+        source: { type: "url", url },
+        usageContext: {
+          operation: "vision_bp_promote",
+          brandId: campaign.brand_id,
+          campaignId,
+        },
+      });
       await setVisionResult(ref.id, result.analysis, result.promptVersion);
       await recomputeLearnings(campaign.brand_id);
       return ok({
