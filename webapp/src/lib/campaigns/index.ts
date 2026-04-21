@@ -25,6 +25,17 @@ export async function listCampaigns(brandId: string): Promise<Campaign[]> {
   return (data ?? []) as Campaign[];
 }
 
+export async function listAllCampaigns(
+  filter?: { status?: Campaign["status"] },
+): Promise<Campaign[]> {
+  const supabase = createAdminClient();
+  let q = supabase.from("campaigns").select("*").order("created_at", { ascending: false });
+  if (filter?.status) q = q.eq("status", filter.status);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []) as Campaign[];
+}
+
 export interface DashboardStats {
   campaigns: number;
   completed: number;
