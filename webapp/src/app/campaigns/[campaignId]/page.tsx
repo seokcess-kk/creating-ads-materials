@@ -19,6 +19,8 @@ import { RetouchStudio } from "@/components/campaign/RetouchStudio";
 import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
+import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
+import { Breadcrumb } from "@/components/layout/Breadcrumb";
 
 export const dynamic = "force-dynamic";
 
@@ -43,19 +45,23 @@ export default async function CampaignPage({
   const stages = run ? await listStages(run.id) : [];
   const channel = getChannel(campaign.channel);
 
+  const isVisible = (status: string | undefined) =>
+    status === "ready" || status === "stale";
+
   const strategyStage = run ? await getStage(run.id, "strategy") : null;
   const strategyVariants = strategyStage ? await listVariants(strategyStage.id) : [];
   const strategyReady =
-    strategyStage?.status === "ready" && strategyVariants.some((v) => v.selected);
+    isVisible(strategyStage?.status) && strategyVariants.some((v) => v.selected);
 
   const copyStage = run ? await getStage(run.id, "copy") : null;
   const copyVariants = copyStage ? await listVariants(copyStage.id) : [];
-  const copyReady = copyStage?.status === "ready" && copyVariants.some((v) => v.selected);
+  const copyReady =
+    isVisible(copyStage?.status) && copyVariants.some((v) => v.selected);
 
   const visualStage = run ? await getStage(run.id, "visual") : null;
   const visualVariants = visualStage ? await listVariants(visualStage.id) : [];
   const selectedVisual = visualVariants.find((v) => v.selected) ?? null;
-  const visualReady = visualStage?.status === "ready" && Boolean(selectedVisual);
+  const visualReady = isVisible(visualStage?.status) && Boolean(selectedVisual);
   const baseImageUrl =
     (selectedVisual?.content_json as UrlContent | undefined)?.url ?? null;
   const visualSuggestions = (() => {
@@ -77,7 +83,8 @@ export default async function CampaignPage({
   const selectedCompose = composeVariants.find((v) => v.selected) ?? null;
   const composeUrl =
     (selectedCompose?.content_json as UrlContent | undefined)?.url ?? null;
-  const composeReady = Boolean(selectedCompose) && composeStage?.status === "ready";
+  const composeReady =
+    Boolean(selectedCompose) && isVisible(composeStage?.status);
 
   const shipStage = run ? await getStage(run.id, "ship") : null;
 
@@ -105,19 +112,39 @@ export default async function CampaignPage({
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      <Breadcrumb
+        items={[
+          { label: "Brands", href: "/brands" },
+          ...(brand ? [{ label: brand.name, href: `/brands/${brand.id}` }] : []),
+          {
+            label: "Campaigns",
+            href: brand ? `/brands/${brand.id}/campaigns` : undefined,
+          },
+          { label: campaign.name },
+        ]}
+      />
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          {brand && (
-            <p className="text-xs text-muted-foreground">
-              <Link href={`/brands/${brand.id}`} className="hover:underline">
-                {brand.name}
-              </Link>
-            </p>
-          )}
           <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
           <div className="flex flex-wrap gap-2 pt-1">
             <Badge variant="secondary">{campaign.goal}</Badge>
             {channel && <Badge variant="outline">{channel.label}</Badge>}
+            <Badge
+              variant={
+                campaign.automation_level === "auto"
+                  ? "destructive"
+                  : campaign.automation_level === "assist"
+                    ? "secondary"
+                    : "outline"
+              }
+              className="text-[10px]"
+            >
+              {campaign.automation_level === "auto"
+                ? "🚀 Auto"
+                : campaign.automation_level === "assist"
+                  ? "✨ Assist"
+                  : "🧑‍💻 Manual"}
+            </Badge>
             <Badge variant={campaign.status === "completed" ? "secondary" : "outline"}>
               {campaign.status}
             </Badge>
@@ -132,6 +159,21 @@ export default async function CampaignPage({
         )}
       </div>
 
+      {memoryForDefaults && (
+        <BrandContextPanel
+          brandId={campaign.brand_id}
+          brandName={brand?.name ?? ""}
+          identity={memoryForDefaults.identity}
+          offer={
+            memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
+          }
+          audience={
+            memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
+            null
+          }
+        />
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">파이프라인</CardTitle>
@@ -145,7 +187,10 @@ export default async function CampaignPage({
             return (
               <div
                 key={stage}
-                className="flex items-center justify-between border rounded-md p-3"
+                className={
+                  "flex items-center justify-between border rounded-md p-3 " +
+                  (row?.status === "stale" ? "border-amber-500/50 bg-amber-500/5" : "")
+                }
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -154,7 +199,9 @@ export default async function CampaignPage({
                         ? "bg-primary text-primary-foreground"
                         : row?.status === "running"
                           ? "bg-primary/50 text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
+                          : row?.status === "stale"
+                            ? "bg-amber-500 text-white"
+                            : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {i + 1}
@@ -168,10 +215,13 @@ export default async function CampaignPage({
                         ? "secondary"
                         : row.status === "failed"
                           ? "destructive"
-                          : "outline"
+                          : row.status === "stale"
+                            ? "outline"
+                            : "outline"
                     }
+                    className={row.status === "stale" ? "border-amber-500 text-amber-700" : ""}
                   >
-                    {row.status}
+                    {row.status === "stale" ? "⚠ stale" : row.status}
                   </Badge>
                 )}
               </div>

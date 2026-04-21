@@ -16,6 +16,7 @@ export default function NewBrandPage() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  const [autoAnalyze, setAutoAnalyze] = useState(true);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +42,21 @@ export default function NewBrandPage() {
       }
       const { brand } = await res.json();
       toast.success("브랜드가 생성되었습니다");
+
+      // 자동 분석 (URL 제공 + 체크박스 on)
+      if (autoAnalyze && websiteUrl.trim()) {
+        toast.info("홈페이지 분석 중 (최대 60초)... 브랜드 페이지에서 결과를 확인하세요");
+        // Fire-and-forget — 사용자는 브랜드 페이지로 이동, 분석은 백그라운드
+        fetch(`/api/brands/${brand.id}/analyze-website`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            website_url: websiteUrl.trim(),
+            save_brand_fields: true,
+          }),
+        }).catch(() => {});
+      }
+
       router.push(`/brands/${brand.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "오류 발생");
@@ -84,6 +100,22 @@ export default function NewBrandPage() {
                 placeholder="https://example.com"
                 disabled={loading}
               />
+              {websiteUrl.trim() && (
+                <label className="flex items-start gap-2 text-xs text-muted-foreground pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoAnalyze}
+                    onChange={(e) => setAutoAnalyze(e.target.checked)}
+                    disabled={loading}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <strong className="text-foreground">✨ 자동 분석:</strong> 생성 후
+                    홈페이지를 분석하여 카테고리·설명·Identity 초안을 자동 작성
+                    (백그라운드 진행)
+                  </span>
+                </label>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">카테고리</Label>
