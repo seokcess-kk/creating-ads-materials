@@ -365,23 +365,20 @@ export function IntentForm({
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {keyVisuals.map((kv) => {
                     const selected = selectedKvIds.includes(kv.id);
-                    const disabled = kv.kind === "person"; // Phase 1: 인물은 비활성
                     return (
                       <label
                         key={kv.id}
-                        className={`relative block border rounded-md overflow-hidden transition-colors ${
-                          disabled
-                            ? "opacity-40 cursor-not-allowed"
-                            : selected
-                              ? "border-primary bg-primary/5 cursor-pointer"
-                              : "hover:bg-muted/50 cursor-pointer"
+                        className={`relative block border rounded-md overflow-hidden transition-colors cursor-pointer ${
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "hover:bg-muted/50"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={selected}
-                          onChange={() => !disabled && toggleKv(kv.id)}
-                          disabled={disabled || saving}
+                          onChange={() => toggleKv(kv.id)}
+                          disabled={saving}
                           className="absolute top-1.5 right-1.5 z-10"
                         />
                         <img
@@ -394,9 +391,9 @@ export function IntentForm({
                             <Badge variant="outline" className="text-[10px]">
                               {KIND_LABEL[kv.kind]}
                             </Badge>
-                            {disabled && (
+                            {kv.kind === "person" && (
                               <Badge variant="outline" className="text-[10px]">
-                                Phase 2
+                                픽셀 보존
                               </Badge>
                             )}
                           </div>
@@ -407,7 +404,7 @@ export function IntentForm({
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  인물 자산은 Phase 2에서 안전 합성(Compositor 트랙)으로 지원 예정
+                  인물 자산은 Compositor 트랙으로 사진을 그대로 보존하여 합성됩니다
                 </p>
               </div>
             )}

@@ -19,6 +19,7 @@ import {
   type AspectRatio,
 } from "@/lib/engines/gemini-image";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
+import { composePersonVariant } from "@/lib/canvas/compose-person-variant";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
 import { getPlaybook } from "@/lib/playbook";
 import { getChannel } from "@/lib/channels";
@@ -118,28 +119,49 @@ export async function POST(
         regenInstruction: body.instruction,
       };
 
-      // Key Visual 에셋 기반 생성 분기 (Phase 1: space/product만 editImage로 처리).
-      // person kind는 Phase 2의 Compositor 트랙에서 처리하므로 여기선 제외 → 해당 variant는 기존 generateImage로 fallback.
+      // Key Visual 에셋 기반 생성 분기.
+      // kind별 트랙 선택:
+      //   person  → Track A (Compositor): 픽셀 보존, 얼굴 변형 없음
+      //   space/product → Track B (Gemini editImage): 원본 구도 유지 + 타이포 추가
+      //   (에셋 없음) → 기존 generateImage
       const selectedKvIds = campaign.selected_key_visual_ids ?? [];
       const keyVisualPool: BrandKeyVisual[] = selectedKvIds.length
         ? await listKeyVisualsByIds(selectedKvIds)
         : [];
-      const eligibleAssets = keyVisualPool.filter((kv) => kv.kind !== "person");
 
       const pickAsset = (i: number): BrandKeyVisual | null => {
-        if (eligibleAssets.length === 0) return null;
-        return eligibleAssets[i % eligibleAssets.length];
+        if (keyVisualPool.length === 0) return null;
+        return keyVisualPool[i % keyVisualPool.length];
       };
+
+      type Track = "gemini_gen" | "gemini_edit" | "compositor";
 
       const results = await Promise.allSettled(
         VISUAL_VARIANT_SPECS.map(async (spec: VisualVariantSpec, i: number) => {
           const asset = pickAsset(i);
-          let prompt: string;
-          let image;
-          let track: "gemini_gen" | "gemini_edit" = "gemini_gen";
+          let prompt: string | null = null;
+          let track: Track = "gemini_gen";
           let promptVersion = VISUAL_PROMPT_VERSION;
+          let url: string;
+          let path: string;
+          let layoutMeta: Record<string, unknown> | null = null;
 
-          if (asset) {
+          if (asset && asset.kind === "person") {
+            // Track A: Compositor (실사 100% 보존)
+            track = "compositor";
+            promptVersion = VISUAL_ASSET_PROMPT_VERSION;
+            const copyContent = selectedCopy.content_json as unknown as CopyVariant;
+            const result = await composePersonVariant({
+              campaignId,
+              spec,
+              keyVisual: asset,
+              copy: copyContent,
+            });
+            url = result.url;
+            path = result.path;
+            layoutMeta = result.layout as unknown as Record<string, unknown>;
+          } else if (asset) {
+            // Track B: Gemini editImage (space/product)
             track = "gemini_edit";
             promptVersion = VISUAL_ASSET_PROMPT_VERSION;
             prompt = buildEditImagePrompt(
@@ -147,7 +169,7 @@ export async function POST(
               spec,
             );
             const baseImage = await fetchAsBase64(asset.storage_url);
-            image = await editImage({
+            const image = await editImage({
               prompt,
               baseImage,
               aspectRatio: channel.aspectRatio as AspectRatio,
@@ -163,9 +185,18 @@ export async function POST(
                 },
               },
             });
+            const uniq = Date.now().toString(36);
+            const uploaded = await uploadGeneratedImage(
+              campaignId,
+              `${spec.id}_${uniq}`,
+              image,
+            );
+            url = uploaded.url;
+            path = uploaded.path;
           } else {
+            // 에셋 없음 — 기존 generateImage 경로
             prompt = buildGeminiPrompt(promptCtx, spec);
-            image = await generateImage({
+            const image = await generateImage({
               prompt,
               aspectRatio: channel.aspectRatio as AspectRatio,
               imageSize: "2K",
@@ -176,14 +207,15 @@ export async function POST(
                 metadata: { focus: spec.focus },
               },
             });
+            const uniq = Date.now().toString(36);
+            const uploaded = await uploadGeneratedImage(
+              campaignId,
+              `${spec.id}_${uniq}`,
+              image,
+            );
+            url = uploaded.url;
+            path = uploaded.path;
           }
-
-          const uniq = Date.now().toString(36);
-          const { url, path } = await uploadGeneratedImage(
-            campaignId,
-            `${spec.id}_${uniq}`,
-            image,
-          );
 
           let validator: Record<string, unknown> = {};
           try {
@@ -209,6 +241,7 @@ export async function POST(
               keyVisualId: asset?.id ?? null,
               keyVisualLabel: asset?.label ?? null,
               keyVisualKind: asset?.kind ?? null,
+              layout: layoutMeta,
             } as Record<string, unknown>,
             scores: validator,
             promptVersion,
