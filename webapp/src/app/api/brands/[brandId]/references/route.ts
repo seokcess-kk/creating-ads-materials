@@ -46,7 +46,18 @@ export async function POST(
     const weight = weightRaw != null ? Math.max(0, Math.min(100, Number(weightRaw))) : 50;
 
     const supabase = createAdminClient();
-    const safeName = file.name.replace(/[^\w.\-가-힣]+/g, "_");
+    // Supabase Storage keys는 ASCII 안전 문자만 허용 — 한글 포함 시 400 Invalid key
+    const dotIdx = file.name.lastIndexOf(".");
+    const ext =
+      dotIdx >= 0
+        ? file.name.slice(dotIdx + 1).replace(/[^\w]+/g, "").toLowerCase()
+        : "";
+    const stem = (dotIdx >= 0 ? file.name.slice(0, dotIdx) : file.name)
+      .replace(/[^\w\-]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60);
+    const safeName = `${stem || "file"}${ext ? `.${ext}` : ""}`;
     const fileName = `${Date.now()}_${safeName}`;
     const path = `${brandId}/references/${fileName}`;
     const buffer = Buffer.from(await file.arrayBuffer());
