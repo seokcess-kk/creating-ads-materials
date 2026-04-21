@@ -132,39 +132,42 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const completeOp = useCallback<NotificationContextValue["completeOp"]>(
     (id, result) => {
-      setOps((prev) => {
-        const op = prev.find((o) => o.id === id);
-        if (!op) return prev;
-        const finished: NotificationOp = {
-          ...op,
-          status: "completed",
-          completedAt: Date.now(),
-          href: result?.href ?? op.href,
-          subtitle: result?.subtitle ?? op.subtitle,
-        };
-        setCompleted((c) => [finished, ...c].slice(0, 10));
-        tryBrowserNotify(finished);
-        return prev.filter((o) => o.id !== id);
-      });
+      const op = opsRef.current.find((o) => o.id === id);
+      if (!op) return;
+      const finished: NotificationOp = {
+        ...op,
+        status: "completed",
+        completedAt: Date.now(),
+        href: result?.href ?? op.href,
+        subtitle: result?.subtitle ?? op.subtitle,
+      };
+      setOps((prev) => prev.filter((o) => o.id !== id));
+      setCompleted((c) =>
+        [finished, ...c.filter((x) => x.id !== id)].slice(0, 10),
+      );
+      tryBrowserNotify(finished);
     },
     [],
   );
 
-  const failOp = useCallback<NotificationContextValue["failOp"]>((id, errorMsg) => {
-    setOps((prev) => {
-      const op = prev.find((o) => o.id === id);
-      if (!op) return prev;
+  const failOp = useCallback<NotificationContextValue["failOp"]>(
+    (id, errorMsg) => {
+      const op = opsRef.current.find((o) => o.id === id);
+      if (!op) return;
       const finished: NotificationOp = {
         ...op,
         status: "failed",
         completedAt: Date.now(),
         errorMsg,
       };
-      setCompleted((c) => [finished, ...c].slice(0, 10));
+      setOps((prev) => prev.filter((o) => o.id !== id));
+      setCompleted((c) =>
+        [finished, ...c.filter((x) => x.id !== id)].slice(0, 10),
+      );
       tryBrowserNotify(finished);
-      return prev.filter((o) => o.id !== id);
-    });
-  }, []);
+    },
+    [],
+  );
 
   const dismissCompleted = useCallback((id: string) => {
     setDismissed((prev) => {
