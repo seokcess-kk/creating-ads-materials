@@ -5,7 +5,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 
-export type UploadKind = "reference" | "logo";
+export type UploadKind = "reference" | "logo" | "key_visual";
 
 export interface SignResponse {
   bucket: string;

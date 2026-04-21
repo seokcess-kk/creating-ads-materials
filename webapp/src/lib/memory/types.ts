@@ -4,6 +4,7 @@ export interface Brand {
   website_url: string | null;
   category: string | null;
   description: string | null;
+  uses_real_assets: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -118,6 +119,34 @@ export interface BrandReference {
   vision_status: VisionStatus;
   vision_error: string | null;
   vision_analyzed_at: string | null;
+  embedding_model: string | null;
+  embedded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type KeyVisualKind = "person" | "space" | "product";
+
+export interface KeyVisualFocalArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface BrandKeyVisual {
+  id: string;
+  brand_id: string;
+  storage_url: string;
+  kind: KeyVisualKind;
+  label: string;
+  description: string | null;
+  focal_area: KeyVisualFocalArea | null;
+  mood_tags: string[];
+  is_primary: boolean;
+  vision_status: VisionStatus;
+  vision_analyzed_at: string | null;
+  vision_error: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -167,6 +196,7 @@ export interface BrandMemory {
   offers: BrandOffer[];
   audiences: BrandAudience[];
   references: BrandReference[];
+  keyVisuals: BrandKeyVisual[];
   learnings: BrandLearnings | null;
   fontPairs: BrandFontPair[];
 }

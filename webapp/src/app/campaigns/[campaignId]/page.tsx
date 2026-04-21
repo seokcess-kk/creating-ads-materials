@@ -16,9 +16,9 @@ import { RetouchStudio } from "@/components/campaign/RetouchStudio";
 import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
+import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
-import { CampaignFontOverride } from "@/components/campaign/CampaignFontOverride";
-import { FontSuggestionsPanel } from "@/components/campaign/FontSuggestionsPanel";
+import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
 import { inferPresetFromCampaignPairs } from "@/lib/fonts/infer-preset";
 import { getPresetById } from "@/lib/fonts/tone-pairs";
@@ -97,7 +97,10 @@ export default async function CampaignPage({
   const memoryForDefaults = await loadBrandMemory(campaign.brand_id);
   const logoDefaults = memoryForDefaults
     ? (() => {
-        const d = computeLogoDefaults(memoryForDefaults);
+        const d = computeLogoDefaults(memoryForDefaults, {
+          goal: campaign.goal,
+          channel: campaign.channel.split("_")[0],
+        });
         const logos = memoryForDefaults.identity?.logos_json ?? [];
         const primary = logos.find((l) => l.is_primary) ?? logos[0] ?? null;
         return {
@@ -211,12 +214,21 @@ export default async function CampaignPage({
             {run && <Badge variant="outline">run: {run.status}</Badge>}
           </div>
         </div>
-        {copyReady && (
-          <ForkChannelMenu
+        <div className="flex items-center gap-2 shrink-0">
+          {copyReady && (
+            <ForkChannelMenu
+              campaignId={campaignId}
+              currentChannel={campaign.channel}
+            />
+          )}
+          <DeleteCampaignButton
             campaignId={campaignId}
-            currentChannel={campaign.channel}
+            campaignName={campaign.name}
+            redirectTo={
+              brand ? `/brands/${brand.id}/campaigns` : "/campaigns"
+            }
           />
-        )}
+        </div>
       </div>
 
       {memoryForDefaults && (
@@ -234,15 +246,10 @@ export default async function CampaignPage({
         />
       )}
 
-      <CampaignFontOverride
+      <CampaignFontPanel
         campaignId={campaignId}
         initialPresetId={overridePresetId}
         initialPresetLabel={overridePresetLabel}
-      />
-
-      <FontSuggestionsPanel
-        campaignId={campaignId}
-        currentPresetId={overridePresetId}
         visualReady={visualReady}
       />
 

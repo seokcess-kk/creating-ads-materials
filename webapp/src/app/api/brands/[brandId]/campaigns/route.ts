@@ -23,6 +23,8 @@ const CreateSchema = z.object({
   channel: z.string().min(1),
   constraints: z.record(z.string(), z.unknown()).optional(),
   automation_level: z.enum(["manual", "assist", "auto"]).optional(),
+  key_visual_intent: z.string().max(500).nullable().optional(),
+  selected_key_visual_ids: z.array(z.string().uuid()).max(10).optional(),
 });
 
 export async function POST(

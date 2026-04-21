@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getBrand, listAudiences, listOffers } from "@/lib/memory";
+import { listKeyVisuals } from "@/lib/memory/key-visuals";
 import { IntentForm } from "@/components/campaign/IntentForm";
 import { Button } from "@/components/ui/button";
 
@@ -14,9 +15,10 @@ export default async function NewCampaignPage({
   const { brandId } = await params;
   const brand = await getBrand(brandId);
   if (!brand) notFound();
-  const [offers, audiences] = await Promise.all([
+  const [offers, audiences, keyVisuals] = await Promise.all([
     listOffers(brandId),
     listAudiences(brandId),
+    listKeyVisuals(brandId),
   ]);
 
   return (
@@ -36,6 +38,8 @@ export default async function NewCampaignPage({
         brandName={brand.name}
         offers={offers}
         audiences={audiences}
+        keyVisuals={keyVisuals}
+        usesRealAssets={brand.uses_real_assets}
       />
     </div>
   );

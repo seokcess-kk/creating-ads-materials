@@ -31,6 +31,8 @@ const PatchSchema = z.object({
   channel: z.string().min(1).optional(),
   constraints: z.record(z.string(), z.unknown()).optional(),
   status: z.enum(["draft", "running", "completed", "abandoned"]).optional(),
+  key_visual_intent: z.string().max(500).nullable().optional(),
+  selected_key_visual_ids: z.array(z.string().uuid()).max(10).optional(),
 });
 
 export async function PATCH(

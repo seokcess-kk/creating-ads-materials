@@ -3,9 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
 const BUCKET = "brand-assets";
+const KEY_VISUAL_BUCKET = "brand-key-visuals";
 
 const SignSchema = z.object({
-  kind: z.enum(["reference", "logo"]),
+  kind: z.enum(["reference", "logo", "key_visual"]),
   filename: z.string().min(1).max(255),
   content_type: z.string().max(100).optional(),
 });
@@ -36,24 +37,31 @@ export async function POST(
     const safeName = `${stem}${ext ? `.${ext}` : ""}`;
 
     let path: string;
+    let bucket: string;
     if (input.kind === "reference") {
       path = `${brandId}/references/${Date.now()}_${safeName}`;
-    } else {
+      bucket = BUCKET;
+    } else if (input.kind === "logo") {
       const id = globalThis.crypto.randomUUID();
       path = `${brandId}/logos/${id}${ext ? `.${ext}` : ""}`;
+      bucket = BUCKET;
+    } else {
+      const id = globalThis.crypto.randomUUID();
+      path = `${brandId}/${id}${ext ? `.${ext}` : ""}`;
+      bucket = KEY_VISUAL_BUCKET;
     }
 
     const supabase = createAdminClient();
     const { data, error } = await supabase.storage
-      .from(BUCKET)
+      .from(bucket)
       .createSignedUploadUrl(path);
     if (error) throw error;
     if (!data) throw new ApiError(500, "서명 URL 생성 실패");
 
-    const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
 
     return ok({
-      bucket: BUCKET,
+      bucket,
       path,
       token: data.token,
       publicUrl: urlData.publicUrl,

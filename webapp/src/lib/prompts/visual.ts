@@ -1,13 +1,14 @@
 import { z } from "zod";
 import type { MessageParam, Tool } from "@anthropic-ai/sdk/resources/messages";
-import type { BrandMemory } from "@/lib/memory/types";
+import type { BrandMemory, BrandKeyVisual } from "@/lib/memory/types";
 import type { Playbook } from "@/lib/playbook/types";
 import type { StrategyAlternative } from "./strategy";
 import type { CopyVariant } from "./copy";
 import type { ChannelConfig } from "@/lib/channels";
-import { buildVisualPatternDigestEn } from "@/lib/vision/digest";
+import { buildVisualPatternDigestEn, type FunnelGoal } from "@/lib/vision/digest";
 
 export const VISUAL_PROMPT_VERSION = "visual@3.1.0";
+export const VISUAL_ASSET_PROMPT_VERSION = "visual-asset@1.0.0";
 export const VISUAL_VALIDATOR_TOOL = "record_visual_validator";
 
 export type VisualFocus = "product_focus" | "number_focus" | "persona_focus";
@@ -78,6 +79,7 @@ export interface VisualPromptContext {
   selectedCopy: CopyVariant;
   playbook: Playbook;
   channel: ChannelConfig;
+  goal: FunnelGoal;
   regenInstruction?: string;
 }
 
@@ -90,7 +92,11 @@ export function buildGeminiPrompt(
   const focus = focusInstruction(spec, ctx.strategy);
   const visualDirection = ctx.strategy.visualDirection;
   const playbookAvoid = ctx.playbook.visualGuide.avoid.join(", ");
-  const bpPatterns = buildVisualPatternDigestEn(ctx.memory);
+  const channelFitKey = ctx.channel.id.split("_")[0];
+  const bpPatterns = buildVisualPatternDigestEn(ctx.memory, {
+    goal: ctx.goal,
+    channel: channelFitKey,
+  });
   const composition = compositionGuide(ctx.channel);
 
   const headline = ctx.selectedCopy.headline;
@@ -136,6 +142,103 @@ ${composition}
 
 # Style
 Modern, premium, performance-advertising aesthetic for the Korean market. Crisp typography, strong hierarchy, feed-stopping contrast.${
+    ctx.regenInstruction
+      ? `
+
+# User re-generation direction
+${ctx.regenInstruction}`
+      : ""
+  }`;
+}
+
+// ========== Asset-based (Track B / editImage) ==========
+// 실사 Key Visual을 baseImage로 넣고 Gemini editImage를 호출할 때의 프롬프트.
+// 원본의 피사체·구도·조명·색조를 보존하고 텍스트·그래픽만 추가한다.
+
+export interface AssetPromptContext extends VisualPromptContext {
+  keyVisual: BrandKeyVisual;
+}
+
+function emptyAreaHint(kv: BrandKeyVisual): string {
+  if (kv.focal_area) {
+    const { x, y, w, h } = kv.focal_area;
+    return `핵심 피사체는 (x=${(x * 100).toFixed(0)}%, y=${(y * 100).toFixed(0)}%, w=${(w * 100).toFixed(0)}%, h=${(h * 100).toFixed(0)}%) 영역에 있음. 이 영역 밖의 여백에만 텍스트 배치.`;
+  }
+  return "사진의 자연스러운 여백(주로 하늘·벽·단색 영역)에 텍스트 배치. 피사체 위에 직접 얹지 않음.";
+}
+
+function moodLine(kv: BrandKeyVisual): string {
+  if (!kv.mood_tags?.length) return "";
+  return `Mood: ${kv.mood_tags.join(", ")}. 타이포·그래픽 스타일을 이 무드와 정합시킴.`;
+}
+
+export function buildEditImagePrompt(
+  ctx: AssetPromptContext,
+  spec: VisualVariantSpec,
+): string {
+  const brand = ctx.memory.brand.name;
+  const category = ctx.memory.brand.category ?? "business";
+  const kv = ctx.keyVisual;
+  const visualDirection = ctx.strategy.visualDirection;
+  const playbookAvoid = ctx.playbook.visualGuide.avoid.join(", ");
+  const composition = compositionGuide(ctx.channel);
+
+  const headline = ctx.selectedCopy.headline;
+  const sub = ctx.selectedCopy.subCopy;
+  const cta = ctx.selectedCopy.cta;
+
+  return `You are given a real photograph as the base image. Transform it into a ${ctx.channel.aspectRatio} (${ctx.channel.width}x${ctx.channel.height}) premium ${ctx.channel.platform} paid ad for the Korean ${category} brand "${brand}".
+
+# CRITICAL — PRESERVE THE ORIGINAL PHOTOGRAPH
+- Keep the original subject, composition, lighting, and color tone EXACTLY as in the base image
+- Do NOT redraw, replace, or stylize any person, product, space, or existing object in the photo
+- Do NOT alter faces, bodies, clothing, or poses — identity must be preserved pixel-accurately
+- Only ADD: typography (headline / sub / CTA button) and minimal graphic accents (thin lines, subtle gradient overlays for legibility)
+- The final image must look like the SAME photograph with added advertising text on top
+
+# Base photo context (for your reference)
+- Kind: ${kv.kind}
+- Label: ${kv.label}
+- Description: ${kv.description ?? "(unavailable)"}
+- ${moodLine(kv)}
+- ${emptyAreaHint(kv)}
+
+# Channel
+- Platform: ${ctx.channel.platform} · ${ctx.channel.label}
+- Dimensions: ${ctx.channel.width}x${ctx.channel.height} (${ctx.channel.aspectRatio})
+
+# Text to render ON TOP of the photograph (Korean, exact spelling)
+- Headline: "${headline}"
+- Sub copy: "${sub}"
+- CTA button text: "${cta}"
+
+Render these as real typography (not placeholder boxes). Use premium Korean geometric sans-serif (Pretendard style). Ensure every character is legible, crisp, and properly kerned.
+
+# Strategy angle (to guide text placement/emphasis only — NOT to modify the image)
+- ${ctx.strategy.angleName} (${ctx.strategy.hookType} hook, ${ctx.strategy.frameworkId})
+- Intent: ${visualDirection}
+
+# Variant focus
+${spec.label} — this dictates text hierarchy/emphasis, not photo modification.
+
+# Channel composition rules
+${composition}
+
+# Typography placement rules
+- Place headline in the upper/lower empty area, avoiding the focal subject
+- Use a subtle dark-to-transparent gradient (opacity ≤ 30%) only if needed for legibility over busy areas
+- CTA button: solid contrasting color, rounded corners, near bottom with breathing room
+- Brand logo is overlaid separately later — DO NOT add any logo/wordmark/watermark
+
+# Avoid
+- Any modification to the original photograph's subject, face, pose, clothing, composition
+- Drawing any logo, brand mark, wordmark, icon, watermark, badge, emblem anywhere
+- Heavy filters, stylization, cartoonification of the photograph
+- Before/after comparison layouts (Meta policy)
+- ${playbookAvoid}
+
+# Style
+Premium, clean, performance-advertising typography laid over a REAL photograph. The photo stays photographic; only the text layer is designed.${
     ctx.regenInstruction
       ? `
 

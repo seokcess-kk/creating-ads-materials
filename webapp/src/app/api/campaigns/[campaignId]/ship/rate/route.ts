@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getCampaign, getLatestRun, rateRun } from "@/lib/campaigns";
-import { recomputeLearnings } from "@/lib/learning";
+import { applyRatingToBPWeights, recomputeLearnings } from "@/lib/learning";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
 const Schema = z.object({
@@ -21,6 +21,13 @@ export async function POST(
 
     const updated = await rateRun(run.id, input.rating, input.note);
 
+    let bpFeedback: Awaited<ReturnType<typeof applyRatingToBPWeights>> | null = null;
+    try {
+      bpFeedback = await applyRatingToBPWeights(run.id, input.rating);
+    } catch (e) {
+      console.warn("BP weight 역전파 실패:", (e as Error).message);
+    }
+
     const campaign = await getCampaign(campaignId);
     if (campaign) {
       try {
@@ -30,7 +37,7 @@ export async function POST(
       }
     }
 
-    return ok({ run: updated });
+    return ok({ run: updated, bpFeedback });
   } catch (e) {
     return serverError(e);
   }

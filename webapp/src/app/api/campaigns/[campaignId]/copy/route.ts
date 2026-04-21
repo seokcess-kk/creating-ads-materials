@@ -13,6 +13,11 @@ import {
 } from "@/lib/campaigns";
 import { loadBrandMemory } from "@/lib/memory";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
+import {
+  briefToText,
+  formatRelevantBPsDigest,
+  retrieveRelevantBPs,
+} from "@/lib/vision/retrieve";
 import { getPlaybook } from "@/lib/playbook";
 import { getFunnelGuide } from "@/lib/funnel";
 import { getFramework } from "@/lib/frameworks";
@@ -108,6 +113,36 @@ export async function POST(
       const intentNote =
         (campaign.constraints_json as Record<string, string>)?.note ?? null;
 
+      let semanticBPDigest: string | null = null;
+      try {
+        const offer =
+          memory.offers.find((o) => o.id === campaign.offer_id) ?? memory.offers[0] ?? null;
+        const audience =
+          memory.audiences.find((a) => a.id === campaign.audience_id) ?? memory.audiences[0] ?? null;
+        const queryText = briefToText({
+          brandName: memory.brand.name,
+          brandCategory: memory.brand.category,
+          offer,
+          audience,
+          intentNote,
+          strategy: strategyContent,
+          channel: campaign.channel,
+          goal: campaign.goal,
+        });
+        const matches = await retrieveRelevantBPs(campaign.brand_id, queryText, {
+          limit: 5,
+          minSimilarity: 0.3,
+          usageContext: {
+            operation: "bp_retrieve_copy",
+            brandId: campaign.brand_id,
+            campaignId,
+          },
+        });
+        semanticBPDigest = formatRelevantBPsDigest(matches);
+      } catch (retErr) {
+        console.warn("Semantic BP 검색 실패:", (retErr as Error).message);
+      }
+
       const response = await callClaude({
         model: "opus",
         maxTokens: 8000,
@@ -126,6 +161,10 @@ export async function POST(
           playbook,
           framework,
           funnel,
+          channel: campaign.channel,
+          semanticBPDigest,
+          keyVisualIntent: campaign.key_visual_intent,
+          selectedKeyVisualIds: campaign.selected_key_visual_ids,
           regenInstruction: body.instruction,
           previousHeadlines,
         }),

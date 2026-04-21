@@ -5,7 +5,7 @@ import type { Playbook } from "@/lib/playbook/types";
 import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
 import type { StrategyAlternative } from "./strategy";
-import { buildCopyPatternDigest, buildVisionDigest } from "@/lib/vision/digest";
+import { buildCopyPatternDigest, buildVisionDigest, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
 
 export const COPY_PROMPT_VERSION = "copy@1.0.0";
@@ -140,8 +140,16 @@ export interface CopyContext {
   playbook: Playbook;
   framework: Framework;
   funnel: FunnelGuide;
+  channel: string;
+  semanticBPDigest?: string | null;
+  keyVisualIntent?: string | null;
+  selectedKeyVisualIds?: string[];
   regenInstruction?: string;
   previousHeadlines?: string[];
+}
+
+function copyDigestOpts(ctx: CopyContext): DigestOpts {
+  return { goal: ctx.funnel.stage, channel: ctx.channel };
 }
 
 export function buildCopySystem(): string {
@@ -244,6 +252,21 @@ function formatFunnel(g: FunnelGuide): string {
   ].join("\n");
 }
 
+function formatKeyVisuals(ctx: CopyContext): string {
+  const ids = ctx.selectedKeyVisualIds ?? [];
+  if (ids.length === 0) return "(실사 자산 미선택)";
+  const pool = ctx.memory.keyVisuals ?? [];
+  const selected = pool.filter((kv) => ids.includes(kv.id));
+  if (selected.length === 0) return "(선택된 실사 자산을 찾을 수 없음)";
+  const intent = ctx.keyVisualIntent ? `의도: "${ctx.keyVisualIntent}"\n` : "";
+  const lines = selected.map((kv) => {
+    const mood = kv.mood_tags?.length ? ` · mood: ${kv.mood_tags.join(", ")}` : "";
+    const desc = kv.description ? ` · ${kv.description}` : "";
+    return `  - [${kv.kind}] "${kv.label}"${desc}${mood}`;
+  });
+  return `${intent}${lines.join("\n")}`;
+}
+
 export function buildCopyMessages(ctx: CopyContext): MessageParam[] {
   const text = `# CONTEXT
 
@@ -266,11 +289,22 @@ ${ctx.intentNote ?? "(없음)"}
 ## Selected Strategy
 ${formatStrategy(ctx.strategy)}
 
-## Brand Patterns (BP Copy digest)
-${buildCopyPatternDigest(ctx.memory)}
+## Brand Patterns (BP Copy digest — ${ctx.funnel.stage} 재가중, Top-3 노출)
+${buildCopyPatternDigest(ctx.memory, copyDigestOpts(ctx))}
 
-## Brand Patterns (BP Vision digest)
-${buildVisionDigest(ctx.memory, 3)}
+## Brand Patterns (BP Vision digest — ${ctx.funnel.stage} 관련성 Top-3)
+${buildVisionDigest(ctx.memory, copyDigestOpts(ctx), 3)}
+
+## Semantic relevant BPs (의미 기반 Top-K)
+${ctx.semanticBPDigest ?? "(embedding 미활성)"}
+
+## Selected Key Visuals (실사 자산)
+${formatKeyVisuals(ctx)}
+
+Key Visual 활용 규칙:
+- 실사 자산이 있으면 카피는 **사진의 여백에 얹힐 것**을 전제한다. 긴 문장보다 짧고 임팩트 있는 헤드라인을 선호.
+- 사진의 mood(warm/clean/professional 등)와 일치하는 톤을 고른다.
+- 사진이 없으면 기존 원칙대로 작성.
 
 ## Brand Preferences (과거 선택·평가)
 ${buildPreferenceDigest(ctx.memory)}

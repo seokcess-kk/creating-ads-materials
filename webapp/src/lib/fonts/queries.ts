@@ -10,6 +10,19 @@ export interface FontQueryOptions {
   limit?: number;
 }
 
+// tier1(public/fonts bundled) > tier2(CDN URL) > tier3(기타 URL) > tier0(repo/fonts, Vercel 미배포)
+// 프로덕션 번들에 실재 파일이 있는 tier 우선.
+const TIER_PRIORITY: Record<FontTier, number> = {
+  tier1: 0,
+  tier2: 1,
+  tier3: 2,
+  tier0: 3,
+};
+
+function sortByTierPriority<T extends { tier: FontTier }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => TIER_PRIORITY[a.tier] - TIER_PRIORITY[b.tier]);
+}
+
 export async function listFonts(options: FontQueryOptions = {}): Promise<FontRow[]> {
   const supabase = createAdminClient();
   let query = supabase.from("fonts").select("*");
@@ -25,12 +38,12 @@ export async function listFonts(options: FontQueryOptions = {}): Promise<FontRow
   if (options.family) query = query.ilike("family", `%${options.family}%`);
   if (options.search) query = query.ilike("family", `%${options.search}%`);
 
-  query = query.order("tier").order("family").order("weight");
+  query = query.order("family").order("weight");
   if (options.limit) query = query.limit(options.limit);
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as FontRow[];
+  return sortByTierPriority((data ?? []) as FontRow[]);
 }
 
 export async function getFont(fontId: string): Promise<FontRow | null> {
@@ -53,7 +66,9 @@ export async function findFont(
   let query = supabase.from("fonts").select("*").eq("family", family);
   if (weight) query = query.eq("weight", weight);
   if (tier) query = query.eq("tier", tier);
-  const { data, error } = await query.order("tier").limit(1).maybeSingle();
+  const { data, error } = await query;
   if (error) throw error;
-  return (data as FontRow | null) ?? null;
+  const rows = (data ?? []) as FontRow[];
+  if (rows.length === 0) return null;
+  return sortByTierPriority(rows)[0];
 }

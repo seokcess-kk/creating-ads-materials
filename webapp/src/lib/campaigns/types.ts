@@ -32,6 +32,8 @@ export interface Campaign {
   constraints_json: Record<string, unknown>;
   status: CampaignStatus;
   automation_level: AutomationLevel;
+  key_visual_intent: string | null;
+  selected_key_visual_ids: string[];
   created_at: string;
   updated_at: string;
 }
@@ -99,4 +101,6 @@ export interface CampaignIntent {
   channel: string;
   constraints?: Record<string, unknown>;
   automation_level?: AutomationLevel;
+  key_visual_intent?: string | null;
+  selected_key_visual_ids?: string[];
 }

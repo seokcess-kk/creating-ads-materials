@@ -5,6 +5,7 @@ import { listCampaigns } from "@/lib/campaigns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 
 export const dynamic = "force-dynamic";
 
@@ -48,20 +49,31 @@ export default async function CampaignsListPage({
       ) : (
         <div className="space-y-3">
           {campaigns.map((c) => (
-            <Link key={c.id} href={`/campaigns/${c.id}`}>
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-base">{c.name}</CardTitle>
-                    <Badge variant="secondary">{c.goal}</Badge>
-                    <Badge variant="outline">{c.channel}</Badge>
-                    <Badge variant={c.status === "completed" ? "secondary" : "outline"}>
-                      {c.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-              </Card>
-            </Link>
+            <div key={c.id} className="relative">
+              <Link href={`/campaigns/${c.id}`}>
+                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardHeader>
+                    <div className="flex items-center gap-2 pr-10">
+                      <CardTitle className="text-base">{c.name}</CardTitle>
+                      <Badge variant="secondary">{c.goal}</Badge>
+                      <Badge variant="outline">{c.channel}</Badge>
+                      <Badge
+                        variant={c.status === "completed" ? "secondary" : "outline"}
+                      >
+                        {c.status}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                </Card>
+              </Link>
+              <div className="absolute right-3 top-3">
+                <DeleteCampaignButton
+                  campaignId={c.id}
+                  campaignName={c.name}
+                  variant="icon"
+                />
+              </div>
+            </div>
           ))}
         </div>
       )}

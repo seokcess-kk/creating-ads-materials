@@ -10,19 +10,39 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import type { BrandAudience, BrandOffer } from "@/lib/memory/types";
+import type {
+  BrandAudience,
+  BrandKeyVisual,
+  BrandOffer,
+  KeyVisualKind,
+} from "@/lib/memory/types";
 import { listActiveChannels } from "@/lib/channels";
 
 const CHANNELS = listActiveChannels();
+
+const KIND_LABEL: Record<KeyVisualKind, string> = {
+  person: "인물",
+  space: "공간",
+  product: "제품",
+};
 
 interface IntentFormProps {
   brandId: string;
   brandName: string;
   offers: BrandOffer[];
   audiences: BrandAudience[];
+  keyVisuals: BrandKeyVisual[];
+  usesRealAssets: boolean;
 }
 
-export function IntentForm({ brandId, brandName, offers, audiences }: IntentFormProps) {
+export function IntentForm({
+  brandId,
+  brandName,
+  offers,
+  audiences,
+  keyVisuals,
+  usesRealAssets,
+}: IntentFormProps) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [offerId, setOfferId] = useState<string | null>(
@@ -34,7 +54,14 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
   const [channelId, setChannelId] = useState<string>("ig_feed_square");
   const [note, setNote] = useState("");
   const [automationLevel, setAutomationLevel] = useState<"manual" | "assist" | "auto">("assist");
+  const [keyVisualIntent, setKeyVisualIntent] = useState("");
+  const [selectedKvIds, setSelectedKvIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+
+  const toggleKv = (id: string) =>
+    setSelectedKvIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
 
   const selectedChannel = CHANNELS.find((c) => c.id === channelId) ?? CHANNELS[0];
 
@@ -55,6 +82,8 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
           channel: channelId,
           constraints: note.trim() ? { note: note.trim() } : {},
           automation_level: automationLevel,
+          key_visual_intent: keyVisualIntent.trim() || null,
+          selected_key_visual_ids: selectedKvIds,
         }),
       });
       if (!res.ok) {
@@ -301,6 +330,90 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
           </div>
         </CardContent>
       </Card>
+
+      {(usesRealAssets || keyVisuals.length > 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">실사 자산 (선택)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>주인공·포커스</Label>
+              <Input
+                value={keyVisualIntent}
+                onChange={(e) => setKeyVisualIntent(e.target.value)}
+                placeholder="예: 원장님 전문성 어필 / 쾌적한 독서실 공간"
+                disabled={saving}
+              />
+              <p className="text-xs text-muted-foreground">
+                자연어로 적어두면 카피·전략 수립 시 참조됩니다
+              </p>
+            </div>
+
+            {keyVisuals.length === 0 ? (
+              <div className="text-sm space-y-2">
+                <p className="text-muted-foreground">등록된 실사 자산이 없습니다.</p>
+                <Link href={`/brands/${brandId}/key-visuals`}>
+                  <Button variant="outline" size="sm">
+                    실사 자산 업로드
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>사용할 자산 (복수 선택 가능, 비워두면 AI 자유 생성)</Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {keyVisuals.map((kv) => {
+                    const selected = selectedKvIds.includes(kv.id);
+                    const disabled = kv.kind === "person"; // Phase 1: 인물은 비활성
+                    return (
+                      <label
+                        key={kv.id}
+                        className={`relative block border rounded-md overflow-hidden transition-colors ${
+                          disabled
+                            ? "opacity-40 cursor-not-allowed"
+                            : selected
+                              ? "border-primary bg-primary/5 cursor-pointer"
+                              : "hover:bg-muted/50 cursor-pointer"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => !disabled && toggleKv(kv.id)}
+                          disabled={disabled || saving}
+                          className="absolute top-1.5 right-1.5 z-10"
+                        />
+                        <img
+                          src={kv.storage_url}
+                          alt={kv.label}
+                          className="w-full aspect-square object-cover"
+                        />
+                        <div className="p-2 space-y-1">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Badge variant="outline" className="text-[10px]">
+                              {KIND_LABEL[kv.kind]}
+                            </Badge>
+                            {disabled && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Phase 2
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs font-medium line-clamp-1">{kv.label}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  인물 자산은 Phase 2에서 안전 합성(Compositor 트랙)으로 지원 예정
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

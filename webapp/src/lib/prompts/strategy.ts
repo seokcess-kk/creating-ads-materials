@@ -126,6 +126,10 @@ export interface StrategyContext {
   playbook: Playbook;
   frameworks: Framework[];
   funnel: FunnelGuide;
+  channel: string;
+  semanticBPDigest?: string | null;
+  keyVisualIntent?: string | null;
+  selectedKeyVisualIds?: string[];
   regenInstruction?: string;
   previousAngles?: Array<{
     angleName: string;
@@ -134,13 +138,17 @@ export interface StrategyContext {
   }>;
 }
 
+function digestOpts(ctx: StrategyContext): DigestOpts {
+  return { goal: ctx.funnel.stage, channel: ctx.channel };
+}
+
 export function buildStrategySystem(): string {
   return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. 브랜드 자산을 바탕으로 BOFU(전환) 광고 소재의 전략 대안 3개를 **명확히 다른 역할**로 설계합니다.
 
-역할 분화 (필수):
-- alt_1 role="safe": **검증된 방향**. Brand Preferences(있으면)와 BP 패턴에서 승률 높은 조합을 재현. 학습 데이터가 없으면 플레이북 recommended hooks 중 가장 자연스러운 것.
-- alt_2 role="explore": **새로운 각도**. safe와 다른 훅×프레임워크 조합으로 타겟 페르소나의 아직 시도 안 한 진입점을 탐색.
-- alt_3 role="challenge": **도전적 방향**. safe와 반대되는 훅(예: safe=benefit ↔ challenge=problem, safe=urgency ↔ challenge=insight)으로 가설을 검증. 플레이북 recommended 밖의 훅 사용도 OK.
+역할 분화 (필수 · 아래 "Role-aware BP Guidance"와 "Semantic relevant BPs" 블록의 지시를 각 대안에 직접 적용):
+- alt_1 role="safe": **지배 BP 패턴 + 의미 유사 BP 재현**. Guidance의 safe 항목과 Semantic Top-K 중 Rel#1의 hook/framework/mood/typography 조합을 적극 반영. 학습 데이터가 비면 플레이북 recommended hooks 중 가장 자연스러운 것.
+- alt_2 role="explore": **BP 미등장·저빈도 영역 탐색**. Guidance의 explore 항목 + Semantic Top-K 중 유사도가 중간대(Rel#2~3)인 BP의 차별화 요소를 의도적으로 시도. safe와 완전히 다른 진입점.
+- alt_3 role="challenge": **지배 패턴의 반대 축**. Guidance의 challenge 항목으로 가설을 뒤집는다. Semantic BP는 "피해야 할 안전지대" 신호로 해석. 플레이북 recommended 밖의 훅 사용도 OK.
 
 원칙:
 - 3대안의 hookType과 frameworkId는 모두 달라야 한다 (중복 금지).
@@ -151,8 +159,8 @@ export function buildStrategySystem(): string {
 - 한국어로 출력. 도구 호출(${STRATEGY_TOOL_NAME})로만 결과를 기록.`;
 }
 
-function formatVisionDigest(memory: BrandMemory): string {
-  return buildVisionDigest(memory);
+function formatVisionDigest(ctx: StrategyContext): string {
+  return buildVisionDigest(ctx.memory, digestOpts(ctx));
 }
 
 function formatIdentity(memory: BrandMemory): string {
@@ -220,6 +228,23 @@ function formatFrameworks(fs: Framework[]): string {
     .join("\n\n");
 }
 
+function formatKeyVisuals(ctx: StrategyContext): string {
+  const ids = ctx.selectedKeyVisualIds ?? [];
+  if (ids.length === 0) return "(실사 자산 미선택 — 이미지 단계에서 Gemini 자유 생성)";
+  const pool = ctx.memory.keyVisuals ?? [];
+  const selected = pool.filter((kv) => ids.includes(kv.id));
+  if (selected.length === 0) return "(선택된 실사 자산을 찾을 수 없음)";
+  const intent = ctx.keyVisualIntent
+    ? `의도: "${ctx.keyVisualIntent}"\n`
+    : "";
+  const lines = selected.map((kv) => {
+    const mood = kv.mood_tags?.length ? ` · mood: ${kv.mood_tags.join(", ")}` : "";
+    const desc = kv.description ? ` · ${kv.description}` : "";
+    return `  - [${kv.kind}] "${kv.label}"${desc}${mood}`;
+  });
+  return `${intent}${lines.join("\n")}`;
+}
+
 function formatFunnel(g: FunnelGuide): string {
   return [
     `stage: ${g.stage}`,
@@ -252,8 +277,23 @@ ${formatAudience(ctx)}
 ## Intent Note
 ${ctx.intentNote ?? "(없음)"}
 
-## Brand Patterns (BP Vision digest)
-${formatVisionDigest(ctx.memory)}
+## Brand Patterns (BP Vision digest — ${ctx.funnel.stage} 관련성 재가중)
+${formatVisionDigest(ctx)}
+
+## Role-aware BP Guidance (3대안 차별화)
+${buildStrategyRoleHints(ctx.memory, digestOpts(ctx))}
+
+## Semantic relevant BPs (Top-K · Offer·Audience·Intent 의미 기반)
+${ctx.semanticBPDigest ?? "(embedding 미활성 — 마이그레이션 013 적용 후 자동 수집)"}
+
+## Selected Key Visuals (실제 브랜드 사진 — 최종 이미지에 사용됨)
+${formatKeyVisuals(ctx)}
+
+Key Visual 활용 규칙 (실사 자산이 선택된 경우):
+- 각 대안의 visualDirection은 **주어진 실사 사진을 배경으로 전제**하고 그 위에 얹을 **타이포·레이아웃·여백 전략**만 서술한다.
+- 피사체 재생성·재배치·보정 같은 지시는 절대 포함하지 않는다 (원본 사진은 픽셀 단위로 보존).
+- 사진의 mood·여백을 읽어 카피 위치(상단/하단/좌측 블록)와 하이라이트할 영역을 제안한다.
+- 실사 자산이 없으면 기존대로 Gemini가 장면을 자유 생성한다.
 
 ## Brand Preferences (이 브랜드의 과거 선택·평가)
 ${buildPreferenceDigest(ctx.memory)}

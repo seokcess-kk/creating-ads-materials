@@ -19,11 +19,16 @@ export default async function BrandDetailPage({
   if (!memory) notFound();
   const campaigns = await listCampaigns(brandId);
 
-  const { brand, identity, offers, audiences, references, fontPairs } = memory;
+  const { brand, identity, offers, audiences, references, keyVisuals, fontPairs } = memory;
   const memoryReady = Boolean(identity) && offers.length > 0 && audiences.length > 0;
   const readyRefs = references.filter((r) => r.vision_status === "ready").length;
   const pendingRefs = references.filter((r) => r.vision_status === "pending").length;
   const failedRefs = references.filter((r) => r.vision_status === "failed").length;
+  const kvByKind = {
+    space: keyVisuals.filter((k) => k.kind === "space").length,
+    person: keyVisuals.filter((k) => k.kind === "person").length,
+    product: keyVisuals.filter((k) => k.kind === "product").length,
+  };
 
   const sections = [
     {
@@ -62,6 +67,17 @@ export default async function BrandDetailPage({
         references.length === 0
           ? "레퍼런스를 업로드하세요"
           : `대기 ${pendingRefs} · 실패 ${failedRefs}`,
+    },
+    {
+      title: "Key Visuals",
+      description: "실사 공간·인물·제품 사진",
+      href: `/brands/${brandId}/key-visuals`,
+      status: `${keyVisuals.length}개`,
+      done: keyVisuals.length > 0,
+      detail:
+        keyVisuals.length === 0
+          ? "실사 사용 시 업로드 (선택)"
+          : `공간 ${kvByKind.space} · 인물 ${kvByKind.person} · 제품 ${kvByKind.product}`,
     },
     {
       title: "Fonts",

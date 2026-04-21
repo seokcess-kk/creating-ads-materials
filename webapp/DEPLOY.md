@@ -4,7 +4,7 @@
 
 - **Vercel Pro 플랜** — Hobby는 함수 실행 10초 제한으로 Visual(240s)·Retouch(180s)·Copy(120s) 실행 불가
 - Supabase 프로젝트 + 마이그레이션 001~006 모두 적용 완료
-- Storage 버킷 **public read** 설정: `brand-assets`, `generated-images`
+- Storage 버킷 **public read** 설정: `brand-assets`, `generated-images`, `brand-key-visuals`
 
 ---
 

@@ -6,7 +6,7 @@ import {
   setVisionResult,
   type ReferenceSource,
 } from "@/lib/memory";
-import { analyzeBP } from "@/lib/vision";
+import { analyzeBP, embedAndStoreBP } from "@/lib/vision";
 import { ok, parseJson, serverError } from "@/lib/api-utils";
 
 export const maxDuration = 60;
@@ -61,6 +61,17 @@ export async function POST(
         },
       });
       await setVisionResult(ref.id, result.analysis, result.promptVersion);
+      try {
+        await embedAndStoreBP({
+          referenceId: ref.id,
+          analysis: result.analysis,
+          sourceType: ref.source_type,
+          note: ref.source_note,
+          usageContext: { operation: "bp_embed", brandId },
+        });
+      } catch (eErr) {
+        console.warn("BP embedding 생성 실패:", (eErr as Error).message);
+      }
       return ok({
         reference: {
           ...ref,

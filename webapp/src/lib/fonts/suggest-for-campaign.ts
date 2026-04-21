@@ -1,5 +1,5 @@
 import type { BrandMemory } from "@/lib/memory/types";
-import { summarizeVisualPatterns } from "@/lib/vision/digest";
+import { summarizeVisualPatterns, type DigestOpts } from "@/lib/vision/digest";
 import { TONE_PRESETS, type TonePresetId } from "./tone-pairs";
 import { resolvePresetFromSignals, collectSignalsForPrefill } from "./prefill";
 
@@ -89,6 +89,7 @@ function emptyReasons(): Record<TonePresetId, string[]> {
 export interface SuggestInput {
   memory: BrandMemory;
   brandCategory?: string | null;
+  digestOpts?: DigestOpts;
 }
 
 /**
@@ -98,11 +99,11 @@ export interface SuggestInput {
 export function suggestFontPresetsForCampaign(
   input: SuggestInput,
 ): FontSuggestion[] {
-  const { memory, brandCategory } = input;
+  const { memory, brandCategory, digestOpts } = input;
   const scores = emptyScores();
   const reasons = emptyReasons();
 
-  const visualPattern = summarizeVisualPatterns(memory);
+  const visualPattern = summarizeVisualPatterns(memory, digestOpts);
 
   // 1) BP typography.style — 가장 강한 신호
   scoreByRules(TYPOGRAPHY_RULES, visualPattern.topTypography, scores, reasons, "BP typography");

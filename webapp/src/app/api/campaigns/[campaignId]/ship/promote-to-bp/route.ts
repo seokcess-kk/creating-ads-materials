@@ -8,7 +8,7 @@ import {
   setVisionFailed,
   setVisionResult,
 } from "@/lib/memory";
-import { analyzeBP } from "@/lib/vision";
+import { analyzeBP, embedAndStoreBP } from "@/lib/vision";
 import { recomputeLearnings } from "@/lib/learning";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
 
@@ -50,6 +50,21 @@ export async function POST(
         },
       });
       await setVisionResult(ref.id, result.analysis, result.promptVersion);
+      try {
+        await embedAndStoreBP({
+          referenceId: ref.id,
+          analysis: result.analysis,
+          sourceType: ref.source_type,
+          note: ref.source_note,
+          usageContext: {
+            operation: "bp_embed_promote",
+            brandId: campaign.brand_id,
+            campaignId,
+          },
+        });
+      } catch (eErr) {
+        console.warn("BP embedding 생성 실패:", (eErr as Error).message);
+      }
       await recomputeLearnings(campaign.brand_id);
       return ok({
         reference: {

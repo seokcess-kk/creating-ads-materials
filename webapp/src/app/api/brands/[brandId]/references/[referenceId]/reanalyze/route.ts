@@ -4,7 +4,7 @@ import {
   setVisionPending,
   setVisionResult,
 } from "@/lib/memory";
-import { analyzeBP } from "@/lib/vision";
+import { analyzeBP, embedAndStoreBP } from "@/lib/vision";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
 
 export const maxDuration = 60;
@@ -29,6 +29,20 @@ export async function POST(
         },
       });
       await setVisionResult(referenceId, result.analysis, result.promptVersion);
+      try {
+        await embedAndStoreBP({
+          referenceId,
+          analysis: result.analysis,
+          sourceType: ref.source_type,
+          note: ref.source_note,
+          usageContext: {
+            operation: "bp_embed_reanalyze",
+            brandId: ref.brand_id,
+          },
+        });
+      } catch (eErr) {
+        console.warn("BP embedding 재생성 실패:", (eErr as Error).message);
+      }
       return ok({
         reference: {
           ...ref,

@@ -1,26 +1,47 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BrandReference, ReferenceSource, VisionAnalysis } from "./types";
 
+// embedding 벡터는 클라이언트로 내려보내지 않는다 (용량·민감도).
+const REFERENCE_FIELDS = [
+  "id",
+  "brand_id",
+  "file_url",
+  "file_name",
+  "source_type",
+  "source_note",
+  "is_negative",
+  "weight",
+  "vision_analysis_json",
+  "vision_prompt_version",
+  "vision_status",
+  "vision_error",
+  "vision_analyzed_at",
+  "embedding_model",
+  "embedded_at",
+  "created_at",
+  "updated_at",
+].join(", ");
+
 export async function listReferences(brandId: string): Promise<BrandReference[]> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("brand_references")
-    .select("*")
+    .select(REFERENCE_FIELDS)
     .eq("brand_id", brandId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as BrandReference[];
+  return (data ?? []) as unknown as BrandReference[];
 }
 
 export async function getReference(referenceId: string): Promise<BrandReference | null> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("brand_references")
-    .select("*")
+    .select(REFERENCE_FIELDS)
     .eq("id", referenceId)
     .maybeSingle();
   if (error) throw error;
-  return (data as BrandReference | null) ?? null;
+  return (data as unknown as BrandReference | null) ?? null;
 }
 
 export interface ReferenceInput {
@@ -91,6 +112,23 @@ export async function setVisionFailed(referenceId: string, errorMsg: string): Pr
       vision_status: "failed",
       vision_error: errorMsg,
       vision_analyzed_at: new Date().toISOString(),
+    })
+    .eq("id", referenceId);
+  if (error) throw error;
+}
+
+export async function setReferenceEmbedding(
+  referenceId: string,
+  embedding: number[],
+  model: string,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("brand_references")
+    .update({
+      embedding,
+      embedding_model: model,
+      embedded_at: new Date().toISOString(),
     })
     .eq("id", referenceId);
   if (error) throw error;

@@ -4,6 +4,7 @@ import { getIdentity } from "./identity";
 import { listOffers } from "./offers";
 import { listAudiences } from "./audiences";
 import { listReferences } from "./references";
+import { listKeyVisuals } from "./key-visuals";
 import { ensureLearnings } from "./learnings";
 import { listFontPairs } from "./fonts";
 
@@ -12,6 +13,7 @@ export * from "./identity";
 export * from "./offers";
 export * from "./audiences";
 export * from "./references";
+export * from "./key-visuals";
 export * from "./learnings";
 export * from "./fonts";
 
@@ -41,6 +43,7 @@ export interface BrandInput {
   website_url?: string | null;
   category?: string | null;
   description?: string | null;
+  uses_real_assets?: boolean;
 }
 
 export async function createBrand(input: BrandInput): Promise<Brand> {
@@ -52,6 +55,7 @@ export async function createBrand(input: BrandInput): Promise<Brand> {
       website_url: input.website_url ?? null,
       category: input.category ?? null,
       description: input.description ?? null,
+      uses_real_assets: input.uses_real_assets ?? false,
     })
     .select()
     .single();
@@ -86,14 +90,16 @@ export async function loadBrandMemory(brandId: string): Promise<BrandMemory | nu
   const brand = await getBrand(brandId);
   if (!brand) return null;
 
-  const [identity, offers, audiences, references, learnings, fontPairs] = await Promise.all([
-    getIdentity(brandId),
-    listOffers(brandId),
-    listAudiences(brandId),
-    listReferences(brandId),
-    ensureLearnings(brandId),
-    listFontPairs(brandId),
-  ]);
+  const [identity, offers, audiences, references, keyVisuals, learnings, fontPairs] =
+    await Promise.all([
+      getIdentity(brandId),
+      listOffers(brandId),
+      listAudiences(brandId),
+      listReferences(brandId),
+      listKeyVisuals(brandId),
+      ensureLearnings(brandId),
+      listFontPairs(brandId),
+    ]);
 
   return {
     brand,
@@ -101,6 +107,7 @@ export async function loadBrandMemory(brandId: string): Promise<BrandMemory | nu
     offers,
     audiences,
     references,
+    keyVisuals,
     learnings,
     fontPairs,
   };

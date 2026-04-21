@@ -81,6 +81,8 @@ export async function createCampaign(
       channel: intent.channel,
       constraints_json: intent.constraints ?? {},
       automation_level: intent.automation_level ?? "assist",
+      key_visual_intent: intent.key_visual_intent ?? null,
+      selected_key_visual_ids: intent.selected_key_visual_ids ?? [],
     })
     .select()
     .single();
@@ -103,6 +105,12 @@ export async function updateCampaign(
   if (patch.status !== undefined) updates.status = patch.status;
   if (patch.automation_level !== undefined) {
     updates.automation_level = patch.automation_level;
+  }
+  if (patch.key_visual_intent !== undefined) {
+    updates.key_visual_intent = patch.key_visual_intent;
+  }
+  if (patch.selected_key_visual_ids !== undefined) {
+    updates.selected_key_visual_ids = patch.selected_key_visual_ids;
   }
 
   const { data, error } = await supabase

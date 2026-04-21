@@ -4,6 +4,7 @@ import { listBrands } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import type { Campaign } from "@/lib/campaigns/types";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +72,8 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
             const brand = brandMap.get(c.brand_id);
             const channel = getChannel(c.channel);
             return (
-              <Link key={c.id} href={`/campaigns/${c.id}`}>
+              <div key={c.id} className="relative">
+                <Link href={`/campaigns/${c.id}`}>
                 <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
                   <CardHeader className="pb-2">
                     {brand && (
@@ -79,7 +81,7 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
                         {brand.name}
                       </CardDescription>
                     )}
-                    <CardTitle className="text-base line-clamp-2">
+                    <CardTitle className="text-base line-clamp-2 pr-8">
                       {c.name}
                     </CardTitle>
                   </CardHeader>
@@ -131,7 +133,15 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
                     </p>
                   </CardContent>
                 </Card>
-              </Link>
+                </Link>
+                <div className="absolute right-3 top-3">
+                  <DeleteCampaignButton
+                    campaignId={c.id}
+                    campaignName={c.name}
+                    variant="icon"
+                  />
+                </div>
+              </div>
             );
           })}
         </div>

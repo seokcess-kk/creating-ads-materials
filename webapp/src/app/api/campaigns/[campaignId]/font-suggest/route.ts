@@ -21,6 +21,10 @@ export async function GET(
     const suggestions = suggestFontPresetsForCampaign({
       memory,
       brandCategory: brand?.category ?? null,
+      digestOpts: {
+        goal: campaign.goal,
+        channel: campaign.channel.split("_")[0],
+      },
     });
 
     return ok({ suggestions });

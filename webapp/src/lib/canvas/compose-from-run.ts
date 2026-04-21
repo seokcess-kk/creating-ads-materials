@@ -9,7 +9,7 @@ import { getFont } from "@/lib/fonts/queries";
 import type { BrandMemory, FontRole, FontRow } from "@/lib/memory/types";
 import type { CopyVariant } from "@/lib/prompts/copy";
 import type { CanvasFontEntry, ComposeFontSet, LogoPosition } from "./compositor";
-import { summarizeVisualPatterns } from "@/lib/vision/digest";
+import { summarizeVisualPatterns, type DigestOpts } from "@/lib/vision/digest";
 
 export interface LogoDefaults {
   position: LogoPosition;
@@ -52,8 +52,11 @@ export function normalizeLogoPosition(raw: string | null | undefined): LogoPosit
   return null;
 }
 
-export function computeLogoDefaults(memory: BrandMemory): LogoDefaults {
-  const summary = summarizeVisualPatterns(memory);
+export function computeLogoDefaults(
+  memory: BrandMemory,
+  opts?: DigestOpts,
+): LogoDefaults {
+  const summary = summarizeVisualPatterns(memory, opts);
   const bpPosition = normalizeLogoPosition(summary.topLogoPosition);
   const bpSize = summary.avgLogoSizeRatio;
   if (bpPosition || bpSize != null) {
@@ -138,6 +141,9 @@ export async function buildComposeSource(
     baseUrl,
     baseSource: retouchV ? "retouch" : "visual",
     fontSet,
-    logoDefaults: computeLogoDefaults(memory),
+    logoDefaults: computeLogoDefaults(memory, {
+      goal: campaign.goal,
+      channel: campaign.channel.split("_")[0],
+    }),
   };
 }

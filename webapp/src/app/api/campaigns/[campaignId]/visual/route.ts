@@ -12,16 +12,26 @@ import {
   upsertStage,
 } from "@/lib/campaigns";
 import { loadBrandMemory } from "@/lib/memory";
-import { generateImage, type AspectRatio } from "@/lib/engines/gemini-image";
+import { listKeyVisualsByIds } from "@/lib/memory/key-visuals";
+import {
+  generateImage,
+  editImage,
+  type AspectRatio,
+} from "@/lib/engines/gemini-image";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
+import { fetchAsBase64 } from "@/lib/utils/image-fetch";
 import { getPlaybook } from "@/lib/playbook";
 import { getChannel } from "@/lib/channels";
 import {
   VISUAL_PROMPT_VERSION,
+  VISUAL_ASSET_PROMPT_VERSION,
   VISUAL_VARIANT_SPECS,
   buildGeminiPrompt,
+  buildEditImagePrompt,
   type VisualPromptContext,
+  type VisualVariantSpec,
 } from "@/lib/prompts/visual";
+import type { BrandKeyVisual } from "@/lib/memory/types";
 import { validateVisualImage } from "@/lib/validators/visual-hook";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
 import type { CopyVariant } from "@/lib/prompts/copy";
@@ -104,23 +114,70 @@ export async function POST(
         selectedCopy: selectedCopy.content_json as unknown as CopyVariant,
         playbook,
         channel,
+        goal: campaign.goal,
         regenInstruction: body.instruction,
       };
 
+      // Key Visual 에셋 기반 생성 분기 (Phase 1: space/product만 editImage로 처리).
+      // person kind는 Phase 2의 Compositor 트랙에서 처리하므로 여기선 제외 → 해당 variant는 기존 generateImage로 fallback.
+      const selectedKvIds = campaign.selected_key_visual_ids ?? [];
+      const keyVisualPool: BrandKeyVisual[] = selectedKvIds.length
+        ? await listKeyVisualsByIds(selectedKvIds)
+        : [];
+      const eligibleAssets = keyVisualPool.filter((kv) => kv.kind !== "person");
+
+      const pickAsset = (i: number): BrandKeyVisual | null => {
+        if (eligibleAssets.length === 0) return null;
+        return eligibleAssets[i % eligibleAssets.length];
+      };
+
       const results = await Promise.allSettled(
-        VISUAL_VARIANT_SPECS.map(async (spec) => {
-          const prompt = buildGeminiPrompt(promptCtx, spec);
-          const image = await generateImage({
-            prompt,
-            aspectRatio: channel.aspectRatio as AspectRatio,
-            imageSize: "2K",
-            usageContext: {
-              operation: "visual_gen",
-              brandId: campaign.brand_id,
-              campaignId,
-              metadata: { focus: spec.focus },
-            },
-          });
+        VISUAL_VARIANT_SPECS.map(async (spec: VisualVariantSpec, i: number) => {
+          const asset = pickAsset(i);
+          let prompt: string;
+          let image;
+          let track: "gemini_gen" | "gemini_edit" = "gemini_gen";
+          let promptVersion = VISUAL_PROMPT_VERSION;
+
+          if (asset) {
+            track = "gemini_edit";
+            promptVersion = VISUAL_ASSET_PROMPT_VERSION;
+            prompt = buildEditImagePrompt(
+              { ...promptCtx, keyVisual: asset },
+              spec,
+            );
+            const baseImage = await fetchAsBase64(asset.storage_url);
+            image = await editImage({
+              prompt,
+              baseImage,
+              aspectRatio: channel.aspectRatio as AspectRatio,
+              imageSize: "2K",
+              usageContext: {
+                operation: "visual_gen_asset",
+                brandId: campaign.brand_id,
+                campaignId,
+                metadata: {
+                  focus: spec.focus,
+                  keyVisualId: asset.id,
+                  keyVisualKind: asset.kind,
+                },
+              },
+            });
+          } else {
+            prompt = buildGeminiPrompt(promptCtx, spec);
+            image = await generateImage({
+              prompt,
+              aspectRatio: channel.aspectRatio as AspectRatio,
+              imageSize: "2K",
+              usageContext: {
+                operation: "visual_gen",
+                brandId: campaign.brand_id,
+                campaignId,
+                metadata: { focus: spec.focus },
+              },
+            });
+          }
+
           const uniq = Date.now().toString(36);
           const { url, path } = await uploadGeneratedImage(
             campaignId,
@@ -134,7 +191,7 @@ export async function POST(
               operation: "visual_validator",
               brandId: campaign.brand_id,
               campaignId,
-              metadata: { focus: spec.focus },
+              metadata: { focus: spec.focus, track },
             })) as unknown as Record<string, unknown>;
           } catch (vErr) {
             validator = { validatorError: (vErr as Error).message };
@@ -148,9 +205,13 @@ export async function POST(
               focus: spec.focus,
               focusLabel: spec.label,
               prompt,
+              track,
+              keyVisualId: asset?.id ?? null,
+              keyVisualLabel: asset?.label ?? null,
+              keyVisualKind: asset?.kind ?? null,
             } as Record<string, unknown>,
             scores: validator,
-            promptVersion: VISUAL_PROMPT_VERSION,
+            promptVersion,
           };
         }),
       );
