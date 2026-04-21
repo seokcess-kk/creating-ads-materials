@@ -43,18 +43,36 @@ export default function NewBrandPage() {
       const { brand } = await res.json();
       toast.success("브랜드가 생성되었습니다");
 
-      // 자동 분석 (URL 제공 + 체크박스 on)
+      // 자동 분석 (URL 제공 + 체크박스 on) — Identity까지 자동 채움
       if (autoAnalyze && websiteUrl.trim()) {
-        toast.info("홈페이지 분석 중 (최대 60초)... 브랜드 페이지에서 결과를 확인하세요");
-        // Fire-and-forget — 사용자는 브랜드 페이지로 이동, 분석은 백그라운드
-        fetch(`/api/brands/${brand.id}/analyze-website`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            website_url: websiteUrl.trim(),
-            save_brand_fields: true,
-          }),
-        }).catch(() => {});
+        toast.info("홈페이지 분석 중 (최대 60초)...");
+        try {
+          const analyzeRes = await fetch(
+            `/api/brands/${brand.id}/analyze-website`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                website_url: websiteUrl.trim(),
+                save_brand_fields: true,
+                save_identity: true,
+              }),
+            },
+          );
+          const analyzeData = await analyzeRes.json();
+          if (analyzeRes.ok) {
+            const msg = analyzeData.identitySaved
+              ? "홈페이지 분석 완료 — Identity 자동 반영됨"
+              : "분석 완료 (추출된 Identity 정보 없음)";
+            toast.success(msg);
+          } else {
+            toast.warning(
+              `분석 실패: ${analyzeData.error ?? "알 수 없는 오류"}. 브랜드는 생성됐습니다.`,
+            );
+          }
+        } catch {
+          toast.warning("분석 실패. 브랜드는 생성됐습니다. Identity 페이지에서 다시 시도하세요.");
+        }
       }
 
       router.push(`/brands/${brand.id}`);
@@ -110,9 +128,9 @@ export default function NewBrandPage() {
                     className="mt-0.5"
                   />
                   <span>
-                    <strong className="text-foreground">✨ 자동 분석:</strong> 생성 후
-                    홈페이지를 분석하여 카테고리·설명·Identity 초안을 자동 작성
-                    (백그라운드 진행)
+                    <strong className="text-foreground">✨ 자동 분석:</strong> 홈페이지를
+                    분석해 카테고리·설명 + Identity(voice/taboos/colors)를 자동
+                    작성합니다. 생성 완료까지 최대 60초 대기.
                   </span>
                 </label>
               )}
