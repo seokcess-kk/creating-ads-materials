@@ -109,24 +109,28 @@ export async function POST(
       }
 
       const label = `compose_${Date.now()}`;
-      const [variant] = await createVariants(stage.id, [
-        {
-          label,
-          content: {
-            url: resultUrl,
-            path: outputPath,
-            baseUrl: source.baseUrl,
-            baseSource: source.baseSource,
-            logoApplied,
-            logoPosition: logoApplied && !isCustomCoords ? position : null,
-            logoSizeRatio: logoApplied ? widthRatio : null,
-            logoXRatio: logoApplied && isCustomCoords ? overrides.logoXRatio : null,
-            logoYRatio: logoApplied && isCustomCoords ? overrides.logoYRatio : null,
-            logoSource: defaultsSource,
+      const [variant] = await createVariants(
+        stage.id,
+        [
+          {
+            label,
+            content: {
+              url: resultUrl,
+              path: outputPath,
+              baseUrl: source.baseUrl,
+              baseSource: source.baseSource,
+              logoApplied,
+              logoPosition: logoApplied && !isCustomCoords ? position : null,
+              logoSizeRatio: logoApplied ? widthRatio : null,
+              logoXRatio: logoApplied && isCustomCoords ? overrides.logoXRatio : null,
+              logoYRatio: logoApplied && isCustomCoords ? overrides.logoYRatio : null,
+              logoSource: defaultsSource,
+            },
+            promptVersion: COMPOSE_PROMPT_VERSION,
           },
-          promptVersion: COMPOSE_PROMPT_VERSION,
-        },
-      ]);
+        ],
+        { mode: "replace", instruction: null },
+      );
 
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "compose", "compose");

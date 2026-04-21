@@ -1,10 +1,12 @@
 import {
+  autoSelectBest,
   createRun,
   createVariants,
   getCampaign,
   getLatestRun,
   listVariants,
   getStage,
+  markDownstreamStale,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -27,7 +29,11 @@ import { ApiError, ok, serverError } from "@/lib/api-utils";
 import { z } from "zod";
 
 const Body = z
-  .object({ instruction: z.string().max(500).optional() })
+  .object({
+    instruction: z.string().max(500).optional(),
+    mode: z.enum(["replace", "add", "remix"]).optional(),
+    baseVariantId: z.string().uuid().optional(),
+  })
   .optional();
 
 export const maxDuration = 90;
@@ -57,10 +63,18 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    let body: { instruction?: string } = {};
+    let body: {
+      instruction?: string;
+      mode?: "replace" | "add" | "remix";
+      baseVariantId?: string;
+    } = {};
     try {
       body = Body.parse(await request.json()) ?? {};
     } catch {}
+    const mode = body.mode ?? "replace";
+    if (mode === "remix" && !body.baseVariantId) {
+      throw new ApiError(400, "remix 모드는 baseVariantId 필요");
+    }
 
     const memory = await loadBrandMemory(campaign.brand_id);
     if (!memory) throw new ApiError(404, "브랜드를 찾을 수 없습니다");
@@ -77,15 +91,19 @@ export async function POST(
       channel: campaign.channel,
     });
 
-    const existingVariants = await listVariants(stage.id);
-    const previousAngles = existingVariants.map((v) => {
-      const c = v.content_json as unknown as StrategyAlternative;
-      return {
-        angleName: c.angleName,
-        hookType: c.hookType,
-        frameworkId: c.frameworkId,
-      };
-    });
+    const existingActive = await listVariants(stage.id);
+    // add 모드에서만 이전 각도를 "회피 대상"으로 전달
+    const previousAngles =
+      mode === "add"
+        ? existingActive.map((v) => {
+            const c = v.content_json as unknown as StrategyAlternative;
+            return {
+              angleName: c.angleName,
+              hookType: c.hookType,
+              frameworkId: c.frameworkId,
+            };
+          })
+        : [];
 
     try {
       const playbook = getPlaybook(campaign.channel, campaign.goal);
@@ -128,22 +146,44 @@ export async function POST(
         throw new Error(`전략 스키마 검증 실패: ${parsed.error.message}`);
       }
 
-      const batchIndex = existingVariants.length / 3 + 1;
       const variants = await createVariants(
         stage.id,
         parsed.data.alternatives.map((a) => ({
-          label: `${a.id}_b${batchIndex}`,
-          content: {
-            ...(a as unknown as Record<string, unknown>),
-            batchIndex,
-            regenInstruction: body.instruction ?? null,
-          },
+          label: a.id,
+          content: a as unknown as Record<string, unknown>,
           promptVersion: STRATEGY_PROMPT_VERSION,
         })),
+        {
+          mode,
+          instruction: body.instruction ?? null,
+          baseVariantId: body.baseVariantId ?? null,
+        },
       );
 
       await setStageStatus(stage.id, "ready");
-      return ok({ run, stage, variants, playbookVersion: playbook.version });
+      // Replace 모드: 이전 선택이 archived됨 → downstream 유효성 깨짐
+      if (mode === "replace") {
+        await markDownstreamStale(run.id, "strategy");
+      }
+
+      // Auto-pilot: Assist/Auto 모드면 최고점 자동 선택
+      let autoSelected = null;
+      if (campaign.automation_level !== "manual") {
+        autoSelected = await autoSelectBest(stage.id, variants);
+      }
+      const respVariants = autoSelected
+        ? variants.map((v) =>
+            v.id === autoSelected.id ? { ...v, selected: true } : v,
+          )
+        : variants;
+
+      return ok({
+        run,
+        stage,
+        variants: respVariants,
+        playbookVersion: playbook.version,
+        autoSelected: autoSelected?.id ?? null,
+      });
     } catch (genErr) {
       const msg = genErr instanceof Error ? genErr.message : String(genErr);
       await setStageStatus(stage.id, "failed", msg);

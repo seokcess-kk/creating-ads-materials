@@ -70,14 +70,18 @@ export async function POST(
     const strategyStage = await upsertStage(newRun.id, "strategy", {
       forkedFrom: srcStrategy.id,
     });
-    const [newStrategy] = await createVariants(strategyStage.id, [
-      {
-        label: srcStrategy.label,
-        content: srcStrategy.content_json,
-        scores: srcStrategy.scores_json,
-        promptVersion: srcStrategy.prompt_version ?? undefined,
-      },
-    ]);
+    const [newStrategy] = await createVariants(
+      strategyStage.id,
+      [
+        {
+          label: srcStrategy.label,
+          content: srcStrategy.content_json,
+          scores: srcStrategy.scores_json,
+          promptVersion: srcStrategy.prompt_version ?? undefined,
+        },
+      ],
+      { mode: "replace", instruction: "fork-channel: cloned" },
+    );
     const supabase = createAdminClient();
     await supabase
       .from("creative_variants")
@@ -88,14 +92,18 @@ export async function POST(
     const copyStage = await upsertStage(newRun.id, "copy", {
       forkedFrom: srcCopy.id,
     });
-    const [newCopy] = await createVariants(copyStage.id, [
-      {
-        label: srcCopy.label,
-        content: srcCopy.content_json,
-        scores: srcCopy.scores_json,
-        promptVersion: srcCopy.prompt_version ?? undefined,
-      },
-    ]);
+    const [newCopy] = await createVariants(
+      copyStage.id,
+      [
+        {
+          label: srcCopy.label,
+          content: srcCopy.content_json,
+          scores: srcCopy.scores_json,
+          promptVersion: srcCopy.prompt_version ?? undefined,
+        },
+      ],
+      { mode: "replace", instruction: "fork-channel: cloned" },
+    );
     await supabase
       .from("creative_variants")
       .update({ selected: true })

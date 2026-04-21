@@ -17,7 +17,9 @@ export type RunStatus =
   | "ship"
   | "complete"
   | "failed";
-export type StageStatus = "pending" | "running" | "ready" | "failed";
+export type StageStatus = "pending" | "running" | "ready" | "failed" | "stale";
+
+export type AutomationLevel = "manual" | "assist" | "auto";
 
 export interface Campaign {
   id: string;
@@ -29,6 +31,7 @@ export interface Campaign {
   channel: string;
   constraints_json: Record<string, unknown>;
   status: CampaignStatus;
+  automation_level: AutomationLevel;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +62,8 @@ export interface CreativeStageRow {
   completed_at: string | null;
 }
 
+export type BatchMode = "replace" | "add" | "remix" | "legacy";
+
 export interface CreativeVariant {
   id: string;
   stage_id: string;
@@ -68,6 +73,22 @@ export interface CreativeVariant {
   prompt_version: string | null;
   selected: boolean;
   created_at: string;
+  batch_id: string;
+  batch_index: number;
+  batch_mode: BatchMode;
+  batch_instruction: string | null;
+  base_variant_id: string | null;
+  archived_at: string | null;
+}
+
+export interface BatchSummary {
+  batch_id: string;
+  batch_index: number;
+  batch_mode: BatchMode;
+  batch_instruction: string | null;
+  created_at: string;
+  variant_count: number;
+  archived: boolean;
 }
 
 export interface CampaignIntent {
@@ -77,4 +98,5 @@ export interface CampaignIntent {
   audience_id: string | null;
   channel: string;
   constraints?: Record<string, unknown>;
+  automation_level?: AutomationLevel;
 }

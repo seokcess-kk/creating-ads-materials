@@ -1,10 +1,12 @@
 import {
+  autoSelectBest,
   createVariants,
   getCampaign,
   getLatestRun,
   getSelectedVariant,
   getStage,
   listVariants,
+  markDownstreamStale,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -29,7 +31,11 @@ import { ApiError, ok, serverError } from "@/lib/api-utils";
 import { z } from "zod";
 
 const Body = z
-  .object({ instruction: z.string().max(500).optional() })
+  .object({
+    instruction: z.string().max(500).optional(),
+    mode: z.enum(["replace", "add", "remix"]).optional(),
+    baseVariantId: z.string().uuid().optional(),
+  })
   .optional();
 
 export const maxDuration = 120;
@@ -59,10 +65,18 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    let body: { instruction?: string } = {};
+    let body: {
+      instruction?: string;
+      mode?: "replace" | "add" | "remix";
+      baseVariantId?: string;
+    } = {};
     try {
       body = Body.parse(await request.json()) ?? {};
     } catch {}
+    const mode = body.mode ?? "replace";
+    if (mode === "remix" && !body.baseVariantId) {
+      throw new ApiError(400, "remix 모드는 baseVariantId 필요");
+    }
 
     const run = await getLatestRun(campaignId);
     if (!run) throw new ApiError(400, "실행이 없습니다. Strategy부터 시작하세요.");
@@ -77,10 +91,13 @@ export async function POST(
       strategy_variant_id: selectedStrategy.id,
     });
 
-    const existingVariants = await listVariants(stage.id);
-    const previousHeadlines = existingVariants
-      .map((v) => (v.content_json as unknown as CopyVariant).headline)
-      .filter((h): h is string => Boolean(h));
+    const existingActive = await listVariants(stage.id);
+    const previousHeadlines =
+      mode === "add"
+        ? existingActive
+            .map((v) => (v.content_json as unknown as CopyVariant).headline)
+            .filter((h): h is string => Boolean(h))
+        : [];
 
     try {
       const strategyContent = selectedStrategy.content_json as unknown as StrategyAlternative;
@@ -128,19 +145,13 @@ export async function POST(
         parsed.data.critiques.map((c) => [c.variantId, c]),
       );
 
-      const batchIndex =
-        Math.floor(existingVariants.length / 5) + 1;
       const variants = await createVariants(
         stage.id,
         parsed.data.variants.map((v) => {
           const critique = critiqueMap.get(v.id);
           return {
-            label: `${v.id}_b${batchIndex}`,
-            content: {
-              ...(v as unknown as Record<string, unknown>),
-              batchIndex,
-              regenInstruction: body.instruction ?? null,
-            },
+            label: v.id,
+            content: v as unknown as Record<string, unknown>,
             scores: critique
               ? {
                   ...critique.scores,
@@ -151,11 +162,35 @@ export async function POST(
             promptVersion: COPY_PROMPT_VERSION,
           };
         }),
+        {
+          mode,
+          instruction: body.instruction ?? null,
+          baseVariantId: body.baseVariantId ?? null,
+        },
       );
 
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "copy", "copy");
-      return ok({ run, stage, variants });
+      if (mode === "replace") {
+        await markDownstreamStale(run.id, "copy");
+      }
+
+      let autoSelected = null;
+      if (campaign.automation_level !== "manual") {
+        autoSelected = await autoSelectBest(stage.id, variants);
+      }
+      const respVariants = autoSelected
+        ? variants.map((v) =>
+            v.id === autoSelected.id ? { ...v, selected: true } : v,
+          )
+        : variants;
+
+      return ok({
+        run,
+        stage,
+        variants: respVariants,
+        autoSelected: autoSelected?.id ?? null,
+      });
     } catch (genErr) {
       const msg = genErr instanceof Error ? genErr.message : String(genErr);
       await setStageStatus(stage.id, "failed", msg);

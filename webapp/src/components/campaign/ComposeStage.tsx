@@ -13,6 +13,9 @@ import {
   previewContainerMaxVh,
   previewLayoutClass,
 } from "./aspect-layout";
+import { StaleBanner } from "./StaleBanner";
+import { RunningStatus } from "./RunningStatus";
+import { useStagePolling } from "./useStagePolling";
 
 const LOGO_POSITION_LABELS: Array<{ id: LogoPosition; label: string }> = [
   { id: "top-left", label: "좌상" },
@@ -139,6 +142,17 @@ export function ComposeStage({
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
+
+  useStagePolling({
+    campaignId,
+    stage: "compose",
+    status: stage?.status,
+    onUpdate: ({ stage: s, variants: v }) => {
+      if (s) setStage(s);
+      setVariants(v);
+      router.refresh();
+    },
+  });
 
   useEffect(() => {
     if (!logoDefaults.logoUrl) return;
@@ -305,6 +319,25 @@ export function ComposeStage({
 
   if (!previousReady) return null;
 
+  if (stage?.status === "running") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">⑤ Compose 합성 중</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RunningStatus
+            label="로고 + 이미지 서버 합성 중"
+            startedAt={stage.started_at}
+            estimatedSeconds={15}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isStale = stage?.status === "stale";
+
   return (
     <Card>
       <CardHeader>
@@ -314,6 +347,14 @@ export function ComposeStage({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isStale && (
+          <StaleBanner
+            stage="Compose"
+            upstreamStage="Visual/Retouch"
+            onRegenerate={generate}
+            running={running}
+          />
+        )}
         {logoDefaults.hasLogo && baseImageUrl ? (
           <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
             <div>

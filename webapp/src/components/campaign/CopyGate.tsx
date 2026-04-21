@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { CopyCritique, CopyVariant } from "@/lib/prompts/copy";
-import { RegenerateBox } from "./RegenerateBox";
+import { BatchRegenerateBox, type RegenMode } from "./BatchRegenerateBox";
+import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
+import { StaleBanner } from "./StaleBanner";
+import { RunningStatus } from "./RunningStatus";
+import { useStagePolling } from "./useStagePolling";
 
 interface CopyGateProps {
   campaignId: string;
@@ -41,40 +45,76 @@ export function CopyGate({
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [historyToken, setHistoryToken] = useState(0);
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
 
-  async function generate(instruction?: string) {
+  useStagePolling({
+    campaignId,
+    stage: "copy",
+    status: stage?.status,
+    onUpdate: ({ stage: s, variants: v }) => {
+      if (s) setStage(s);
+      setVariants(v);
+      router.refresh();
+    },
+  });
+
+  async function generate(opts?: {
+    instruction: string;
+    mode: RegenMode;
+    baseVariantId?: string;
+  }) {
+    const body = opts
+      ? {
+          instruction: opts.instruction || undefined,
+          mode: opts.mode,
+          baseVariantId: opts.baseVariantId,
+        }
+      : { mode: "replace" as RegenMode };
     setGenerating(true);
     toast.info(
-      instruction
-        ? "방향성 반영 카피 재생성 (60~120초)"
-        : "카피 5~8변형 + self-critique 생성 중 (60~120초)",
+      opts?.mode === "add"
+        ? "추가 카피 생성 중 (60~120초)"
+        : opts?.mode === "remix"
+          ? "선택 카피 기반 변형 중 (60~120초)"
+          : "카피 5~8변형 + self-critique 생성 중 (60~120초)",
     );
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/copy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(instruction ? { instruction } : {}),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
       setStage(data.stage);
-      setVariants((prev) =>
-        instruction ? [...prev, ...data.variants] : data.variants,
-      );
-      toast.success(
-        instruction
-          ? `${data.variants.length}개 추가 생성`
-          : `${data.variants.length}개 변형 생성 + 검증 완료`,
-      );
+      if (opts?.mode === "add") {
+        setVariants((prev) => [...prev, ...data.variants]);
+      } else {
+        setVariants(data.variants);
+      }
+      setHistoryToken((n) => n + 1);
+      toast.success(`${data.variants.length}개 변형 생성`);
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function onRestored() {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/copy`);
+      const data = await res.json();
+      if (res.ok) {
+        setVariants(data.variants ?? []);
+        setHistoryToken((n) => n + 1);
+      }
+      router.refresh();
+    } catch {}
   }
 
   async function select(variantId: string) {
@@ -138,16 +178,23 @@ export function CopyGate({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">② Copy 생성 중...</CardTitle>
+          <CardTitle className="text-base">② Copy 생성 중</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            카피 + critique 생성 중입니다 (60~120초).
-          </p>
+          <RunningStatus
+            label="카피 5~8변형 + self-critique 생성 중"
+            startedAt={stage.started_at}
+            estimatedSeconds={90}
+          />
         </CardContent>
       </Card>
     );
   }
+
+  const isStale = stage.status === "stale";
+  const showVariants =
+    (stage.status === "ready" || stage.status === "stale") && variants.length > 0;
+  if (!showVariants) return null;
 
   const selectedId = variants.find((v) => v.selected)?.id ?? null;
   const sorted = [...variants].sort((a, b) => {
@@ -156,16 +203,45 @@ export function CopyGate({
     return sb - sa;
   });
 
+  const currentBatchIndex = variants[0]?.batch_index ?? 1;
+  const currentInstruction = variants[0]?.batch_instruction ?? null;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between">
-          <span>② Copy — {variants.length}변형</span>
-          <Badge variant="outline">Human Gate 2</Badge>
+          <span className="flex items-center gap-2">
+            ② Copy — {variants.length}변형
+            <Badge variant="outline" className="text-[10px]">
+              배치 #{currentBatchIndex}
+            </Badge>
+          </span>
+          <div className="flex items-center gap-1">
+            <BatchHistoryDrawer
+              campaignId={campaignId}
+              stage="copy"
+              refreshToken={historyToken}
+              onRestored={onRestored}
+            />
+            <Badge variant="outline">Human Gate 2</Badge>
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-3">
+      <CardContent className="space-y-3">
+        {isStale && (
+          <StaleBanner
+            stage="Copy"
+            upstreamStage="Strategy"
+            onRegenerate={() => generate()}
+            running={generating}
+          />
+        )}
+        {currentInstruction && (
+          <p className="text-xs text-muted-foreground italic border-l-2 pl-2">
+            지시: “{currentInstruction}”
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
           overall 점수 내림차순 정렬. 하나를 선택하면 Visual 단계가 활성화됩니다.
         </p>
         <div className="grid md:grid-cols-2 gap-3">
@@ -260,9 +336,9 @@ export function CopyGate({
           })}
         </div>
         <div className="pt-2">
-          <RegenerateBox
-            label="다른 방향으로 카피 추가"
-            placeholder="예: 숫자 더 강조 / 더 짧게 / 긴박감 추가 / 일상적 톤"
+          <BatchRegenerateBox
+            label="재생성"
+            placeholder="예: 숫자 강조 / 더 짧게 / 긴박감 추가"
             suggestions={[
               "숫자·수치를 더 강조",
               "더 짧고 강하게",
@@ -271,6 +347,8 @@ export function CopyGate({
               "페인 포인트 직설적으로",
             ]}
             running={generating}
+            hasVariants={variants.length > 0}
+            selectedVariantId={selectedId}
             onRegenerate={generate}
           />
         </div>

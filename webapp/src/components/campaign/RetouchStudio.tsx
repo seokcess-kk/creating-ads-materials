@@ -15,6 +15,10 @@ import {
   previewLayoutClass,
   type ChannelAspectRatio,
 } from "./aspect-layout";
+import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
+import { StaleBanner } from "./StaleBanner";
+import { RunningStatus } from "./RunningStatus";
+import { useStagePolling } from "./useStagePolling";
 
 interface RetouchStudioProps {
   campaignId: string;
@@ -52,9 +56,66 @@ export function RetouchStudio({
   const [baseVariantId, setBaseVariantId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [historyToken, setHistoryToken] = useState(0);
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
+
+  useStagePolling({
+    campaignId,
+    stage: "retouch",
+    status: stage?.status,
+    onUpdate: ({ stage: s, variants: v }) => {
+      if (s) setStage(s);
+      setVariants(v);
+      router.refresh();
+    },
+  });
+
+  async function onRestored() {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch`);
+      const data = await res.json();
+      if (res.ok) {
+        setVariants(data.variants ?? []);
+        setHistoryToken((n) => n + 1);
+      }
+      router.refresh();
+    } catch {}
+  }
+
+  async function clearAndRestart() {
+    if (!instruction.trim()) {
+      toast.error("새로 시작할 편집 지시를 입력하세요");
+      return;
+    }
+    setRunning(true);
+    toast.info("이전 턴 아카이브 + 새 편집 시작 (30~60초)");
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instruction: instruction.trim(),
+          baseVariantId: baseVariantId ?? undefined,
+          keepCompositionStrict: strict,
+          mode: "replace",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "편집 실패");
+      setStage(data.stage);
+      setVariants([data.variant]);
+      setInstruction("");
+      setHistoryToken((n) => n + 1);
+      toast.success("새로 시작 완료");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setRunning(false);
+    }
+  }
 
   const currentBaseUrl =
     (baseVariantId
@@ -113,15 +174,50 @@ export function RetouchStudio({
 
   if (!visualReady) return null;
 
+  if (stage?.status === "running") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">④ Retouch 편집 중</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RunningStatus
+            label="Gemini 이미지 편집 중"
+            startedAt={stage.started_at}
+            estimatedSeconds={45}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isStale = stage?.status === "stale";
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between">
           <span>④ Retouch</span>
-          <Badge variant="outline">Optional · 멀티턴 편집</Badge>
+          <div className="flex items-center gap-1">
+            <BatchHistoryDrawer
+              campaignId={campaignId}
+              stage="retouch"
+              refreshToken={historyToken}
+              onRestored={onRestored}
+            />
+            <Badge variant="outline">Optional · 멀티턴 편집</Badge>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {isStale && (
+          <StaleBanner
+            stage="Retouch"
+            upstreamStage="Visual"
+            onRegenerate={run}
+            running={running}
+          />
+        )}
         <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">
@@ -188,9 +284,21 @@ export function RetouchStudio({
               엄격 모드 (최소 변경만)
             </label>
 
-            <Button onClick={run} disabled={running || !instruction.trim()}>
-              {running ? "편집 중..." : "편집 적용"}
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={run} disabled={running || !instruction.trim()} className="flex-1">
+                {running ? "편집 중..." : "➕ 턴 추가"}
+              </Button>
+              {variants.length > 0 && (
+                <Button
+                  variant="outline"
+                  onClick={clearAndRestart}
+                  disabled={running || !instruction.trim()}
+                  title="이전 턴을 히스토리로 보내고 새로 시작"
+                >
+                  🔄 새로 시작
+                </Button>
+              )}
+            </div>
           </div>
         </div>
 

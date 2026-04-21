@@ -1,10 +1,12 @@
 import {
+  autoSelectBest,
   createVariants,
   getCampaign,
   getLatestRun,
   getSelectedVariant,
   getStage,
   listVariants,
+  markDownstreamStale,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -27,7 +29,11 @@ import { ApiError, ok, serverError } from "@/lib/api-utils";
 import { z } from "zod";
 
 const Body = z
-  .object({ instruction: z.string().max(500).optional() })
+  .object({
+    instruction: z.string().max(500).optional(),
+    mode: z.enum(["replace", "add", "remix"]).optional(),
+    baseVariantId: z.string().uuid().optional(),
+  })
   .optional();
 
 export const maxDuration = 240;
@@ -57,10 +63,18 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    let body: { instruction?: string } = {};
+    let body: {
+      instruction?: string;
+      mode?: "replace" | "add" | "remix";
+      baseVariantId?: string;
+    } = {};
     try {
       body = Body.parse(await request.json()) ?? {};
     } catch {}
+    const mode = body.mode ?? "replace";
+    if (mode === "remix" && !body.baseVariantId) {
+      throw new ApiError(400, "remix 모드는 baseVariantId 필요");
+    }
 
     const run = await getLatestRun(campaignId);
     if (!run) throw new ApiError(400, "실행이 없습니다");
@@ -93,9 +107,6 @@ export async function POST(
         regenInstruction: body.instruction,
       };
 
-      const existingVariants = await listVariants(stage.id);
-      const batchIndex = Math.floor(existingVariants.length / 3) + 1;
-
       const results = await Promise.allSettled(
         VISUAL_VARIANT_SPECS.map(async (spec) => {
           const prompt = buildGeminiPrompt(promptCtx, spec);
@@ -110,9 +121,10 @@ export async function POST(
               metadata: { focus: spec.focus },
             },
           });
+          const uniq = Date.now().toString(36);
           const { url, path } = await uploadGeneratedImage(
             campaignId,
-            `${spec.id}_b${batchIndex}`,
+            `${spec.id}_${uniq}`,
             image,
           );
 
@@ -129,15 +141,13 @@ export async function POST(
           }
 
           return {
-            label: `${spec.id}_b${batchIndex}`,
+            label: spec.id,
             content: {
               url,
               path,
               focus: spec.focus,
               focusLabel: spec.label,
               prompt,
-              batchIndex,
-              regenInstruction: body.instruction ?? null,
             } as Record<string, unknown>,
             scores: validator,
             promptVersion: VISUAL_PROMPT_VERSION,
@@ -164,11 +174,34 @@ export async function POST(
         throw new Error(`모든 변형 실패 — ${msg}`);
       }
 
-      const variants = await createVariants(stage.id, succeeded);
+      const variants = await createVariants(stage.id, succeeded, {
+        mode,
+        instruction: body.instruction ?? null,
+        baseVariantId: body.baseVariantId ?? null,
+      });
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "visual", "visual");
+      if (mode === "replace") {
+        await markDownstreamStale(run.id, "visual");
+      }
 
-      return ok({ run, stage, variants, failures });
+      let autoSelected = null;
+      if (campaign.automation_level !== "manual") {
+        autoSelected = await autoSelectBest(stage.id, variants);
+      }
+      const respVariants = autoSelected
+        ? variants.map((v) =>
+            v.id === autoSelected.id ? { ...v, selected: true } : v,
+          )
+        : variants;
+
+      return ok({
+        run,
+        stage,
+        variants: respVariants,
+        failures,
+        autoSelected: autoSelected?.id ?? null,
+      });
     } catch (genErr) {
       const msg = genErr instanceof Error ? genErr.message : String(genErr);
       await setStageStatus(stage.id, "failed", msg);

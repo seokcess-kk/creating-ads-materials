@@ -7,6 +7,7 @@ import {
   getSelectedVariant,
   getStage,
   listVariants,
+  markDownstreamStale,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -42,6 +43,7 @@ const RetouchSchema = z.object({
   instruction: z.string().min(1).max(500),
   baseVariantId: z.string().uuid().optional(),
   keepCompositionStrict: z.boolean().optional(),
+  mode: z.enum(["replace", "add"]).optional(),
 });
 
 interface VariantContent {
@@ -121,22 +123,33 @@ export async function POST(
         edited,
       );
 
-      const [variant] = await createVariants(stage.id, [
-        {
-          label: turnLabel,
-          content: {
-            url,
-            path,
-            instruction: input.instruction,
-            baseVariantId: input.baseVariantId ?? selectedVisual.id,
-            baseLabel,
+      const [variant] = await createVariants(
+        stage.id,
+        [
+          {
+            label: turnLabel,
+            content: {
+              url,
+              path,
+              instruction: input.instruction,
+              baseVariantId: input.baseVariantId ?? selectedVisual.id,
+              baseLabel,
+            },
+            promptVersion: RETOUCH_PROMPT_VERSION,
           },
-          promptVersion: RETOUCH_PROMPT_VERSION,
+        ],
+        {
+          mode: input.mode ?? "add",
+          instruction: input.instruction,
+          baseVariantId: input.baseVariantId ?? selectedVisual.id,
         },
-      ]);
+      );
 
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "retouch", "retouch");
+      if ((input.mode ?? "add") === "replace") {
+        await markDownstreamStale(run.id, "retouch");
+      }
 
       return ok({ stage, variant });
     } catch (genErr) {

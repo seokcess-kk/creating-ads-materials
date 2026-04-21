@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { VisualValidatorResult } from "@/lib/prompts/visual";
-import { RegenerateBox } from "./RegenerateBox";
+import { BatchRegenerateBox, type RegenMode } from "./BatchRegenerateBox";
+import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
+import { StaleBanner } from "./StaleBanner";
+import { RunningStatus } from "./RunningStatus";
+import { useStagePolling } from "./useStagePolling";
 
 import {
   aspectClass,
@@ -51,37 +55,63 @@ export function VisualStage({
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [historyToken, setHistoryToken] = useState(0);
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
 
-  async function generate(instruction?: string) {
+  useStagePolling({
+    campaignId,
+    stage: "visual",
+    status: stage?.status,
+    onUpdate: ({ stage: s, variants: v }) => {
+      if (s) setStage(s);
+      setVariants(v);
+      router.refresh();
+    },
+  });
+
+  async function generate(opts?: {
+    instruction: string;
+    mode: RegenMode;
+    baseVariantId?: string;
+  }) {
+    const body = opts
+      ? {
+          instruction: opts.instruction || undefined,
+          mode: opts.mode,
+          baseVariantId: opts.baseVariantId,
+        }
+      : { mode: "replace" as RegenMode };
     setGenerating(true);
     toast.info(
-      instruction
-        ? "방향성 반영 Visual 재생성 (90~180초)"
-        : "Gemini 3 Pro Image × 3 생성 + Claude Vision 검증 (90~180초)",
+      opts?.mode === "add"
+        ? "추가 Visual 생성 중 (90~180초)"
+        : opts?.mode === "remix"
+          ? "선택 Visual 기반 변형 중 (90~180초)"
+          : "Gemini × 3 생성 + Vision 검증 (90~180초)",
     );
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/visual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(instruction ? { instruction } : {}),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
       setStage(data.stage);
-      setVariants((prev) =>
-        instruction ? [...prev, ...data.variants] : data.variants,
-      );
-      if (data.failures?.length) {
-        toast.warning(`${data.variants.length}개 성공, ${data.failures.length}개 실패`);
+      if (opts?.mode === "add") {
+        setVariants((prev) => [...prev, ...data.variants]);
       } else {
-        toast.success(
-          instruction
-            ? `${data.variants.length}개 추가 생성`
-            : `${data.variants.length}개 비주얼 생성 완료`,
+        setVariants(data.variants);
+      }
+      setHistoryToken((n) => n + 1);
+      if (data.failures?.length) {
+        toast.warning(
+          `${data.variants.length}개 성공, ${data.failures.length}개 실패`,
         );
+      } else {
+        toast.success(`${data.variants.length}개 비주얼 생성`);
       }
       router.refresh();
     } catch (e) {
@@ -89,6 +119,18 @@ export function VisualStage({
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function onRestored() {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/visual`);
+      const data = await res.json();
+      if (res.ok) {
+        setVariants(data.variants ?? []);
+        setHistoryToken((n) => n + 1);
+      }
+      router.refresh();
+    } catch {}
   }
 
   async function select(variantId: string) {
@@ -152,16 +194,23 @@ export function VisualStage({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">③ Visual 생성 중...</CardTitle>
+          <CardTitle className="text-base">③ Visual 생성 중</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Gemini 병렬 생성 + Vision 검증 중 (90~180초)
-          </p>
+          <RunningStatus
+            label="Gemini 병렬 생성 + Vision 검증 중"
+            startedAt={stage.started_at}
+            estimatedSeconds={135}
+          />
         </CardContent>
       </Card>
     );
   }
+
+  const isStale = stage.status === "stale";
+  const showVariants =
+    (stage.status === "ready" || stage.status === "stale") && variants.length > 0;
+  if (!showVariants) return null;
 
   const selectedId = variants.find((v) => v.selected)?.id ?? null;
   const sorted = [...variants].sort((a, b) => {
@@ -170,16 +219,45 @@ export function VisualStage({
     return sb - sa;
   });
 
+  const currentBatchIndex = variants[0]?.batch_index ?? 1;
+  const currentInstruction = variants[0]?.batch_instruction ?? null;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between">
-          <span>③ Visual — {variants.length}변형</span>
-          <Badge variant="outline">M2 종료 게이트</Badge>
+          <span className="flex items-center gap-2">
+            ③ Visual — {variants.length}변형
+            <Badge variant="outline" className="text-[10px]">
+              배치 #{currentBatchIndex}
+            </Badge>
+          </span>
+          <div className="flex items-center gap-1">
+            <BatchHistoryDrawer
+              campaignId={campaignId}
+              stage="visual"
+              refreshToken={historyToken}
+              onRestored={onRestored}
+            />
+            <Badge variant="outline">M2 종료 게이트</Badge>
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-3">
+      <CardContent className="space-y-3">
+        {isStale && (
+          <StaleBanner
+            stage="Visual"
+            upstreamStage="Copy"
+            onRegenerate={() => generate()}
+            running={generating}
+          />
+        )}
+        {currentInstruction && (
+          <p className="text-xs text-muted-foreground italic border-l-2 pl-2">
+            지시: “{currentInstruction}”
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
           overall 점수 내림차순. Retouch/Compose/Ship은 M3에서 활성화됩니다.
         </p>
         <div className={`grid gap-3 ${variantGridCols(aspectRatio)}`}>
@@ -260,9 +338,9 @@ export function VisualStage({
           })}
         </div>
         <div className="pt-2">
-          <RegenerateBox
-            label="다른 방향으로 Visual 추가"
-            placeholder="예: 더 미니멀 / 제품 위주 / 더 밝은 톤 / 인물 강조"
+          <BatchRegenerateBox
+            label="재생성"
+            placeholder="예: 더 미니멀 / 제품 위주 / 더 밝은 톤"
             suggestions={[
               "더 미니멀·여백 많이",
               "제품·UI 중심으로",
@@ -271,6 +349,8 @@ export function VisualStage({
               "따뜻한 컬러 팔레트",
             ]}
             running={generating}
+            hasVariants={variants.length > 0}
+            selectedVariantId={selectedId}
             onRegenerate={generate}
           />
         </div>

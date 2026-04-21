@@ -8,7 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { CreativeRun, CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
-import { RegenerateBox } from "./RegenerateBox";
+import { BatchRegenerateBox, type RegenMode } from "./BatchRegenerateBox";
+import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
+import { StaleBanner } from "./StaleBanner";
+import { RunningStatus } from "./RunningStatus";
+import { useStagePolling } from "./useStagePolling";
 
 interface StrategyGateProps {
   campaignId: string;
@@ -29,32 +33,60 @@ export function StrategyGate({
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const [historyToken, setHistoryToken] = useState(0);
 
   useEffect(() => setRun(initialRun), [initialRun]);
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
 
-  async function generate(instruction?: string) {
+  useStagePolling({
+    campaignId,
+    stage: "strategy",
+    status: stage?.status,
+    onUpdate: ({ stage: s, variants: v }) => {
+      if (s) setStage(s);
+      setVariants(v);
+      router.refresh();
+    },
+  });
+
+  async function generate(opts?: {
+    instruction: string;
+    mode: RegenMode;
+    baseVariantId?: string;
+  }) {
+    const body = opts
+      ? {
+          instruction: opts.instruction || undefined,
+          mode: opts.mode,
+          baseVariantId: opts.baseVariantId,
+        }
+      : { mode: "replace" as RegenMode };
     setGenerating(true);
     toast.info(
-      instruction
-        ? "방향성 반영 재생성 (30~60초)"
-        : "Claude Opus가 3대안 설계 중 (30~60초)",
+      opts?.mode === "add"
+        ? "추가 대안 생성 중 (30~60초)"
+        : opts?.mode === "remix"
+          ? "선택 대안 기반 변형 중 (30~60초)"
+          : "Claude Opus가 3대안 설계 중 (30~60초)",
     );
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/strategy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(instruction ? { instruction } : {}),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
       setRun(data.run);
       setStage(data.stage);
-      setVariants((prev) =>
-        instruction ? [...prev, ...data.variants] : data.variants,
-      );
-      toast.success(instruction ? "추가 대안 생성 완료" : "3대안 생성 완료");
+      if (opts?.mode === "add") {
+        setVariants((prev) => [...prev, ...data.variants]);
+      } else {
+        setVariants(data.variants);
+      }
+      setHistoryToken((n) => n + 1);
+      toast.success("생성 완료");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -75,7 +107,7 @@ export function StrategyGate({
       setVariants((prev) =>
         prev.map((v) => ({ ...v, selected: v.id === variantId })),
       );
-      toast.success("Strategy 선택 완료 — Copy 단계로");
+      toast.success("Strategy 선택 — Copy 단계로");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -84,7 +116,20 @@ export function StrategyGate({
     }
   }
 
-  const hasReady = stage?.status === "ready" && variants.length > 0;
+  async function onRestored() {
+    // 히스토리에서 배치 복원 → active variants 다시 로드
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/strategy`);
+      const data = await res.json();
+      if (res.ok) {
+        setVariants(data.variants ?? []);
+        setHistoryToken((n) => n + 1);
+      }
+      router.refresh();
+    } catch {}
+  }
+
+  const hasVariants = stage?.status === "ready" && variants.length > 0;
   const selectedId = variants.find((v) => v.selected)?.id ?? null;
 
   if (!run || !stage) {
@@ -125,29 +170,52 @@ export function StrategyGate({
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">① Strategy 생성 중...</CardTitle>
+          <CardTitle className="text-base">① Strategy 생성 중</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Claude Opus가 3대안을 설계하고 있습니다 (30~60초). 새로고침하면 상태가 갱신됩니다.
-          </p>
+          <RunningStatus
+            label="Claude Opus가 3대안을 설계하는 중"
+            startedAt={stage.started_at}
+            estimatedSeconds={45}
+          />
         </CardContent>
       </Card>
     );
   }
 
-  if (!hasReady) return null;
+  if (!hasVariants) return null;
+
+  const currentBatchIndex = variants[0]?.batch_index ?? 1;
+  const currentInstruction = variants[0]?.batch_instruction ?? null;
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between">
-          <span>① Strategy — 3대안</span>
-          <Badge variant="outline">Human Gate 1</Badge>
+          <span className="flex items-center gap-2">
+            ① Strategy
+            <Badge variant="outline" className="text-[10px]">
+              배치 #{currentBatchIndex}
+            </Badge>
+          </span>
+          <div className="flex items-center gap-1">
+            <BatchHistoryDrawer
+              campaignId={campaignId}
+              stage="strategy"
+              refreshToken={historyToken}
+              onRestored={onRestored}
+            />
+            <Badge variant="outline">Human Gate 1</Badge>
+          </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground mb-3">
+      <CardContent className="space-y-4">
+        {currentInstruction && (
+          <p className="text-xs text-muted-foreground italic border-l-2 pl-2">
+            지시: “{currentInstruction}”
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
           하나를 선택하면 Copy 단계가 활성화됩니다.
         </p>
         <div className="grid md:grid-cols-3 gap-3">
@@ -234,20 +302,19 @@ export function StrategyGate({
             );
           })}
         </div>
-        <div className="pt-2">
-          <RegenerateBox
-            label="다른 방향으로 3대안 추가"
-            placeholder="예: 더 공격적으로 / 선호도 무시하고 새 조합 / 감성 중심으로"
-            suggestions={[
-              "더 공격적·도전적으로",
-              "숫자·수치를 더 강조",
-              "감성·스토리 중심으로",
-              "선호도 무시하고 새 조합",
-            ]}
-            running={generating}
-            onRegenerate={generate}
-          />
-        </div>
+        <BatchRegenerateBox
+          label="재생성"
+          placeholder="예: 더 공격적으로 / 숫자 강조 / 감성 중심"
+          suggestions={[
+            "더 공격적·도전적으로",
+            "숫자·수치를 더 강조",
+            "감성·스토리 중심으로",
+          ]}
+          running={generating}
+          hasVariants={variants.length > 0}
+          selectedVariantId={selectedId}
+          onRegenerate={generate}
+        />
       </CardContent>
     </Card>
   );
