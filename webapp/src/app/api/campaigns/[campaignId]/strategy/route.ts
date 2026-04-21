@@ -116,7 +116,7 @@ export async function POST(
 
       const response = await callClaude({
         model: "opus",
-        maxTokens: 4000,
+        maxTokens: 6000,
         system: buildStrategySystem(),
         usageContext: {
           operation: "strategy",
@@ -138,12 +138,20 @@ export async function POST(
         toolChoice: { type: "tool", name: STRATEGY_TOOL_NAME },
       });
 
+      if (response.stop_reason === "max_tokens") {
+        throw new Error(
+          "Claude 응답이 토큰 한도에서 잘렸습니다. maxTokens를 더 늘리거나 요청을 줄여주세요.",
+        );
+      }
+
       const raw = extractToolUse(response, STRATEGY_TOOL_NAME);
       if (!raw) throw new Error("전략 결과를 추출할 수 없습니다");
 
       const parsed = StrategyOutputSchema.safeParse(raw);
       if (!parsed.success) {
-        throw new Error(`전략 스키마 검증 실패: ${parsed.error.message}`);
+        throw new Error(
+          `전략 스키마 검증 실패 (stop=${response.stop_reason}): ${parsed.error.message}`,
+        );
       }
 
       const variants = await createVariants(

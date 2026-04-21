@@ -110,7 +110,7 @@ export async function POST(
 
       const response = await callClaude({
         model: "opus",
-        maxTokens: 5000,
+        maxTokens: 8000,
         system: buildCopySystem(),
         usageContext: {
           operation: "copy",
@@ -133,12 +133,20 @@ export async function POST(
         toolChoice: { type: "tool", name: COPY_TOOL_NAME },
       });
 
+      if (response.stop_reason === "max_tokens") {
+        throw new Error(
+          "Claude 응답이 토큰 한도에서 잘렸습니다. maxTokens를 더 늘리거나 요청을 줄여주세요.",
+        );
+      }
+
       const raw = extractToolUse(response, COPY_TOOL_NAME);
       if (!raw) throw new Error("카피 결과를 추출할 수 없습니다");
 
       const parsed = CopyOutputSchema.safeParse(raw);
       if (!parsed.success) {
-        throw new Error(`카피 스키마 검증 실패: ${parsed.error.message}`);
+        throw new Error(
+          `카피 스키마 검증 실패 (stop=${response.stop_reason}): ${parsed.error.message}`,
+        );
       }
 
       const critiqueMap = new Map(
