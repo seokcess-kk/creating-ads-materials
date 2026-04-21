@@ -21,11 +21,11 @@ export async function POST(
 
     const run = await getLatestRun(campaignId);
     if (!run) throw new ApiError(404, "실행이 없습니다");
-    const stage = await getStage(run.id, "visual");
-    if (!stage) throw new ApiError(404, "Visual 스테이지가 없습니다");
+    const stage = await getStage(run.id, "retouch");
+    if (!stage) throw new ApiError(404, "Retouch 스테이지가 없습니다");
 
     const variant = await selectVariant(stage.id, variant_id);
-    await updateRunStatus(run.id, "retouch", "retouch");
+    await updateRunStatus(run.id, "compose", "compose");
     return ok({ variant });
   } catch (e) {
     return serverError(e);

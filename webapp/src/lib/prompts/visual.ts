@@ -6,7 +6,7 @@ import type { StrategyAlternative } from "./strategy";
 import type { CopyVariant } from "./copy";
 import { buildVisualPatternDigestEn } from "@/lib/vision/digest";
 
-export const VISUAL_PROMPT_VERSION = "visual@1.0.0";
+export const VISUAL_PROMPT_VERSION = "visual@2.0.0";
 export const VISUAL_VALIDATOR_TOOL = "record_visual_validator";
 
 export type VisualFocus = "product_focus" | "number_focus" | "persona_focus";

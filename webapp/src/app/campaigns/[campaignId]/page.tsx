@@ -7,15 +7,27 @@ import {
   listStages,
   listVariants,
 } from "@/lib/campaigns";
-import { getBrand } from "@/lib/memory";
+import { getBrand, loadBrandMemory } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
+import { computeLogoDefaults } from "@/lib/canvas/compose-from-run";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StrategyGate } from "@/components/campaign/StrategyGate";
 import { CopyGate } from "@/components/campaign/CopyGate";
 import { VisualStage } from "@/components/campaign/VisualStage";
+import { RetouchStudio } from "@/components/campaign/RetouchStudio";
+import { ComposeStage } from "@/components/campaign/ComposeStage";
+import { ShipCard } from "@/components/campaign/ShipCard";
 
 export const dynamic = "force-dynamic";
+
+interface UrlContent {
+  url?: string;
+}
+interface VisualScores {
+  suggestions?: string[];
+  issues?: string[];
+}
 
 export default async function CampaignPage({
   params,
@@ -41,6 +53,51 @@ export default async function CampaignPage({
 
   const visualStage = run ? await getStage(run.id, "visual") : null;
   const visualVariants = visualStage ? await listVariants(visualStage.id) : [];
+  const selectedVisual = visualVariants.find((v) => v.selected) ?? null;
+  const visualReady = visualStage?.status === "ready" && Boolean(selectedVisual);
+  const baseImageUrl =
+    (selectedVisual?.content_json as UrlContent | undefined)?.url ?? null;
+  const visualSuggestions = (() => {
+    const s = selectedVisual?.scores_json as VisualScores | undefined;
+    const out: string[] = [];
+    if (s?.suggestions) out.push(...s.suggestions);
+    if (s?.issues) out.push(...s.issues);
+    return out;
+  })();
+
+  const retouchStage = run ? await getStage(run.id, "retouch") : null;
+  const retouchVariants = retouchStage ? await listVariants(retouchStage.id) : [];
+  const selectedRetouch = retouchVariants.find((v) => v.selected) ?? null;
+
+  const composeReadyGate = Boolean(selectedRetouch) || visualReady;
+
+  const composeStage = run ? await getStage(run.id, "compose") : null;
+  const composeVariants = composeStage ? await listVariants(composeStage.id) : [];
+  const selectedCompose = composeVariants.find((v) => v.selected) ?? null;
+  const composeUrl =
+    (selectedCompose?.content_json as UrlContent | undefined)?.url ?? null;
+  const composeReady = Boolean(selectedCompose) && composeStage?.status === "ready";
+
+  const shipStage = run ? await getStage(run.id, "ship") : null;
+
+  const memoryForDefaults = await loadBrandMemory(campaign.brand_id);
+  const logoDefaults = memoryForDefaults
+    ? (() => {
+        const d = computeLogoDefaults(memoryForDefaults);
+        const logos = memoryForDefaults.identity?.logo_urls_json ?? {};
+        const logoUrl = logos.full ?? logos.light ?? logos.icon ?? null;
+        return { ...d, hasLogo: Boolean(logoUrl), logoUrl };
+      })()
+    : {
+        position: "top-left" as const,
+        widthRatio: 0.14,
+        source: "fallback" as const,
+        hasLogo: false,
+        logoUrl: null,
+      };
+
+  const composeBaseUrl =
+    ((selectedRetouch ?? selectedVisual)?.content_json as UrlContent | undefined)?.url ?? null;
 
   const stageRows = ["strategy", "copy", "visual", "retouch", "compose", "ship"] as const;
   const stageMap = Object.fromEntries(stages.map((s) => [s.stage, s]));
@@ -71,12 +128,13 @@ export default async function CampaignPage({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">파이프라인</CardTitle>
-          <CardDescription>M2는 Strategy → Copy → Visual까지 활성</CardDescription>
+          <CardDescription>
+            Strategy → Copy → Visual → Retouch(옵션) → Compose → Ship
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {stageRows.map((stage, i) => {
             const row = stageMap[stage];
-            const active = i <= 2;
             return (
               <div
                 key={stage}
@@ -95,7 +153,6 @@ export default async function CampaignPage({
                     {i + 1}
                   </div>
                   <span className="text-sm capitalize">{stage}</span>
-                  {!active && <Badge variant="outline">M3</Badge>}
                 </div>
                 {row && (
                   <Badge
@@ -135,6 +192,34 @@ export default async function CampaignPage({
         copyReady={copyReady}
         initialStage={visualStage}
         initialVariants={visualVariants}
+      />
+
+      <RetouchStudio
+        campaignId={campaignId}
+        visualReady={visualReady}
+        baseImageUrl={baseImageUrl}
+        visualSuggestions={visualSuggestions}
+        initialStage={retouchStage}
+        initialVariants={retouchVariants}
+      />
+
+      <ComposeStage
+        campaignId={campaignId}
+        previousReady={composeReadyGate}
+        baseImageUrl={composeBaseUrl}
+        logoDefaults={logoDefaults}
+        initialStage={composeStage}
+        initialVariants={composeVariants}
+      />
+
+      <ShipCard
+        campaignId={campaignId}
+        campaignName={campaign.name}
+        campaignStatus={campaign.status}
+        composeReady={composeReady}
+        composeUrl={composeUrl}
+        initialRun={run}
+        initialStage={shipStage}
       />
     </div>
   );
