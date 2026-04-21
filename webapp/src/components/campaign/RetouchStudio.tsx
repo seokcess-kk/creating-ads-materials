@@ -19,6 +19,13 @@ import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
 import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
+import { useNotifications } from "@/components/notifications/NotificationContext";
+
+const RETOUCH_STEPS = [
+  { label: "base 이미지 다운로드", atSec: 0 },
+  { label: "Gemini 편집", atSec: 3 },
+  { label: "업로드", atSec: 35 },
+];
 
 interface RetouchStudioProps {
   campaignId: string;
@@ -57,6 +64,7 @@ export function RetouchStudio({
   const [running, setRunning] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
@@ -128,7 +136,14 @@ export function RetouchStudio({
       return;
     }
     setRunning(true);
-    toast.info("Gemini 3 Pro Image 편집 중 (30~60초)");
+    const opId = startOp({
+      kind: "retouch",
+      title: "Retouch 편집",
+      subtitle: instruction.trim().slice(0, 40),
+      estimatedSeconds: 45,
+      steps: RETOUCH_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/retouch`, {
         method: "POST",
@@ -144,10 +159,15 @@ export function RetouchStudio({
       setStage(data.stage);
       setVariants((prev) => [...prev, data.variant]);
       setInstruction("");
-      toast.success("편집 완료");
+      completeOp(opId, {
+        subtitle: "새 턴 추가됨",
+        href: `/campaigns/${campaignId}`,
+      });
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setRunning(false);
     }
@@ -185,6 +205,7 @@ export function RetouchStudio({
             label="Gemini 이미지 편집 중"
             startedAt={stage.started_at}
             estimatedSeconds={45}
+            steps={RETOUCH_STEPS}
           />
         </CardContent>
       </Card>

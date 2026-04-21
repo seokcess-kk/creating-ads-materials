@@ -13,6 +13,14 @@ import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
 import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
+import { useNotifications } from "@/components/notifications/NotificationContext";
+
+const COPY_STEPS = [
+  { label: "Strategy 로드 + 메모리 준비", atSec: 0 },
+  { label: "5~8개 카피 변형 생성", atSec: 10 },
+  { label: "Self-critique 4축 검증", atSec: 60 },
+  { label: "저장", atSec: 85 },
+];
 
 interface CopyGateProps {
   campaignId: string;
@@ -46,6 +54,7 @@ export function CopyGate({
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
@@ -74,13 +83,19 @@ export function CopyGate({
         }
       : { mode: "replace" as RegenMode };
     setGenerating(true);
-    toast.info(
+    const opTitle =
       opts?.mode === "add"
-        ? "추가 카피 생성 중 (60~120초)"
+        ? "Copy 추가 변형"
         : opts?.mode === "remix"
-          ? "선택 카피 기반 변형 중 (60~120초)"
-          : "카피 5~8변형 + self-critique 생성 중 (60~120초)",
-    );
+          ? "Copy 리믹스"
+          : "Copy 생성";
+    const opId = startOp({
+      kind: "copy",
+      title: opTitle,
+      estimatedSeconds: 90,
+      steps: COPY_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/copy`, {
         method: "POST",
@@ -96,10 +111,15 @@ export function CopyGate({
         setVariants(data.variants);
       }
       setHistoryToken((n) => n + 1);
-      toast.success(`${data.variants.length}개 변형 생성`);
+      completeOp(opId, {
+        subtitle: `${data.variants.length}개 변형 생성`,
+        href: `/campaigns/${campaignId}`,
+      });
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
@@ -185,6 +205,7 @@ export function CopyGate({
             label="카피 5~8변형 + self-critique 생성 중"
             startedAt={stage.started_at}
             estimatedSeconds={90}
+            steps={COPY_STEPS}
           />
         </CardContent>
       </Card>

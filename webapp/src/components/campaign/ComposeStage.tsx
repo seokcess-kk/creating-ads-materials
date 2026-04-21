@@ -17,6 +17,13 @@ import {
 import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
+import { useNotifications } from "@/components/notifications/NotificationContext";
+
+const COMPOSE_STEPS = [
+  { label: "로고 · base 이미지 준비", atSec: 0 },
+  { label: "Canvas 서버 합성", atSec: 3 },
+  { label: "업로드", atSec: 12 },
+];
 
 const LOGO_POSITION_LABELS: Array<{ id: LogoPosition; label: string }> = [
   { id: "top-left", label: "좌상" },
@@ -124,6 +131,7 @@ export function ComposeStage({
   const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
   const [running, setRunning] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   const [logoAspect, setLogoAspect] = useState<number>(1);
   const [widthRatio, setWidthRatio] = useState<number>(logoDefaults.widthRatio);
@@ -278,7 +286,13 @@ export function ComposeStage({
 
   async function generate() {
     setRunning(true);
-    toast.info("서버 합성 중 (10~20초)");
+    const opId = startOp({
+      kind: "compose",
+      title: "Compose 합성",
+      estimatedSeconds: 15,
+      steps: COMPOSE_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
     try {
       const body = logoDefaults.hasLogo
         ? {
@@ -297,10 +311,15 @@ export function ComposeStage({
       if (!res.ok) throw new Error(data.error ?? "합성 실패");
       setStage(data.stage);
       setVariants((prev) => [...prev, data.variant]);
-      toast.success("합성 완료");
+      completeOp(opId, {
+        subtitle: "최종 이미지 준비 완료",
+        href: `/campaigns/${campaignId}`,
+      });
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setRunning(false);
     }
@@ -338,6 +357,7 @@ export function ComposeStage({
             label="로고 + 이미지 서버 합성 중"
             startedAt={stage.started_at}
             estimatedSeconds={15}
+            steps={COMPOSE_STEPS}
           />
         </CardContent>
       </Card>

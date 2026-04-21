@@ -13,6 +13,14 @@ import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
 import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
+import { useNotifications } from "@/components/notifications/NotificationContext";
+
+const VISUAL_STEPS = [
+  { label: "프롬프트 3개 구성", atSec: 0 },
+  { label: "Gemini 이미지 3장 병렬 생성", atSec: 8 },
+  { label: "Storage 업로드", atSec: 85 },
+  { label: "Claude Vision 4축 검증", atSec: 100 },
+];
 
 import {
   aspectClass,
@@ -56,6 +64,7 @@ export function VisualStage({
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   useEffect(() => setStage(initialStage), [initialStage]);
   useEffect(() => setVariants(initialVariants), [initialVariants]);
@@ -84,13 +93,19 @@ export function VisualStage({
         }
       : { mode: "replace" as RegenMode };
     setGenerating(true);
-    toast.info(
+    const opTitle =
       opts?.mode === "add"
-        ? "추가 Visual 생성 중 (90~180초)"
+        ? "Visual 추가 변형"
         : opts?.mode === "remix"
-          ? "선택 Visual 기반 변형 중 (90~180초)"
-          : "Gemini × 3 생성 + Vision 검증 (90~180초)",
-    );
+          ? "Visual 리믹스"
+          : "Visual 생성";
+    const opId = startOp({
+      kind: "visual",
+      title: opTitle,
+      estimatedSeconds: 135,
+      steps: VISUAL_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/visual`, {
         method: "POST",
@@ -106,16 +121,18 @@ export function VisualStage({
         setVariants(data.variants);
       }
       setHistoryToken((n) => n + 1);
-      if (data.failures?.length) {
-        toast.warning(
-          `${data.variants.length}개 성공, ${data.failures.length}개 실패`,
-        );
-      } else {
-        toast.success(`${data.variants.length}개 비주얼 생성`);
-      }
+      const subtitle = data.failures?.length
+        ? `${data.variants.length}개 성공 · ${data.failures.length}개 실패`
+        : `${data.variants.length}개 비주얼 생성`;
+      completeOp(opId, {
+        subtitle,
+        href: `/campaigns/${campaignId}`,
+      });
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
@@ -201,6 +218,7 @@ export function VisualStage({
             label="Gemini 병렬 생성 + Vision 검증 중"
             startedAt={stage.started_at}
             estimatedSeconds={135}
+            steps={VISUAL_STEPS}
           />
         </CardContent>
       </Card>

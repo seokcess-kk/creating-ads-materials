@@ -13,6 +13,13 @@ import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
 import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
+import { useNotifications } from "@/components/notifications/NotificationContext";
+
+const STRATEGY_STEPS = [
+  { label: "브랜드 메모리 로드", atSec: 0 },
+  { label: "Claude Opus 3대안 설계", atSec: 5 },
+  { label: "결과 저장", atSec: 40 },
+];
 
 interface StrategyGateProps {
   campaignId: string;
@@ -34,6 +41,7 @@ export function StrategyGate({
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   useEffect(() => setRun(initialRun), [initialRun]);
   useEffect(() => setStage(initialStage), [initialStage]);
@@ -63,13 +71,19 @@ export function StrategyGate({
         }
       : { mode: "replace" as RegenMode };
     setGenerating(true);
-    toast.info(
+    const opTitle =
       opts?.mode === "add"
-        ? "추가 대안 생성 중 (30~60초)"
+        ? "Strategy 추가 대안"
         : opts?.mode === "remix"
-          ? "선택 대안 기반 변형 중 (30~60초)"
-          : "Claude Opus가 3대안 설계 중 (30~60초)",
-    );
+          ? "Strategy 리믹스"
+          : "Strategy 생성";
+    const opId = startOp({
+      kind: "strategy",
+      title: opTitle,
+      estimatedSeconds: 45,
+      steps: STRATEGY_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/strategy`, {
         method: "POST",
@@ -86,10 +100,15 @@ export function StrategyGate({
         setVariants(data.variants);
       }
       setHistoryToken((n) => n + 1);
-      toast.success("생성 완료");
+      completeOp(opId, {
+        subtitle: `${data.variants.length}개 대안 생성`,
+        href: `/campaigns/${campaignId}`,
+      });
       router.refresh();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
@@ -177,6 +196,7 @@ export function StrategyGate({
             label="Claude Opus가 3대안을 설계하는 중"
             startedAt={stage.started_at}
             estimatedSeconds={45}
+            steps={STRATEGY_STEPS}
           />
         </CardContent>
       </Card>

@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { NotificationProvider } from "@/components/notifications/NotificationContext";
+import { TopProgressBar } from "@/components/notifications/TopProgressBar";
+import { CompletionBanner } from "@/components/notifications/CompletionBanner";
+import { ActivityCenter } from "@/components/notifications/ActivityCenter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,11 +34,20 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-6xl mx-auto p-6">{children}</div>
-        </main>
-        <Toaster />
+        <NotificationProvider>
+          <Sidebar />
+          <main className="flex-1 overflow-auto">
+            <TopProgressBar />
+            <CompletionBanner />
+            <div className="max-w-6xl mx-auto p-6">
+              <div className="flex justify-end mb-2 -mt-2">
+                <ActivityCenter />
+              </div>
+              {children}
+            </div>
+          </main>
+          <Toaster />
+        </NotificationProvider>
       </body>
     </html>
   );

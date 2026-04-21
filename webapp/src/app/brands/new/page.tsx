@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useNotifications } from "@/components/notifications/NotificationContext";
 
 export default function NewBrandPage() {
   const router = useRouter();
@@ -17,6 +18,7 @@ export default function NewBrandPage() {
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [autoAnalyze, setAutoAnalyze] = useState(true);
+  const { startOp, completeOp, failOp } = useNotifications();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,43 +47,59 @@ export default function NewBrandPage() {
 
       // 자동 분석 (URL 제공 + 체크박스 on) — Identity/Offer/Audience까지 자동 채움
       if (autoAnalyze && websiteUrl.trim()) {
-        toast.info("홈페이지 분석 중 (최대 60초)...");
-        try {
-          const analyzeRes = await fetch(
-            `/api/brands/${brand.id}/analyze-website`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                website_url: websiteUrl.trim(),
-                save_brand_fields: true,
-                save_identity: true,
-                save_offers: true,
-                save_audiences: true,
-              }),
-            },
-          );
-          const analyzeData = await analyzeRes.json();
-          if (analyzeRes.ok) {
-            const parts: string[] = [];
-            if (analyzeData.identitySaved) parts.push("Identity");
-            if ((analyzeData.offersSaved ?? 0) > 0)
-              parts.push(`Offer ${analyzeData.offersSaved}개`);
-            if ((analyzeData.audiencesSaved ?? 0) > 0)
-              parts.push(`Audience ${analyzeData.audiencesSaved}개`);
-            toast.success(
-              parts.length > 0
-                ? `분석 완료 — ${parts.join(" · ")} 자동 생성됨`
-                : "분석 완료 (추출 가능한 정보 없음)",
+        const opId = startOp({
+          kind: "brand_analyze",
+          title: `${brand.name} 홈페이지 분석`,
+          subtitle: "Identity · Offer · Audience 자동 추출",
+          estimatedSeconds: 60,
+          steps: [
+            { label: "HTML 페이지 fetch", atSec: 0 },
+            { label: "Claude Opus 분석", atSec: 5 },
+            { label: "Identity · Offer · Audience 저장", atSec: 50 },
+          ],
+          href: `/brands/${brand.id}`,
+        });
+        // router.push 먼저 → 분석은 백그라운드로 notification 시스템이 추적
+        router.push(`/brands/${brand.id}`);
+        (async () => {
+          try {
+            const analyzeRes = await fetch(
+              `/api/brands/${brand.id}/analyze-website`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  website_url: websiteUrl.trim(),
+                  save_brand_fields: true,
+                  save_identity: true,
+                  save_offers: true,
+                  save_audiences: true,
+                }),
+              },
             );
-          } else {
-            toast.warning(
-              `분석 실패: ${analyzeData.error ?? "알 수 없는 오류"}. 브랜드는 생성됐습니다.`,
-            );
+            const analyzeData = await analyzeRes.json();
+            if (analyzeRes.ok) {
+              const parts: string[] = [];
+              if (analyzeData.identitySaved) parts.push("Identity");
+              if ((analyzeData.offersSaved ?? 0) > 0)
+                parts.push(`Offer ${analyzeData.offersSaved}개`);
+              if ((analyzeData.audiencesSaved ?? 0) > 0)
+                parts.push(`Audience ${analyzeData.audiencesSaved}개`);
+              completeOp(opId, {
+                subtitle:
+                  parts.length > 0
+                    ? `${parts.join(" · ")} 자동 생성됨`
+                    : "추출 가능한 정보 없음",
+                href: `/brands/${brand.id}`,
+              });
+            } else {
+              failOp(opId, analyzeData.error ?? "알 수 없는 오류");
+            }
+          } catch (e) {
+            failOp(opId, e instanceof Error ? e.message : "네트워크 오류");
           }
-        } catch {
-          toast.warning("분석 실패. 브랜드는 생성됐습니다. Identity 페이지에서 다시 시도하세요.");
-        }
+        })();
+        return;
       }
 
       router.push(`/brands/${brand.id}`);
