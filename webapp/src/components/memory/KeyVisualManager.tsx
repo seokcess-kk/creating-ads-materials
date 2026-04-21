@@ -41,6 +41,7 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
   async function handleFile(file: File) {
     if (!label.trim()) {
       toast.error("라벨을 먼저 입력하세요");
+      if (fileRef.current) fileRef.current.value = "";
       return;
     }
     setUploading(true);
@@ -69,6 +70,7 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
+      if (fileRef.current) fileRef.current.value = "";
     } finally {
       setUploading(false);
     }
@@ -162,7 +164,13 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
               />
             </div>
           </div>
-          <label className="block border-2 border-dashed rounded-md p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
+          <label
+            className={`block border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+              uploading || !label.trim()
+                ? "opacity-50 cursor-not-allowed"
+                : "cursor-pointer hover:border-primary/50"
+            }`}
+          >
             <input
               ref={fileRef}
               type="file"
@@ -171,11 +179,15 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
                 const f = e.target.files?.[0];
                 if (f) handleFile(f);
               }}
-              disabled={uploading}
+              disabled={uploading || !label.trim()}
               className="hidden"
             />
             <p className="text-sm text-muted-foreground">
-              {uploading ? "업로드 및 분석 중..." : "클릭하여 이미지 선택"}
+              {uploading
+                ? "업로드 및 분석 중..."
+                : !label.trim()
+                  ? "먼저 위에서 라벨을 입력하세요"
+                  : "클릭하여 이미지 선택"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Claude Vision이 자동으로 설명·무드 태그를 추출합니다
