@@ -1,7 +1,9 @@
 import { z } from "zod";
 import {
   getLatestRun,
+  getSelectedVariant,
   getStage,
+  markDownstreamStale,
   selectVariant,
   updateRunStatus,
 } from "@/lib/campaigns";
@@ -24,7 +26,11 @@ export async function POST(
     const stage = await getStage(run.id, "strategy");
     if (!stage) throw new ApiError(404, "Strategy 스테이지가 없습니다");
 
+    const current = await getSelectedVariant(run.id, "strategy");
     const variant = await selectVariant(stage.id, variant_id);
+    if (current?.id !== variant_id) {
+      await markDownstreamStale(run.id, "strategy");
+    }
     await updateRunStatus(run.id, "copy", "copy");
     return ok({ variant });
   } catch (e) {
