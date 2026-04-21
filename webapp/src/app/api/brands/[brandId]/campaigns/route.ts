@@ -22,6 +22,7 @@ const CreateSchema = z.object({
   audience_id: z.string().uuid().nullable(),
   channel: z.string().min(1),
   constraints: z.record(z.string(), z.unknown()).optional(),
+  automation_level: z.enum(["manual", "assist", "auto"]).optional(),
 });
 
 export async function POST(

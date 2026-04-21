@@ -33,6 +33,7 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
   );
   const [channelId, setChannelId] = useState<string>("ig_feed_square");
   const [note, setNote] = useState("");
+  const [automationLevel, setAutomationLevel] = useState<"manual" | "assist" | "auto">("assist");
   const [saving, setSaving] = useState(false);
 
   const selectedChannel = CHANNELS.find((c) => c.id === channelId) ?? CHANNELS[0];
@@ -53,6 +54,7 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
           audience_id: audienceId,
           channel: channelId,
           constraints: note.trim() ? { note: note.trim() } : {},
+          automation_level: automationLevel,
         }),
       });
       if (!res.ok) {
@@ -239,6 +241,64 @@ export function IntentForm({ brandId, brandName, offers, audiences }: IntentForm
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">자동화 수준</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {(
+              [
+                {
+                  id: "manual" as const,
+                  icon: "🧑‍💻",
+                  title: "Manual",
+                  desc: "모든 선택 수동. 대안을 직접 비교하며 결정.",
+                },
+                {
+                  id: "assist" as const,
+                  icon: "✨",
+                  title: "Assist",
+                  desc: "생성 후 최고점 자동 pre-select. 다른 것 클릭도 가능.",
+                },
+                {
+                  id: "auto" as const,
+                  icon: "🚀",
+                  title: "Auto (beta)",
+                  desc: "Assist + 다음 단계 자동 진행. Compose에서 정지.",
+                },
+              ] as const
+            ).map((m) => (
+              <label
+                key={m.id}
+                className={`border rounded-md p-3 cursor-pointer transition-colors ${
+                  automationLevel === m.id
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-muted/50"
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="automation"
+                    checked={automationLevel === m.id}
+                    onChange={() => setAutomationLevel(m.id)}
+                    disabled={saving}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">
+                      {m.icon} {m.title}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">{m.desc}</p>
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
