@@ -5,10 +5,10 @@ import type { Playbook } from "@/lib/playbook/types";
 import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
 import type { StrategyAlternative } from "./strategy";
-import { buildCopyPatternDigest, buildVisionDigest, type DigestOpts } from "@/lib/vision/digest";
+import { buildCopyPatternDigest, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
 
-export const COPY_PROMPT_VERSION = "copy@1.0.0";
+export const COPY_PROMPT_VERSION = "copy@1.1.0";
 export const COPY_TOOL_NAME = "record_copy_drafts";
 
 export const CopyVariantSchema = z.object({
@@ -153,25 +153,33 @@ function copyDigestOpts(ctx: CopyContext): DigestOpts {
 }
 
 export function buildCopySystem(): string {
-  return `당신은 퍼포먼스 광고 시니어 카피라이터입니다. 선택된 전략을 기반으로 5~8개의 카피 변형을 작성하고, 각 변형을 4축으로 자체 평가합니다.
+  return `당신은 퍼포먼스 광고 시니어 카피라이터입니다. 선택된 전략 기반 카피 5~8개 변형 + 각 변형 4축 self-critique.
 
-카피 작성 원칙:
-- 선택된 전략(angle)의 프레임워크 구조를 충실히 따른다.
-- 5~8개 변형은 서로 다른 진입점을 사용한다: 혜택 중심 / 증거 중심 / 시간 중심 / 페인 중심 / 긴급성 중심 등.
-- 단순 단어 교체 금지. 의미·뉘앙스가 달라야 한다.
-- Identity taboos + 플레이북 taboos를 절대 사용하지 않는다.
-- Meta 광고 정책 위반 금지: before/after 대조, 개인 속성 단정 지칭, 결과 확약.
-- 한국어 광고 톤. 번역체·격식체·AI 티 배제.
-- 헤드라인에 수치·고유명사·행동 동사 중 하나 이상 포함.
+## 작성 원칙
+- 전략 angle의 프레임워크 구조 충실
+- 5~8개는 서로 다른 진입점 (혜택/증거/시간/페인/긴급성 등)
+- 단순 단어 교체 금지 — 의미·뉘앙스 달라야 함
+- Identity taboos + 플레이북 taboos 절대 금지
+- Meta 정책 금지: before/after 대조, 개인 속성 단정, 결과 확약
+- 한국어 광고 톤 (번역체·격식체·AI 티 배제)
+- 헤드라인에 수치·고유명사·행동 동사 중 하나 이상
 
-Self-critique 원칙(4축, 1~5점):
-- taboosClear: taboo·정책 위반 여부 (5=전혀 없음, 1=심각 위반)
-- frameworkFit: 선택된 프레임워크 구조 충실도
-- hookStrength: 스크롤 멈출 확률. 수치·구체성·대비가 있을수록 높음
-- koreanNatural: 번역체·AI 티 여부 (5=자연스러운 광고 톤, 1=어색)
-- overall은 4축의 산술 평균.
+## Self-critique (1~5점)
+- taboosClear: taboo·정책 위반 (5=없음, 1=심각)
+- frameworkFit: 프레임워크 충실도
+- hookStrength: 3초 주목도 (수치·구체성·대비가 있을수록 높음)
+- koreanNatural: 번역체·AI 티 (5=자연, 1=어색)
+- overall: 4축 평균
 
-도구 ${COPY_TOOL_NAME}로 variants·critiques를 한 번에 기록하세요.`;
+## Key Visual 활용 (실사 자산이 선택된 경우)
+- 사진 여백에 얹힐 전제로 짧고 임팩트 있는 헤드라인 선호
+- 사진 mood(warm/clean/professional 등)와 일치하는 톤 선택
+
+## Brand Preferences 활용
+- 참고 정보, 강제 반영 금지
+- 선호 훅·"자주 수정한 영역"을 의식적으로 반영하되 진입점은 다양화
+
+도구 ${COPY_TOOL_NAME}로 variants + critiques 한 번에 기록.`;
 }
 
 function formatIdentity(memory: BrandMemory): string {
@@ -268,83 +276,71 @@ function formatKeyVisuals(ctx: CopyContext): string {
 }
 
 export function buildCopyMessages(ctx: CopyContext): MessageParam[] {
-  const text = `# CONTEXT
+  // Brand-level (cache 대상). 채널/funnel이 같은 브랜드 반복 호출 시 재사용.
+  // framework·playbook도 brand block에 포함: framework는 strategy가 선택한 하나라
+  // 캠페인 내 재생성 시 재사용 가능, playbook은 channel+goal 단위 고정.
+  const brandBlock = `# Brand
+- ${ctx.memory.brand.name} / ${ctx.memory.brand.category ?? "(미지정)"}
 
-## Brand
-- name: ${ctx.memory.brand.name}
-- category: ${ctx.memory.brand.category ?? "(미지정)"}
-
-## Identity
+# Identity
 ${formatIdentity(ctx.memory)}
 
-## Offer (선택)
-${formatOffer(ctx)}
-
-## Audience (선택)
-${formatAudience(ctx)}
-
-## Intent Note
-${ctx.intentNote ?? "(없음)"}
-
-## Selected Strategy
-${formatStrategy(ctx.strategy)}
-
-## Brand Patterns (BP Copy digest — ${ctx.funnel.stage} 재가중, Top-3 노출)
+# BP Copy digest (${ctx.funnel.stage} 재가중, Top-3)
 ${buildCopyPatternDigest(ctx.memory, copyDigestOpts(ctx))}
 
-## Brand Patterns (BP Vision digest — ${ctx.funnel.stage} 관련성 Top-3)
-${buildVisionDigest(ctx.memory, copyDigestOpts(ctx), 3)}
-
-## Semantic relevant BPs (의미 기반 Top-K)
-${ctx.semanticBPDigest ?? "(embedding 미활성)"}
-
-## Selected Key Visuals (실사 자산)
-${formatKeyVisuals(ctx)}
-
-Key Visual 활용 규칙:
-- 실사 자산이 있으면 카피는 **사진의 여백에 얹힐 것**을 전제한다. 긴 문장보다 짧고 임팩트 있는 헤드라인을 선호.
-- 사진의 mood(warm/clean/professional 등)와 일치하는 톤을 고른다.
-- 사진이 없으면 기존 원칙대로 작성.
-
-## Brand Preferences (과거 선택·평가)
+# Brand Preferences
 ${buildPreferenceDigest(ctx.memory)}
-(5~8개 변형은 진입점을 다양하게 유지하되, 선호 훅과 "자주 수정한 영역"을 의식적으로 반영)
 
-# RULES
-
-## Playbook
+# Playbook
 ${formatPlaybook(ctx.playbook)}
 
-## Framework (선택된 전략 기준)
-${formatFramework(ctx.framework)}
+# Funnel Guide
+${formatFunnel(ctx.funnel)}`;
 
-## Funnel Guide
-${formatFunnel(ctx.funnel)}
-
-${
+  const prev =
     ctx.previousHeadlines && ctx.previousHeadlines.length > 0
-      ? `## Previous headlines (avoid repeating these exact phrasings)
-${ctx.previousHeadlines.map((h) => `  - "${h}"`).join("\n")}
-`
-      : ""
-  }${
-    ctx.regenInstruction
-      ? `
-## Re-generation direction (사용자 요청)
-${ctx.regenInstruction}
+      ? `\n\n# Previous headlines (중복 금지)\n${ctx.previousHeadlines.map((h) => `- "${h}"`).join("\n")}`
+      : "";
+  const regen = ctx.regenInstruction
+    ? `\n\n# Re-generation direction\n${ctx.regenInstruction}\n(전체 변형에 반영, 진입점 다양성 유지)`
+    : "";
 
-이 방향성을 전체 변형에 반영하되 서로 다른 진입점을 유지.
-`
-      : ""
-  }
+  // Campaign-level: 캠페인·전략별로 달라지는 부분.
+  const campaignBlock = `# Offer
+${formatOffer(ctx)}
+
+# Audience
+${formatAudience(ctx)}
+
+# Intent Note
+${ctx.intentNote ?? "(없음)"}
+
+# Selected Strategy
+${formatStrategy(ctx.strategy)}
+
+# Semantic relevant BPs
+${ctx.semanticBPDigest ?? "(embedding 미활성)"}
+
+# Selected Key Visuals
+${formatKeyVisuals(ctx)}
+
+# Framework (선택됨)
+${formatFramework(ctx.framework)}${prev}${regen}
+
 # TASK
-선택된 전략의 각도 안에서, 서로 다른 진입점을 사용한 카피 변형 5~8개를 작성하고 각각을 self-critique 하세요.
-도구 ${COPY_TOOL_NAME}로 variants·critiques를 한 번에 기록하세요.`;
+전략 angle 안에서 서로 다른 진입점으로 5~8개 카피 + 각 self-critique. ${COPY_TOOL_NAME}로 기록.`;
 
   return [
     {
       role: "user",
-      content: [{ type: "text", text }],
+      content: [
+        {
+          type: "text",
+          text: brandBlock,
+          cache_control: { type: "ephemeral" },
+        },
+        { type: "text", text: campaignBlock },
+      ],
     },
   ];
 }

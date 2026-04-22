@@ -7,7 +7,7 @@ import type { FunnelGuide } from "@/lib/funnel/types";
 import { buildVisionDigest, buildStrategyRoleHints, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
 
-export const STRATEGY_PROMPT_VERSION = "strategy@2.0.0";
+export const STRATEGY_PROMPT_VERSION = "strategy@2.1.0";
 export const STRATEGY_TOOL_NAME = "record_strategy_alternatives";
 
 export type StrategyRole = "safe" | "explore" | "challenge";
@@ -143,20 +143,32 @@ function digestOpts(ctx: StrategyContext): DigestOpts {
 }
 
 export function buildStrategySystem(): string {
-  return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. 브랜드 자산을 바탕으로 BOFU(전환) 광고 소재의 전략 대안 3개를 **명확히 다른 역할**로 설계합니다.
+  return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. BOFU 광고 전략 대안 3개를 role별로 설계합니다.
 
-역할 분화 (필수 · 아래 "Role-aware BP Guidance"와 "Semantic relevant BPs" 블록의 지시를 각 대안에 직접 적용):
-- alt_1 role="safe": **지배 BP 패턴 + 의미 유사 BP 재현**. Guidance의 safe 항목과 Semantic Top-K 중 Rel#1의 hook/framework/mood/typography 조합을 적극 반영. 학습 데이터가 비면 플레이북 recommended hooks 중 가장 자연스러운 것.
-- alt_2 role="explore": **BP 미등장·저빈도 영역 탐색**. Guidance의 explore 항목 + Semantic Top-K 중 유사도가 중간대(Rel#2~3)인 BP의 차별화 요소를 의도적으로 시도. safe와 완전히 다른 진입점.
-- alt_3 role="challenge": **지배 패턴의 반대 축**. Guidance의 challenge 항목으로 가설을 뒤집는다. Semantic BP는 "피해야 할 안전지대" 신호로 해석. 플레이북 recommended 밖의 훅 사용도 OK.
+## 역할 분화 (필수)
+- alt_1 safe: 지배 BP 패턴 + Semantic Rel#1 재현. 학습 데이터 부재 시 플레이북 recommended hooks 우선
+- alt_2 explore: BP 미등장·저빈도 영역 탐색. Semantic Rel#2~3의 차별화 요소 시도. safe와 완전 다른 진입점
+- alt_3 challenge: 지배 패턴의 반대 축. Semantic BP는 "피할 안전지대"로 해석. recommended 밖 훅 허용
 
-원칙:
-- 3대안의 hookType과 frameworkId는 모두 달라야 한다 (중복 금지).
-- 각 대안은 타겟 페르소나의 pains/desires와 직접 연결되어야 한다.
-- 플레이북의 taboos·금지 표현을 절대 사용하지 않는다.
-- 수치·긴급성·구체적 혜택을 담는다. 추상적 수사·과장·before-after는 피한다.
-- Brand Preferences는 **참고 정보일 뿐 강제 조건이 아니다**. safe에서만 주로 반영.
-- 한국어로 출력. 도구 호출(${STRATEGY_TOOL_NAME})로만 결과를 기록.`;
+## 원칙
+- 3대안 hookType·frameworkId 모두 서로 다름 (중복 금지)
+- 각 대안은 페르소나 pains/desires와 직접 연결
+- 플레이북 taboos + Identity taboos 절대 금지
+- 수치·긴급성·구체 혜택. 추상 수사·과장·before-after 금지
+
+## Preference 활용
+- 참고 정보, 강제 반영 금지
+- safe에서만 주로 반영 (100% 복제 지양)
+- explore·challenge는 Preferences 무시하고 다양성 우선
+- "자주 수정한 영역"은 visualDirection에 수치로 선제 명시
+
+## Key Visual 활용 (실사 자산이 선택된 경우)
+- visualDirection은 사진을 배경으로 전제한 **타이포·레이아웃·여백 전략**만 서술
+- 피사체 재생성·재배치·보정 지시 절대 금지 (원본 픽셀 보존)
+- 사진 mood·여백을 반영해 카피 위치·하이라이트 영역 제안
+- 실사 미선택이면 Gemini 자유 생성 전제
+
+한국어 출력. 도구 ${STRATEGY_TOOL_NAME}로만 기록.`;
 }
 
 function formatVisionDigest(ctx: StrategyContext): string {
@@ -204,28 +216,19 @@ function formatAudience(ctx: StrategyContext): string {
 }
 
 function formatPlaybook(p: Playbook): string {
+  // Strategy 단계에선 hookTypes·recommended는 Funnel Guide가 담당.
+  // 여기는 playbook 고유 정보만 최소 전달.
   return [
-    `version: ${p.version}`,
-    `hookTypes available: ${p.hookTypes.join(", ")}`,
-    `recommended: ${p.recommendedHooks.join(", ")}`,
-    `tone: ${p.tone.style}`,
-    `do: ${p.tone.do.join(" · ")}`,
-    `dont: ${p.tone.dont.join(" · ")}`,
+    `tone: ${p.tone.style} · do: ${p.tone.do.join(" · ")} · dont: ${p.tone.dont.join(" · ")}`,
     `taboos: ${p.taboos.join(", ")}`,
-    `headline maxLen: ${p.structure.headline.maxLen}자, preferred ${p.structure.headline.preferredLen}자`,
-    `visual focus: ${p.visualGuide.focus.join(" · ")}`,
-    `visual avoid: ${p.visualGuide.avoid.join(" · ")}`,
-    `colorStrategy: ${p.visualGuide.colorStrategy}`,
+    `headline: ≤${p.structure.headline.maxLen}자 (선호 ${p.structure.headline.preferredLen}자)`,
+    `visual focus: ${p.visualGuide.focus.join(" · ")} / avoid: ${p.visualGuide.avoid.join(" · ")}`,
   ].join("\n");
 }
 
 function formatFrameworks(fs: Framework[]): string {
-  return fs
-    .map(
-      (f) =>
-        `### ${f.id} — ${f.name}\n${f.summary}\n구조: ${f.structure.map((s) => s.role).join(" → ")}\n힌트: ${f.promptHint}`,
-    )
-    .join("\n\n");
+  // Strategy 단계에서는 framework 선택만 결정. 상세 구조는 Copy 단계에서 선택된 하나만 전송.
+  return fs.map((f) => `- ${f.id}: ${f.name} — ${f.summary}`).join("\n");
 }
 
 function formatKeyVisuals(ctx: StrategyContext): string {
@@ -257,96 +260,73 @@ function formatFunnel(g: FunnelGuide): string {
 }
 
 export function buildStrategyMessages(ctx: StrategyContext): MessageParam[] {
-  const text = `# CONTEXT
+  // Brand-level (cache 대상): 같은 브랜드 + 같은 channel/funnel 조합에서 재사용되는 블록.
+  // 채널·funnel이 바뀌면 cache miss가 나지만, 한 캠페인 세션 내 Strategy 반복·재시도는 hit.
+  const brandBlock = `# Brand
+- name: ${ctx.memory.brand.name} / category: ${ctx.memory.brand.category ?? "(미지정)"}
+${ctx.memory.brand.description ? `- ${ctx.memory.brand.description}` : ""}
 
-## Brand
-- name: ${ctx.memory.brand.name}
-- category: ${ctx.memory.brand.category ?? "(미지정)"}
-- website: ${ctx.memory.brand.website_url ?? "(없음)"}
-- description: ${ctx.memory.brand.description ?? "(없음)"}
-
-## Identity
+# Identity
 ${formatIdentity(ctx.memory)}
 
-## Offer (선택된)
-${formatOffer(ctx)}
-
-## Audience (선택된)
-${formatAudience(ctx)}
-
-## Intent Note
-${ctx.intentNote ?? "(없음)"}
-
-## Brand Patterns (BP Vision digest — ${ctx.funnel.stage} 관련성 재가중)
+# BP Vision digest (${ctx.funnel.stage} 재가중)
 ${formatVisionDigest(ctx)}
 
-## Role-aware BP Guidance (3대안 차별화)
+# Role-aware BP Guidance
 ${buildStrategyRoleHints(ctx.memory, digestOpts(ctx))}
 
-## Semantic relevant BPs (Top-K · Offer·Audience·Intent 의미 기반)
-${ctx.semanticBPDigest ?? "(embedding 미활성 — 마이그레이션 013 적용 후 자동 수집)"}
-
-## Selected Key Visuals (실제 브랜드 사진 — 최종 이미지에 사용됨)
-${formatKeyVisuals(ctx)}
-
-Key Visual 활용 규칙 (실사 자산이 선택된 경우):
-- 각 대안의 visualDirection은 **주어진 실사 사진을 배경으로 전제**하고 그 위에 얹을 **타이포·레이아웃·여백 전략**만 서술한다.
-- 피사체 재생성·재배치·보정 같은 지시는 절대 포함하지 않는다 (원본 사진은 픽셀 단위로 보존).
-- 사진의 mood·여백을 읽어 카피 위치(상단/하단/좌측 블록)와 하이라이트할 영역을 제안한다.
-- 실사 자산이 없으면 기존대로 Gemini가 장면을 자유 생성한다.
-
-## Brand Preferences (이 브랜드의 과거 선택·평가)
+# Brand Preferences
 ${buildPreferenceDigest(ctx.memory)}
 
-Preference 활용 규칙:
-- Preferences는 **참고 정보**다. 강제 반영 금지.
-- safe 대안에서만 주로 반영 — 그래도 100% 복제는 지양하고 조금은 새로운 요소 추가.
-- explore·challenge는 Preferences에 **구애받지 않고** 다양성을 우선.
-- "자주 수정한 영역"은 어느 대안이든 해당 요소를 선제적으로 명시 (예: retouch=size 빈번 → visualDirection에 수치 크기 구체화).
-- 학습 데이터가 비어있으면 플레이북·BP 패턴만 참고.
-
-# RULES
-
-## Playbook — ${ctx.playbook.channel} / ${ctx.playbook.funnelStage}
+# Playbook (${ctx.playbook.channel} / ${ctx.playbook.funnelStage})
 ${formatPlaybook(ctx.playbook)}
 
-## Funnel Guide
+# Funnel Guide
 ${formatFunnel(ctx.funnel)}
 
-## Available Frameworks
-${formatFrameworks(ctx.frameworks)}
+# Available Frameworks
+${formatFrameworks(ctx.frameworks)}`;
 
-${
+  // Campaign-level: 캠페인마다 달라지는 변수부. cache 안 함.
+  const prev =
     ctx.previousAngles && ctx.previousAngles.length > 0
-      ? `## Previous attempts (avoid duplicating these exact angles)
-${ctx.previousAngles
-  .map((p) => `  - "${p.angleName}" (${p.hookType} / ${p.frameworkId})`)
-  .join("\n")}
-`
-      : ""
-  }${
-    ctx.regenInstruction
-      ? `
-## Re-generation direction (사용자 요청)
-${ctx.regenInstruction}
+      ? `\n\n# Previous attempts (중복 금지)\n${ctx.previousAngles
+          .map((p) => `- "${p.angleName}" (${p.hookType}/${p.frameworkId})`)
+          .join("\n")}`
+      : "";
+  const regen = ctx.regenInstruction
+    ? `\n\n# Re-generation direction\n${ctx.regenInstruction}\n(3대안 모두 반영, 역할 분화 유지)`
+    : "";
 
-이 방향성을 3대안 모두에 반영하되 역할 분화(safe/explore/challenge)는 유지.
-`
-      : ""
-  }
+  const campaignBlock = `# Offer
+${formatOffer(ctx)}
+
+# Audience
+${formatAudience(ctx)}
+
+# Intent Note
+${ctx.intentNote ?? "(없음)"}
+
+# Semantic relevant BPs
+${ctx.semanticBPDigest ?? "(embedding 미활성)"}
+
+# Selected Key Visuals
+${formatKeyVisuals(ctx)}${prev}${regen}
+
 # TASK
-3대안을 **역할별로** 설계하세요:
-- alt_1 (safe): 검증된 방향
-- alt_2 (explore): 새로운 각도
-- alt_3 (challenge): 반대·도전 방향
-
-각 대안의 hookType과 frameworkId는 모두 서로 달라야 합니다. 후속 단계(Copy·Visual)에서 바로 확장될 수 있도록 구체적으로 작성하세요.
-도구 ${STRATEGY_TOOL_NAME}로 결과를 기록하세요.`;
+역할별 3대안(safe/explore/challenge) 설계. hookType·frameworkId 중복 금지. ${STRATEGY_TOOL_NAME}로 기록.`;
 
   return [
     {
       role: "user",
-      content: [{ type: "text", text }],
+      content: [
+        {
+          type: "text",
+          text: brandBlock,
+          cache_control: { type: "ephemeral" },
+        },
+        { type: "text", text: campaignBlock },
+      ],
     },
   ];
 }

@@ -16,6 +16,7 @@ export interface RecordUsageInput extends UsageContext {
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
+  cacheCreationTokens?: number;
   imageCount?: number;
 }
 
@@ -26,6 +27,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       input: input.inputTokens ?? 0,
       output: input.outputTokens ?? 0,
       cacheRead: input.cacheReadTokens,
+      cacheCreation: input.cacheCreationTokens,
     });
   } else if (input.provider === "gemini") {
     cost = estimateGeminiImageCost(input.model, input.imageCount ?? 1);
@@ -41,6 +43,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
     input_tokens: input.inputTokens ?? null,
     output_tokens: input.outputTokens ?? null,
     cache_read_tokens: input.cacheReadTokens ?? null,
+    cache_creation_tokens: input.cacheCreationTokens ?? null,
     image_count: input.imageCount ?? null,
     estimated_cost_usd: cost,
     metadata: input.metadata ?? {},
