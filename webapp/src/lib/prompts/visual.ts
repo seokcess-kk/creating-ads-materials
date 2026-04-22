@@ -7,8 +7,8 @@ import type { CopyVariant } from "./copy";
 import type { ChannelConfig } from "@/lib/channels";
 import { buildVisualPatternDigestEn, type FunnelGoal } from "@/lib/vision/digest";
 
-export const VISUAL_PROMPT_VERSION = "visual@3.1.0";
-export const VISUAL_ASSET_PROMPT_VERSION = "visual-asset@1.0.0";
+export const VISUAL_PROMPT_VERSION = "visual@3.2.0";
+export const VISUAL_ASSET_PROMPT_VERSION = "visual-asset@1.1.0";
 export const VISUAL_VALIDATOR_TOOL = "record_visual_validator";
 
 export type VisualFocus = "product_focus" | "number_focus" | "persona_focus";
@@ -80,6 +80,9 @@ export interface VisualPromptContext {
   playbook: Playbook;
   channel: ChannelConfig;
   goal: FunnelGoal;
+  // 브랜드 폰트 설정에서 추출한 typography 서술 (prompt-hints.buildTypographyHint 결과).
+  // null이면 기본 "Pretendard-style" fallback 사용.
+  typographyHint?: string | null;
   regenInstruction?: string;
 }
 
@@ -117,7 +120,10 @@ Absolutely do NOT draw, render, or imply any logo, brand mark, wordmark, icon, w
 - Sub copy: "${sub}"
 - CTA button text: "${cta}"
 
-Render these as real typography (not placeholder boxes). Use premium Korean geometric sans-serif (Pretendard style). Ensure every character is legible, crisp, and properly kerned.
+Render these as real typography (not placeholder boxes). Ensure every character is legible, crisp, and properly kerned.
+
+# Typography (brand font style guide — follow closely)
+${ctx.typographyHint ?? "Use premium Korean geometric sans-serif (Pretendard-style), consistent stroke widths."}
 
 # Strategy angle
 - ${ctx.strategy.angleName} (${ctx.strategy.hookType} hook, ${ctx.strategy.frameworkId})
@@ -212,7 +218,10 @@ export function buildEditImagePrompt(
 - Sub copy: "${sub}"
 - CTA button text: "${cta}"
 
-Render these as real typography (not placeholder boxes). Use premium Korean geometric sans-serif (Pretendard style). Ensure every character is legible, crisp, and properly kerned.
+Render these as real typography (not placeholder boxes). Ensure every character is legible, crisp, and properly kerned.
+
+# Typography (brand font style guide — follow closely)
+${ctx.typographyHint ?? "Use premium Korean geometric sans-serif (Pretendard-style), consistent stroke widths."}
 
 # Strategy angle (to guide text placement/emphasis only — NOT to modify the image)
 - ${ctx.strategy.angleName} (${ctx.strategy.hookType} hook, ${ctx.strategy.frameworkId})

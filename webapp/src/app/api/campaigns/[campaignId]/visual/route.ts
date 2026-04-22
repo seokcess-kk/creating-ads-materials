@@ -21,6 +21,9 @@ import {
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { composePersonVariant } from "@/lib/canvas/compose-person-variant";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
+import { resolveFontPairsForCampaign } from "@/lib/memory/fonts";
+import { getFont } from "@/lib/fonts/queries";
+import { buildTypographyHint } from "@/lib/fonts/prompt-hints";
 import { getPlaybook } from "@/lib/playbook";
 import { getChannel } from "@/lib/channels";
 import {
@@ -109,6 +112,30 @@ export async function POST(
       const playbook = getPlaybook(campaign.channel, campaign.goal);
       const channel = getChannel(campaign.channel);
       if (!channel) throw new Error(`알 수 없는 채널: ${campaign.channel}`);
+
+      // 브랜드 폰트 pair를 로드하여 typography 서술로 변환 → Gemini 프롬프트에 주입.
+      // 정확한 폰트 파일 재현은 불가능하지만 유사 스타일 유도 효과.
+      const fontPairs = await resolveFontPairsForCampaign(
+        campaign.brand_id,
+        campaignId,
+      );
+      const fontMetas = await Promise.all(
+        (["headline", "sub", "cta"] as const).map(async (role) => {
+          const pair = fontPairs[role];
+          if (!pair) return [role, null] as const;
+          const font = await getFont(pair.font_id);
+          return [
+            role,
+            font ? { family: font.family, weight: font.weight } : null,
+          ] as const;
+        }),
+      );
+      const typographyHint = buildTypographyHint({
+        headline: fontMetas.find(([r]) => r === "headline")?.[1] ?? null,
+        sub: fontMetas.find(([r]) => r === "sub")?.[1] ?? null,
+        cta: fontMetas.find(([r]) => r === "cta")?.[1] ?? null,
+      });
+
       const promptCtx: VisualPromptContext = {
         memory,
         strategy: selectedStrategy.content_json as unknown as StrategyAlternative,
@@ -116,6 +143,7 @@ export async function POST(
         playbook,
         channel,
         goal: campaign.goal,
+        typographyHint,
         regenInstruction: body.instruction,
       };
 
