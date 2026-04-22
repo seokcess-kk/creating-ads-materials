@@ -21,6 +21,13 @@ const STRATEGY_STEPS = [
   { label: "결과 저장", atSec: 40 },
 ];
 
+const COPY_STEPS = [
+  { label: "Strategy 로드 + 메모리 준비", atSec: 0 },
+  { label: "카피 변형 생성", atSec: 10 },
+  { label: "Self-critique 4축 검증", atSec: 60 },
+  { label: "저장", atSec: 85 },
+];
+
 interface StrategyGateProps {
   campaignId: string;
   initialRun: CreativeRun | null;
@@ -114,7 +121,9 @@ export function StrategyGate({
     }
   }
 
+  // 카드 클릭용 경량 선택 — /strategy/select만 호출, Claude Copy 호출 없음.
   async function select(variantId: string) {
+    if (selecting !== null) return;
     setSelecting(variantId);
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
@@ -126,10 +135,54 @@ export function StrategyGate({
       setVariants((prev) =>
         prev.map((v) => ({ ...v, selected: v.id === variantId })),
       );
-      toast.success("Strategy 선택 — Copy 단계로");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setSelecting(null);
+    }
+  }
+
+  // 전략 선택(idempotent) + Copy 전체 생성을 한 번의 액션으로 묶는다.
+  // 버튼 라벨 "카피 더 보기"의 의도에 맞춰 Claude Copy 변형을 바로 생성.
+  async function selectAndGenerateCopy(variantId: string) {
+    setSelecting(variantId);
+    const opId = startOp({
+      kind: "copy",
+      title: "Copy 생성",
+      estimatedSeconds: 90,
+      steps: COPY_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
+    try {
+      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant_id: variantId }),
+      });
+      if (!sel.ok) throw new Error((await sel.json()).error ?? "Strategy 선택 실패");
+
+      const gen = await fetch(`/api/campaigns/${campaignId}/copy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "replace" }),
+      });
+      const data = await gen.json();
+      if (!gen.ok) throw new Error(data.error ?? "Copy 생성 실패");
+
+      setVariants((prev) =>
+        prev.map((v) => ({ ...v, selected: v.id === variantId })),
+      );
+      completeOp(opId, {
+        subtitle: `${data.variants?.length ?? 0}개 카피 변형 생성`,
+        href: `/campaigns/${campaignId}`,
+      });
+      toast.success("카피 생성 완료");
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setSelecting(null);
     }
@@ -281,13 +334,31 @@ export function StrategyGate({
                   : c.role === "challenge"
                     ? "⚡ Challenge"
                     : null;
+            const cardDisabled = selecting !== null;
             return (
               <Card
                 key={v.id}
+                role="button"
+                tabIndex={cardDisabled ? -1 : 0}
+                aria-pressed={isSelected}
+                aria-label={`전략 ${c.angleName} 선택`}
+                onClick={() => {
+                  if (cardDisabled) return;
+                  select(v.id);
+                }}
+                onKeyDown={(e) => {
+                  if (cardDisabled) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    select(v.id);
+                  }
+                }}
                 className={
-                  isSelected
-                    ? "border-primary bg-primary/5"
-                    : "hover:border-primary/40 transition-colors"
+                  "cursor-pointer transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50 " +
+                  (isSelected
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                    : "hover:border-primary/40 hover:shadow-sm") +
+                  (cardDisabled ? " opacity-70 cursor-wait" : "")
                 }
               >
                 <CardHeader className="pb-2">
@@ -357,7 +428,10 @@ export function StrategyGate({
                         size="sm"
                         variant={isSelected ? "outline" : "default"}
                         className="flex-1"
-                        onClick={() => selectAndBypass(v.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectAndBypass(v.id);
+                        }}
                         disabled={selecting !== null}
                       >
                         {selecting === v.id
@@ -369,10 +443,13 @@ export function StrategyGate({
                       size="sm"
                       variant="outline"
                       className="flex-1"
-                      onClick={() => select(v.id)}
-                      disabled={selecting !== null || isSelected}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectAndGenerateCopy(v.id);
+                      }}
+                      disabled={selecting !== null}
                     >
-                      {isSelected ? "선택됨" : "카피 더 보기"}
+                      {selecting === v.id ? "생성 중..." : "카피 더 보기"}
                     </Button>
                   </div>
                 </CardContent>
