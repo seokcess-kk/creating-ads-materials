@@ -336,3 +336,95 @@ export function buildValidatorMessages(
     },
   ];
 }
+
+// ========== 배치 Validator (variant N개를 한 번의 Claude 호출로 평가) ==========
+// 기존 per-variant 3회 호출을 1회로 합쳐 공통 context 재전송을 제거. 입력 토큰 65%↓.
+
+export const VISUAL_BATCH_VALIDATOR_TOOL = "record_visual_batch_validator";
+
+export const VisualBatchValidatorItemSchema = VisualValidatorSchema.extend({
+  variantId: z.string(),
+});
+export type VisualBatchValidatorItem = z.infer<typeof VisualBatchValidatorItemSchema>;
+
+export const VisualBatchValidatorSchema = z.object({
+  variants: z.array(VisualBatchValidatorItemSchema).min(1),
+});
+export type VisualBatchValidatorResult = z.infer<typeof VisualBatchValidatorSchema>;
+
+export const visualBatchValidatorTool: Tool = {
+  name: VISUAL_BATCH_VALIDATOR_TOOL,
+  description: "여러 광고 비주얼 후보를 각각 4축으로 한 번에 평가",
+  input_schema: {
+    type: "object",
+    properties: {
+      variants: {
+        type: "array",
+        description: "제시된 이미지 각각에 대한 평가 (variantId로 매핑)",
+        items: {
+          type: "object",
+          properties: {
+            variantId: {
+              type: "string",
+              description: "예: vis_1, vis_2, vis_3 — 이미지 앞에 표시된 라벨과 동일",
+            },
+            hookStrength: { type: "number", description: "1~5. 첫 3초 스크롤 멈춤" },
+            textReady: {
+              type: "number",
+              description: "1~5. 이미지 내 렌더된 한국어 타이포 가독성·정확성",
+            },
+            brandConsistency: { type: "number", description: "1~5. 브랜드 컬러·톤 일관성" },
+            policyClear: {
+              type: "number",
+              description: "1~5. Meta 정책 준수(before-after, 단정, 부적절 콘텐츠 없음)",
+            },
+            overall: { type: "number", description: "1~5. 4축 산술 평균" },
+            issues: { type: "array", items: { type: "string" } },
+            suggestions: { type: "array", items: { type: "string" } },
+            notes: { type: "string" },
+          },
+          required: [
+            "variantId",
+            "hookStrength",
+            "textReady",
+            "brandConsistency",
+            "policyClear",
+            "overall",
+          ],
+        },
+      },
+    },
+    required: ["variants"],
+  },
+};
+
+export interface ValidatorBatchItem {
+  variantId: string;
+  imageUrl: string;
+  spec: VisualVariantSpec;
+}
+
+export function buildBatchValidatorMessages(
+  items: ValidatorBatchItem[],
+  ctx: VisualPromptContext,
+): MessageParam[] {
+  const brand = ctx.memory.brand.name;
+  const header = `아래는 브랜드 "${brand}" ${ctx.channel.label} BOFU 광고의 후보 ${items.length}개입니다.
+전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
+예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
+
+각 이미지는 바로 앞에 표시된 "### variantId: ..." 라벨로 식별됩니다.
+각각에 대해 4축(hookStrength·textReady·brandConsistency·policyClear)을 1~5점으로 매기고,
+${VISUAL_BATCH_VALIDATOR_TOOL} 도구로 한 번에 기록하세요.`;
+
+  const content: MessageParam["content"] = [{ type: "text", text: header }];
+  for (const it of items) {
+    content.push({
+      type: "text",
+      text: `### variantId: ${it.variantId} (${it.spec.label})`,
+    });
+    content.push({ type: "image", source: { type: "url", url: it.imageUrl } });
+  }
+
+  return [{ role: "user", content }];
+}

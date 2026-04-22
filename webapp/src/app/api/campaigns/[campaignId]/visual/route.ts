@@ -33,7 +33,7 @@ import {
   type VisualVariantSpec,
 } from "@/lib/prompts/visual";
 import type { BrandKeyVisual } from "@/lib/memory/types";
-import { validateVisualImage } from "@/lib/validators/visual-hook";
+import { validateVisualImagesBatch } from "@/lib/validators/visual-hook";
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
 import type { CopyVariant } from "@/lib/prompts/copy";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
@@ -217,20 +217,9 @@ export async function POST(
             path = uploaded.path;
           }
 
-          let validator: Record<string, unknown> = {};
-          try {
-            validator = (await validateVisualImage(url, promptCtx, spec, {
-              operation: "visual_validator",
-              brandId: campaign.brand_id,
-              campaignId,
-              metadata: { focus: spec.focus, track },
-            })) as unknown as Record<string, unknown>;
-          } catch (vErr) {
-            validator = { validatorError: (vErr as Error).message };
-          }
-
           return {
             label: spec.id,
+            spec,
             content: {
               url,
               path,
@@ -243,30 +232,70 @@ export async function POST(
               keyVisualKind: asset?.kind ?? null,
               layout: layoutMeta,
             } as Record<string, unknown>,
-            scores: validator,
             promptVersion,
           };
         }),
       );
+
+      // 이미지 생성 성공/실패 집계. 검증(validator)은 이후 배치 호출 1번으로 처리.
+      type GeneratedVariant = {
+        label: string;
+        spec: VisualVariantSpec;
+        content: Record<string, unknown>;
+        promptVersion: string;
+      };
+      const generated: GeneratedVariant[] = [];
+      const failures: Array<{ label: string; reason: string }> = [];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        const spec = VISUAL_VARIANT_SPECS[i];
+        if (r.status === "fulfilled") generated.push(r.value);
+        else failures.push({ label: spec.id, reason: (r.reason as Error)?.message ?? "unknown" });
+      }
+
+      if (generated.length === 0) {
+        const msg = failures.map((f) => `${f.label}: ${f.reason}`).join(" / ");
+        throw new Error(`모든 변형 실패 — ${msg}`);
+      }
+
+      // 배치 Validator: 생성된 variant들을 한 번의 Claude 호출로 평가 (기존 N회 → 1회).
+      let scoresMap = new Map<string, Record<string, unknown>>();
+      try {
+        const batchResult = await validateVisualImagesBatch(
+          generated.map((g) => ({
+            variantId: g.label,
+            imageUrl: (g.content.url as string) ?? "",
+            spec: g.spec,
+          })),
+          promptCtx,
+          {
+            operation: "visual_validator_batch",
+            brandId: campaign.brand_id,
+            campaignId,
+            metadata: { count: generated.length },
+          },
+        );
+        for (const [vid, score] of batchResult.entries()) {
+          scoresMap.set(vid, score as unknown as Record<string, unknown>);
+        }
+      } catch (vErr) {
+        const errMsg = (vErr as Error).message;
+        for (const g of generated) {
+          scoresMap.set(g.label, { validatorError: errMsg });
+        }
+      }
 
       const succeeded: Array<{
         label: string;
         content: Record<string, unknown>;
         scores: Record<string, unknown>;
         promptVersion: string;
-      }> = [];
-      const failures: Array<{ label: string; reason: string }> = [];
-      for (let i = 0; i < results.length; i++) {
-        const r = results[i];
-        const spec = VISUAL_VARIANT_SPECS[i];
-        if (r.status === "fulfilled") succeeded.push(r.value);
-        else failures.push({ label: spec.id, reason: (r.reason as Error)?.message ?? "unknown" });
-      }
-
-      if (succeeded.length === 0) {
-        const msg = failures.map((f) => `${f.label}: ${f.reason}`).join(" / ");
-        throw new Error(`모든 변형 실패 — ${msg}`);
-      }
+      }> = generated.map((g) => ({
+        label: g.label,
+        content: g.content,
+        scores: scoresMap.get(g.label) ?? { validatorError: "no-score" },
+        promptVersion: g.promptVersion,
+      }));
 
       const variants = await createVariants(stage.id, succeeded, {
         mode,
