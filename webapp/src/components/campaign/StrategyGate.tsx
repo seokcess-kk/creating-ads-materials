@@ -135,6 +135,37 @@ export function StrategyGate({
     }
   }
 
+  // sampleCopy를 Copy variant로 채택 (별도 Copy Claude 호출 없이 Visual로 직행).
+  async function selectAndBypass(variantId: string) {
+    setSelecting(variantId);
+    try {
+      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant_id: variantId }),
+      });
+      if (!sel.ok) throw new Error((await sel.json()).error ?? "Strategy 선택 실패");
+
+      const byp = await fetch(
+        `/api/campaigns/${campaignId}/copy/from-sample`,
+        { method: "POST" },
+      );
+      if (!byp.ok) {
+        throw new Error((await byp.json()).error ?? "샘플 카피 채택 실패");
+      }
+
+      setVariants((prev) =>
+        prev.map((v) => ({ ...v, selected: v.id === variantId })),
+      );
+      toast.success("전략 + 샘플 카피 채택 — Visual 단계로");
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setSelecting(null);
+    }
+  }
+
   async function onRestored() {
     // 히스토리에서 배치 복원 → active variants 다시 로드
     try {
@@ -304,19 +335,46 @@ export function StrategyGate({
                     <p className="font-medium text-muted-foreground">근거</p>
                     <p>{c.whyItWorks}</p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant={isSelected ? "outline" : "default"}
-                    className="w-full mt-2"
-                    onClick={() => select(v.id)}
-                    disabled={selecting !== null || isSelected}
-                  >
-                    {selecting === v.id
-                      ? "선택 중..."
-                      : isSelected
-                        ? "선택됨"
-                        : "이 대안 선택"}
-                  </Button>
+                  {c.sampleCopy && (
+                    <div className="mt-2 p-2 rounded-md border bg-muted/40 space-y-1">
+                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                        샘플 카피
+                      </p>
+                      <p className="text-sm font-semibold leading-tight">
+                        {c.sampleCopy.headline}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.sampleCopy.subCopy}
+                      </p>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {c.sampleCopy.cta}
+                      </Badge>
+                    </div>
+                  )}
+                  <div className="flex gap-1 mt-2">
+                    {c.sampleCopy && (
+                      <Button
+                        size="sm"
+                        variant={isSelected ? "outline" : "default"}
+                        className="flex-1"
+                        onClick={() => selectAndBypass(v.id)}
+                        disabled={selecting !== null}
+                      >
+                        {selecting === v.id
+                          ? "진행 중..."
+                          : "샘플로 진행"}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => select(v.id)}
+                      disabled={selecting !== null || isSelected}
+                    >
+                      {isSelected ? "선택됨" : "카피 더 보기"}
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );

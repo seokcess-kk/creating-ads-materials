@@ -150,7 +150,7 @@ export async function POST(
 
       const response = await callClaude({
         model: "opus",
-        maxTokens: 6000,
+        maxTokens: 8000,
         system: buildStrategySystem(),
         usageContext: {
           operation: "strategy",
