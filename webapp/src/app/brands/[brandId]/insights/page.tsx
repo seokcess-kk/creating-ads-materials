@@ -254,9 +254,9 @@ export default async function InsightsPage({
 
       <Card className="bg-muted/30">
         <CardContent className="py-4 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium">📊 M4.5 예고</p>
+          <p className="font-medium">📊 안내</p>
           <p>
-            성과 데이터(CTR·CVR·CPC)를 수동 입력하면 위 선호도 가중치가 실제 성과로 캘리브레이션됩니다.
+            향후 성과 데이터(CTR·CVR·CPC)를 입력하면 위 선호도 가중치가 실제 성과로 캘리브레이션됩니다.
           </p>
         </CardContent>
       </Card>

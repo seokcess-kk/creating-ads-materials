@@ -26,8 +26,8 @@ export default async function NewCampaignPage({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">새 캠페인 — Intent</h1>
-          <p className="text-muted-foreground">BOFU · IG Feed 1:1 파일럿</p>
+          <h1 className="text-2xl font-bold tracking-tight">새 캠페인</h1>
+          <p className="text-muted-foreground">채널·오퍼·타겟을 선택하면 Strategy 단계가 시작됩니다</p>
         </div>
         <Link href={`/brands/${brandId}`}>
           <Button variant="outline">← 돌아가기</Button>

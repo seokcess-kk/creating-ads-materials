@@ -244,7 +244,7 @@ export function CopyGate({
               refreshToken={historyToken}
               onRestored={onRestored}
             />
-            <Badge variant="outline">Human Gate 2</Badge>
+            <Badge variant="outline">선택 필요</Badge>
           </div>
         </CardTitle>
       </CardHeader>

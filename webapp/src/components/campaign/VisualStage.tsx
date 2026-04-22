@@ -162,7 +162,7 @@ export function VisualStage({
       setVariants((prev) =>
         prev.map((v) => ({ ...v, selected: v.id === variantId })),
       );
-      toast.success("Visual 선택 — M3(Retouch) 대기");
+      toast.success("Visual 선택 — Retouch 단계로");
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -257,7 +257,7 @@ export function VisualStage({
               refreshToken={historyToken}
               onRestored={onRestored}
             />
-            <Badge variant="outline">M2 종료 게이트</Badge>
+            <Badge variant="outline">선택 필요</Badge>
           </div>
         </CardTitle>
       </CardHeader>
@@ -276,7 +276,7 @@ export function VisualStage({
           </p>
         )}
         <p className="text-sm text-muted-foreground">
-          overall 점수 내림차순. Retouch/Compose/Ship은 M3에서 활성화됩니다.
+          overall 점수 내림차순. 하나를 선택하면 Retouch/Compose/Ship 단계가 활성화됩니다.
         </p>
         <div className={`grid gap-3 ${variantGridCols(aspectRatio)}`}>
           {sorted.map((v) => {
@@ -347,7 +347,7 @@ export function VisualStage({
                     {selecting === v.id
                       ? "선택 중..."
                       : isSelected
-                        ? "선택됨 (M3 대기)"
+                        ? "선택됨 (Retouch 대기)"
                         : "이 비주얼 선택"}
                   </Button>
                 </CardContent>

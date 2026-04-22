@@ -225,7 +225,7 @@ export function StrategyGate({
               refreshToken={historyToken}
               onRestored={onRestored}
             />
-            <Badge variant="outline">Human Gate 1</Badge>
+            <Badge variant="outline">선택 필요</Badge>
           </div>
         </CardTitle>
       </CardHeader>
