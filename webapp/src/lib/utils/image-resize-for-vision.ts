@@ -1,7 +1,7 @@
-// Validator 전용 이미지 다운샘플.
+// Claude Vision 입력용 이미지 다운샘플.
 // Claude Vision은 이미지 1장당 토큰이 해상도·종횡비에 비례. 2K 원본을 그대로
-// 보내면 ~5000 토큰/장인데, Validator는 hook strength·가독성만 판단하므로
-// 1024px 긴 변 JPEG로 충분하다. ~70% 절감.
+// 보내면 ~5000 토큰/장. BP 8축 분석·Validator hook 판단 모두 1024px 긴 변
+// JPEG로 충분하다. ~70% 절감.
 
 import { createCanvas, loadImage } from "@napi-rs/canvas";
 
@@ -15,7 +15,7 @@ export interface ResizedImage {
 const TARGET_LONG_EDGE = 1024;
 const JPEG_QUALITY = 80;
 
-export async function fetchAndResizeForValidator(
+export async function fetchAndResizeForVision(
   url: string,
 ): Promise<ResizedImage> {
   const res = await fetch(url);
