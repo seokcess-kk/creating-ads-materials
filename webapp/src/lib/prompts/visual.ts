@@ -398,14 +398,23 @@ export const visualBatchValidatorTool: Tool = {
   },
 };
 
+// Validator 호출자가 넘기는 기본 항목.
 export interface ValidatorBatchItem {
   variantId: string;
   imageUrl: string;
   spec: VisualVariantSpec;
 }
 
+// 빌더에 넘기는 해상도 축소된 항목 (validator 함수 내부에서 변환).
+export interface ResolvedValidatorItem {
+  variantId: string;
+  spec: VisualVariantSpec;
+  imageBase64: string;
+  mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+}
+
 export function buildBatchValidatorMessages(
-  items: ValidatorBatchItem[],
+  items: ResolvedValidatorItem[],
   ctx: VisualPromptContext,
 ): MessageParam[] {
   const brand = ctx.memory.brand.name;
@@ -423,7 +432,14 @@ ${VISUAL_BATCH_VALIDATOR_TOOL} 도구로 한 번에 기록하세요.`;
       type: "text",
       text: `### variantId: ${it.variantId} (${it.spec.label})`,
     });
-    content.push({ type: "image", source: { type: "url", url: it.imageUrl } });
+    content.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: it.mediaType,
+        data: it.imageBase64,
+      },
+    });
   }
 
   return [{ role: "user", content }];

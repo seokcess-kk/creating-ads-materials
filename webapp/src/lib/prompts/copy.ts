@@ -8,7 +8,7 @@ import type { StrategyAlternative } from "./strategy";
 import { buildCopyPatternDigest, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
 
-export const COPY_PROMPT_VERSION = "copy@1.1.0";
+export const COPY_PROMPT_VERSION = "copy@1.2.0";
 export const COPY_TOOL_NAME = "record_copy_drafts";
 
 export const CopyVariantSchema = z.object({
@@ -35,26 +35,26 @@ export const CopyCritiqueSchema = z.object({
 export type CopyCritique = z.infer<typeof CopyCritiqueSchema>;
 
 export const CopyOutputSchema = z.object({
-  variants: z.array(CopyVariantSchema).min(5).max(8),
+  variants: z.array(CopyVariantSchema).min(5).max(6),
   critiques: z.array(CopyCritiqueSchema),
 });
 export type CopyOutput = z.infer<typeof CopyOutputSchema>;
 
 export const copyTool: Tool = {
   name: COPY_TOOL_NAME,
-  description: "5~8개 카피 변형 + 표준 self-critique 결과를 함께 기록",
+  description: "5~6개 카피 변형 + 표준 self-critique 결과를 함께 기록",
   input_schema: {
     type: "object",
     properties: {
       variants: {
         type: "array",
         minItems: 5,
-        maxItems: 8,
+        maxItems: 6,
         description: "선택된 전략 angle 안에서의 카피 변형. 서로 다른 뉘앙스·시작점·핵심 단어.",
         items: {
           type: "object",
           properties: {
-            id: { type: "string", description: "copy_1 ~ copy_8" },
+            id: { type: "string", description: "copy_1 ~ copy_6" },
             headline: {
               type: "string",
               description: "메인 헤드라인 (한국어, 공백 제외 12~18자 권장, 최대 40자)",
@@ -153,11 +153,11 @@ function copyDigestOpts(ctx: CopyContext): DigestOpts {
 }
 
 export function buildCopySystem(): string {
-  return `당신은 퍼포먼스 광고 시니어 카피라이터입니다. 선택된 전략 기반 카피 5~8개 변형 + 각 변형 4축 self-critique.
+  return `당신은 퍼포먼스 광고 시니어 카피라이터입니다. 선택된 전략 기반 카피 5~6개 변형 + 각 변형 4축 self-critique.
 
 ## 작성 원칙
 - 전략 angle의 프레임워크 구조 충실
-- 5~8개는 서로 다른 진입점 (혜택/증거/시간/페인/긴급성 등)
+- 5~6개는 서로 다른 진입점 (혜택/증거/시간/페인/긴급성 등)
 - 단순 단어 교체 금지 — 의미·뉘앙스 달라야 함
 - Identity taboos + 플레이북 taboos 절대 금지
 - Meta 정책 금지: before/after 대조, 개인 속성 단정, 결과 확약
@@ -328,7 +328,7 @@ ${formatKeyVisuals(ctx)}
 ${formatFramework(ctx.framework)}${prev}${regen}
 
 # TASK
-전략 angle 안에서 서로 다른 진입점으로 5~8개 카피 + 각 self-critique. ${COPY_TOOL_NAME}로 기록.`;
+전략 angle 안에서 서로 다른 진입점으로 5~6개 카피 + 각 self-critique. ${COPY_TOOL_NAME}로 기록.`;
 
   return [
     {
