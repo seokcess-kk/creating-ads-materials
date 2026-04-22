@@ -381,7 +381,9 @@ export async function listVariants(
   const supabase = createAdminClient();
   let q = supabase.from("creative_variants").select("*").eq("stage_id", stageId);
   if (!options.includeArchived) q = q.is("archived_at", null);
-  const { data, error } = await q.order("created_at");
+  // created_at가 동점일 때(동일 INSERT로 들어온 배치) id를 tiebreaker로 사용해
+  // 안정 정렬 보장 — UPDATE 후 tuple 물리 순서가 바뀌어도 화면상 순서 유지.
+  const { data, error } = await q.order("created_at").order("id");
   if (error) throw error;
   return (data ?? []) as CreativeVariant[];
 }

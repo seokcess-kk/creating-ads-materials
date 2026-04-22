@@ -339,25 +339,25 @@ export function StrategyGate({
               <Card
                 key={v.id}
                 role="button"
-                tabIndex={cardDisabled ? -1 : 0}
+                tabIndex={cardDisabled || isSelected ? -1 : 0}
                 aria-pressed={isSelected}
-                aria-label={`전략 ${c.angleName} 선택`}
+                aria-label={`전략 ${c.angleName}${isSelected ? " (선택됨)" : " 선택"}`}
                 onClick={() => {
-                  if (cardDisabled) return;
+                  if (cardDisabled || isSelected) return;
                   select(v.id);
                 }}
                 onKeyDown={(e) => {
-                  if (cardDisabled) return;
+                  if (cardDisabled || isSelected) return;
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     select(v.id);
                   }
                 }}
                 className={
-                  "cursor-pointer transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50 " +
+                  "transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50 " +
                   (isSelected
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                    : "hover:border-primary/40 hover:shadow-sm") +
+                    ? "border-primary bg-primary/5 ring-2 ring-primary/30 cursor-default"
+                    : "hover:border-primary/40 hover:shadow-sm cursor-pointer") +
                   (cardDisabled ? " opacity-70 cursor-wait" : "")
                 }
               >
