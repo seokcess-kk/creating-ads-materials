@@ -23,6 +23,10 @@ const Schema = z.object({
   is_negative: z.boolean().optional(),
   weight: z.number().int().min(0).max(100).optional(),
   performance_score: z.number().int().min(1).max(5).nullable().optional(),
+  // 스크래퍼가 이미 확보한 크리에이티브 URL을 직접 넘겨 og:image 단계를 건너뛴다.
+  // TikTok CC처럼 og:image가 제품 페이지 썸네일이라 개별 광고 이미지와 다른 경우 필수.
+  override_image_url: z.string().url().optional(),
+  override_title: z.string().max(200).nullable().optional(),
 });
 
 export async function POST(
@@ -37,22 +41,31 @@ export async function POST(
     const dup = await getReferenceBySourceUrl(brandId, parsed.canonical);
     if (dup) throw new ApiError(409, "이미 임포트된 광고입니다");
 
-    const og = await fetchOgMeta(parsed.canonical).catch(() => null);
-    if (!og?.image) {
-      throw new ApiError(
-        422,
-        `${platformLabel(parsed.platform)}에서 og:image를 찾지 못했습니다. 수동 업로드로 대체하거나 Playwright 경로가 필요합니다.`,
-      );
+    // override_image_url 있으면 스크래퍼 경로 — og fetch 생략.
+    let imageUrl: string | null = input.override_image_url ?? null;
+    let title: string | null = input.override_title ?? null;
+    let siteName: string | null = null;
+    if (!imageUrl) {
+      const og = await fetchOgMeta(parsed.canonical).catch(() => null);
+      if (!og?.image) {
+        throw new ApiError(
+          422,
+          `${platformLabel(parsed.platform)}에서 og:image를 찾지 못했습니다. override_image_url을 전달하거나 수동 업로드를 사용하세요.`,
+        );
+      }
+      imageUrl = og.image;
+      title = og.title;
+      siteName = og.siteName;
     }
 
     const stored = await downloadToReferenceBucket(
       brandId,
-      og.image,
+      imageUrl,
       parsed.id ?? parsed.platform,
     );
 
     const noteParts = [platformLabel(parsed.platform)];
-    if (og.title) noteParts.push(og.title.slice(0, 120));
+    if (title) noteParts.push(title.slice(0, 120));
     if (input.source_note) noteParts.push(input.source_note);
 
     const ref = await createReference(brandId, {
@@ -91,14 +104,14 @@ export async function POST(
           vision_status: "ready" as const,
           vision_analyzed_at: new Date().toISOString(),
         },
-        meta: { platform: parsed.platform, title: og.title, siteName: og.siteName },
+        meta: { platform: parsed.platform, title, siteName },
       });
     } catch (vErr) {
       const msg = vErr instanceof Error ? vErr.message : String(vErr);
       await setVisionFailed(ref.id, msg);
       return ok({
         reference: { ...ref, vision_status: "failed" as const, vision_error: msg },
-        meta: { platform: parsed.platform, title: og.title, siteName: og.siteName },
+        meta: { platform: parsed.platform, title, siteName },
       });
     }
   } catch (e) {
