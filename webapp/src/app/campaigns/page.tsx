@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import type { Campaign } from "@/lib/campaigns/types";
 import { formatKst } from "@/lib/format/date";
+import { FilterChipGroup, type FilterOption } from "@/components/filters/FilterChipGroup";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,12 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
   ]);
   const brandMap = new Map(brands.map((b) => [b.id, b]));
 
+  const statusChipOptions: FilterOption[] = STATUS_FILTERS.map((f) => ({
+    id: f.id,
+    label: f.label,
+    href: f.id === "all" ? "/campaigns" : `/campaigns?status=${f.id}`,
+  }));
+
   return (
     <div className="space-y-6">
       <div>
@@ -42,21 +49,13 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
         <p className="text-muted-foreground">전체 브랜드의 캠페인 목록</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {STATUS_FILTERS.map((f) => (
-          <Link
-            key={f.id}
-            href={f.id === "all" ? "/campaigns" : `/campaigns?status=${f.id}`}
-            className={
-              "rounded-full border px-3 py-1 text-xs transition-colors " +
-              (currentStatus === f.id
-                ? "bg-primary text-primary-foreground border-primary"
-                : "hover:bg-muted")
-            }
-          >
-            {f.label}
-          </Link>
-        ))}
+      <div>
+        <FilterChipGroup
+          options={statusChipOptions}
+          activeId={currentStatus}
+          size="md"
+          wrap
+        />
       </div>
 
       {campaigns.length === 0 ? (

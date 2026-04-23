@@ -8,6 +8,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
+import { FilterChipGroup, type FilterOption } from "@/components/filters/FilterChipGroup";
 import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
@@ -123,19 +124,47 @@ export default async function UsagePage({
   const rangeStart = list.total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const rangeEnd = Math.min(currentPage * pageSize, list.total);
 
-  const providerOptions: Array<{ id: string; label: string }> = [
+  const periodChipOptions: FilterOption[] = [
+    { id: "7d", label: "최근 7일" },
+    { id: "month", label: "이번 달" },
+    { id: "30d", label: "최근 30일" },
+    { id: "all", label: "전체" },
+  ].map((o) => ({
+    ...o,
+    href: buildUsageHref(sp, { period: o.id, page: "1" }),
+  }));
+
+  const providerChipOptions: FilterOption[] = [
     { id: "all", label: "전체" },
     { id: "anthropic", label: "Anthropic" },
     { id: "gemini", label: "Gemini" },
-  ];
+  ].map((o) => ({
+    ...o,
+    href: buildUsageHref(sp, {
+      provider: o.id === "all" ? undefined : o.id,
+      page: "1",
+    }),
+  }));
 
-  const operationOptions: Array<{ id: string; label: string }> = [
+  const operationChipOptions: FilterOption[] = [
     { id: "all", label: "전체" },
     ...Object.keys(summary.byOperation).map((k) => ({
       id: k,
       label: OPERATION_LABELS[k] ?? k,
     })),
-  ];
+  ].map((o) => ({
+    ...o,
+    href: buildUsageHref(sp, {
+      operation: o.id === "all" ? undefined : o.id,
+      page: "1",
+    }),
+  }));
+
+  const pageSizeChipOptions: FilterOption[] = PAGE_SIZE_OPTIONS.map((n) => ({
+    id: String(n),
+    label: String(n),
+    href: buildUsageHref(sp, { pageSize: String(n), page: "1" }),
+  }));
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -144,25 +173,13 @@ export default async function UsagePage({
         <p className="text-muted-foreground">Claude · Gemini 호출 비용 추적</p>
       </div>
 
-      <div className="flex gap-1 text-sm">
-        {[
-          { id: "7d", label: "최근 7일" },
-          { id: "month", label: "이번 달" },
-          { id: "30d", label: "최근 30일" },
-          { id: "all", label: "전체" },
-        ].map((p) => (
-          <Link
-            key={p.id}
-            href={buildUsageHref(sp, { period: p.id, page: "1" })}
-            className={`rounded-md px-3 py-1 text-xs border transition-colors ${
-              period === p.id
-                ? "bg-primary text-primary-foreground border-primary"
-                : "hover:bg-muted"
-            }`}
-          >
-            {p.label}
-          </Link>
-        ))}
+      <div>
+        <FilterChipGroup
+          options={periodChipOptions}
+          activeId={period}
+          size="md"
+          wrap
+        />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -244,85 +261,42 @@ export default async function UsagePage({
       </div>
 
       <Card>
-        <CardHeader className="space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <CardTitle className="text-base">호출 내역</CardTitle>
-              <CardDescription className="text-xs">
-                {periodLabel} · 총 {fmtNum(list.total)}건
-                {list.total > 0 && (
-                  <>
-                    {" "}
-                    · {fmtNum(rangeStart)}–{fmtNum(rangeEnd)} 표시
-                  </>
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-1 text-[11px]">
-              <span className="text-muted-foreground mr-1">페이지당</span>
-              {PAGE_SIZE_OPTIONS.map((n) => (
-                <Link
-                  key={n}
-                  href={buildUsageHref(sp, { pageSize: String(n), page: "1" })}
-                  className={`rounded-md px-2 py-0.5 border transition-colors ${
-                    pageSize === n
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                >
-                  {n}
-                </Link>
-              ))}
-            </div>
+        <CardHeader className="space-y-4">
+          <div>
+            <CardTitle className="text-base">호출 내역</CardTitle>
+            <CardDescription className="text-xs">
+              {periodLabel} · 총 {fmtNum(list.total)}건
+              {list.total > 0 && (
+                <>
+                  {" "}
+                  · {fmtNum(rangeStart)}–{fmtNum(rangeEnd)} 표시
+                </>
+              )}
+            </CardDescription>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[11px]">
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">Provider</span>
-              {providerOptions.map((opt) => {
-                const active = (provider ?? "all") === opt.id;
-                return (
-                  <Link
-                    key={opt.id}
-                    href={buildUsageHref(sp, {
-                      provider: opt.id === "all" ? undefined : opt.id,
-                      page: "1",
-                    })}
-                    className={`rounded-md px-2 py-0.5 border transition-colors ${
-                      active
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "hover:bg-muted"
-                    }`}
-                  >
-                    {opt.label}
-                  </Link>
-                );
-              })}
-            </div>
-            {operationOptions.length > 1 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-muted-foreground">Operation</span>
-                {operationOptions.map((opt) => {
-                  const active = (operation ?? "all") === opt.id;
-                  return (
-                    <Link
-                      key={opt.id}
-                      href={buildUsageHref(sp, {
-                        operation: opt.id === "all" ? undefined : opt.id,
-                        page: "1",
-                      })}
-                      className={`rounded-md px-2 py-0.5 border transition-colors ${
-                        active
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      {opt.label}
-                    </Link>
-                  );
-                })}
-              </div>
+          <div className="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2">
+            <FilterChipGroup
+              label="Provider"
+              options={providerChipOptions}
+              activeId={provider ?? "all"}
+              size="sm"
+            />
+            {operationChipOptions.length > 1 && (
+              <FilterChipGroup
+                label="Operation"
+                options={operationChipOptions}
+                activeId={operation ?? "all"}
+                size="sm"
+                wrap
+              />
             )}
+            <FilterChipGroup
+              label="페이지당"
+              options={pageSizeChipOptions}
+              activeId={String(pageSize)}
+              size="sm"
+            />
           </div>
         </CardHeader>
         <CardContent>
