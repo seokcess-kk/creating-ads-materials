@@ -1,8 +1,8 @@
 import Link from "next/link";
 import {
   getPricingNote,
-  getRecentUsage,
   getUsageByBrand,
+  getUsageList,
   getUsageSummary,
 } from "@/lib/usage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,8 @@ const OPERATION_LABELS: Record<string, string> = {
   analyze_website: "홈페이지 분석",
 };
 
+const PAGE_SIZE_OPTIONS = [50, 100, 200];
+
 function fmtUsd(n: number): string {
   return `$${n.toFixed(4)}`;
 }
@@ -32,12 +34,42 @@ function fmtNum(n: number): string {
   return n.toLocaleString();
 }
 
+interface SearchParamsShape {
+  period?: string;
+  page?: string;
+  pageSize?: string;
+  provider?: string;
+  operation?: string;
+}
+
+function buildUsageHref(
+  current: SearchParamsShape,
+  overrides: Partial<SearchParamsShape>,
+): string {
+  const merged: SearchParamsShape = { ...current, ...overrides };
+  const params = new URLSearchParams();
+  if (merged.period) params.set("period", merged.period);
+  if (merged.provider) params.set("provider", merged.provider);
+  if (merged.operation) params.set("operation", merged.operation);
+  if (merged.pageSize) params.set("pageSize", merged.pageSize);
+  if (merged.page && merged.page !== "1") params.set("page", merged.page);
+  const qs = params.toString();
+  return qs ? `/usage?${qs}` : "/usage";
+}
+
 export default async function UsagePage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<SearchParamsShape>;
 }) {
-  const { period = "month" } = await searchParams;
+  const sp = await searchParams;
+  const period = sp.period ?? "month";
+  const provider = sp.provider && sp.provider !== "all" ? sp.provider : undefined;
+  const operation = sp.operation && sp.operation !== "all" ? sp.operation : undefined;
+  const pageSize = PAGE_SIZE_OPTIONS.includes(Number(sp.pageSize))
+    ? Number(sp.pageSize)
+    : 50;
+  const page = Math.max(1, Number(sp.page) || 1);
 
   const now = new Date();
   let from: Date | undefined;
@@ -49,9 +81,9 @@ export default async function UsagePage({
     from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   }
 
-  const [summary, recent, byBrand] = await Promise.all([
+  const [summary, list, byBrand] = await Promise.all([
     getUsageSummary({ from }),
-    getRecentUsage(50),
+    getUsageList({ from, provider, operation, page, pageSize }),
     getUsageByBrand(),
   ]);
 
@@ -86,6 +118,25 @@ export default async function UsagePage({
           ? "최근 7일"
           : "전체 기간";
 
+  const totalPages = Math.max(1, Math.ceil(list.total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const rangeStart = list.total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, list.total);
+
+  const providerOptions: Array<{ id: string; label: string }> = [
+    { id: "all", label: "전체" },
+    { id: "anthropic", label: "Anthropic" },
+    { id: "gemini", label: "Gemini" },
+  ];
+
+  const operationOptions: Array<{ id: string; label: string }> = [
+    { id: "all", label: "전체" },
+    ...Object.keys(summary.byOperation).map((k) => ({
+      id: k,
+      label: OPERATION_LABELS[k] ?? k,
+    })),
+  ];
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
@@ -102,7 +153,7 @@ export default async function UsagePage({
         ].map((p) => (
           <Link
             key={p.id}
-            href={`/usage?period=${p.id}`}
+            href={buildUsageHref(sp, { period: p.id, page: "1" })}
             className={`rounded-md px-3 py-1 text-xs border transition-colors ${
               period === p.id
                 ? "bg-primary text-primary-foreground border-primary"
@@ -193,62 +244,208 @@ export default async function UsagePage({
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">최근 호출 (최대 50건)</CardTitle>
+        <CardHeader className="space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base">호출 내역</CardTitle>
+              <CardDescription className="text-xs">
+                {periodLabel} · 총 {fmtNum(list.total)}건
+                {list.total > 0 && (
+                  <>
+                    {" "}
+                    · {fmtNum(rangeStart)}–{fmtNum(rangeEnd)} 표시
+                  </>
+                )}
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-1 text-[11px]">
+              <span className="text-muted-foreground mr-1">페이지당</span>
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <Link
+                  key={n}
+                  href={buildUsageHref(sp, { pageSize: String(n), page: "1" })}
+                  className={`rounded-md px-2 py-0.5 border transition-colors ${
+                    pageSize === n
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted"
+                  }`}
+                >
+                  {n}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground">Provider</span>
+              {providerOptions.map((opt) => {
+                const active = (provider ?? "all") === opt.id;
+                return (
+                  <Link
+                    key={opt.id}
+                    href={buildUsageHref(sp, {
+                      provider: opt.id === "all" ? undefined : opt.id,
+                      page: "1",
+                    })}
+                    className={`rounded-md px-2 py-0.5 border transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "hover:bg-muted"
+                    }`}
+                  >
+                    {opt.label}
+                  </Link>
+                );
+              })}
+            </div>
+            {operationOptions.length > 1 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-muted-foreground">Operation</span>
+                {operationOptions.map((opt) => {
+                  const active = (operation ?? "all") === opt.id;
+                  return (
+                    <Link
+                      key={opt.id}
+                      href={buildUsageHref(sp, {
+                        operation: opt.id === "all" ? undefined : opt.id,
+                        page: "1",
+                      })}
+                      className={`rounded-md px-2 py-0.5 border transition-colors ${
+                        active
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "hover:bg-muted"
+                      }`}
+                    >
+                      {opt.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {recent.length === 0 ? (
+          {list.rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">호출 기록 없음</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-2">시각</th>
-                    <th className="py-2 pr-2">Provider</th>
-                    <th className="py-2 pr-2">Operation</th>
-                    <th className="py-2 pr-2">Model</th>
-                    <th className="py-2 pr-2 text-right">Input</th>
-                    <th className="py-2 pr-2 text-right">Output</th>
-                    <th className="py-2 pr-2 text-right">Image</th>
-                    <th className="py-2 text-right">Cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((r) => (
-                    <tr key={r.id} className="border-b last:border-0">
-                      <td className="py-2 pr-2 whitespace-nowrap">
-                        {formatKst(r.created_at)}
-                      </td>
-                      <td className="py-2 pr-2">
-                        <Badge variant="outline" className="text-[10px]">
-                          {r.provider}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-2">
-                        {OPERATION_LABELS[r.operation] ?? r.operation}
-                      </td>
-                      <td className="py-2 pr-2 text-muted-foreground">{r.model ?? "—"}</td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
-                        {r.input_tokens != null ? fmtNum(r.input_tokens) : "—"}
-                      </td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
-                        {r.output_tokens != null ? fmtNum(r.output_tokens) : "—"}
-                      </td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
-                        {r.image_count != null ? r.image_count : "—"}
-                      </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {fmtUsd(Number(r.estimated_cost_usd ?? 0))}
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="py-2 pr-2">시각</th>
+                      <th className="py-2 pr-2">Provider</th>
+                      <th className="py-2 pr-2">Operation</th>
+                      <th className="py-2 pr-2">Model</th>
+                      <th className="py-2 pr-2 text-right">Input</th>
+                      <th className="py-2 pr-2 text-right">Output</th>
+                      <th className="py-2 pr-2 text-right">Image</th>
+                      <th className="py-2 text-right">Cost</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {list.rows.map((r) => (
+                      <tr key={r.id} className="border-b last:border-0">
+                        <td className="py-2 pr-2 whitespace-nowrap">
+                          {formatKst(r.created_at)}
+                        </td>
+                        <td className="py-2 pr-2">
+                          <Badge variant="outline" className="text-[10px]">
+                            {r.provider}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-2">
+                          {OPERATION_LABELS[r.operation] ?? r.operation}
+                        </td>
+                        <td className="py-2 pr-2 text-muted-foreground">{r.model ?? "—"}</td>
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {r.input_tokens != null ? fmtNum(r.input_tokens) : "—"}
+                        </td>
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {r.output_tokens != null ? fmtNum(r.output_tokens) : "—"}
+                        </td>
+                        <td className="py-2 pr-2 text-right tabular-nums">
+                          {r.image_count != null ? r.image_count : "—"}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {fmtUsd(Number(r.estimated_cost_usd ?? 0))}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 text-xs">
+                  <span className="text-muted-foreground">
+                    페이지 {currentPage} / {totalPages}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <PageLink
+                      sp={sp}
+                      targetPage={1}
+                      disabled={currentPage === 1}
+                      label="« 처음"
+                    />
+                    <PageLink
+                      sp={sp}
+                      targetPage={currentPage - 1}
+                      disabled={currentPage === 1}
+                      label="‹ 이전"
+                    />
+                    <PageLink
+                      sp={sp}
+                      targetPage={currentPage + 1}
+                      disabled={currentPage === totalPages}
+                      label="다음 ›"
+                    />
+                    <PageLink
+                      sp={sp}
+                      targetPage={totalPages}
+                      disabled={currentPage === totalPages}
+                      label="끝 »"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function PageLink({
+  sp,
+  targetPage,
+  disabled,
+  label,
+}: {
+  sp: SearchParamsShape;
+  targetPage: number;
+  disabled: boolean;
+  label: string;
+}) {
+  const baseClass = "rounded-md px-2 py-1 border transition-colors";
+  if (disabled) {
+    return (
+      <span
+        aria-disabled
+        className={`${baseClass} text-muted-foreground opacity-40 cursor-not-allowed`}
+      >
+        {label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={buildUsageHref(sp, { page: String(targetPage) })}
+      className={`${baseClass} hover:bg-muted`}
+    >
+      {label}
+    </Link>
   );
 }

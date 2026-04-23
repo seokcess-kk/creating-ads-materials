@@ -89,15 +89,48 @@ export async function getUsageSummary(filter: UsageFilter = {}): Promise<UsageSu
   };
 }
 
-export async function getRecentUsage(limit: number = 50): Promise<UsageRow[]> {
+export interface UsageListFilter extends UsageFilter {
+  provider?: string;
+  operation?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface UsageListResult {
+  rows: UsageRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export async function getUsageList(filter: UsageListFilter = {}): Promise<UsageListResult> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = Math.min(500, Math.max(10, filter.pageSize ?? 50));
+  const rangeFrom = (page - 1) * pageSize;
+  const rangeTo = rangeFrom + pageSize - 1;
+
+  let query = supabase
     .from("api_usage")
-    .select("*")
+    .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
-    .limit(limit);
+    .range(rangeFrom, rangeTo);
+
+  if (filter.from) query = query.gte("created_at", filter.from.toISOString());
+  if (filter.to) query = query.lte("created_at", filter.to.toISOString());
+  if (filter.brandId) query = query.eq("brand_id", filter.brandId);
+  if (filter.campaignId) query = query.eq("campaign_id", filter.campaignId);
+  if (filter.provider) query = query.eq("provider", filter.provider);
+  if (filter.operation) query = query.eq("operation", filter.operation);
+
+  const { data, count, error } = await query;
   if (error) throw error;
-  return (data ?? []) as UsageRow[];
+  return {
+    rows: (data ?? []) as UsageRow[],
+    total: count ?? 0,
+    page,
+    pageSize,
+  };
 }
 
 export interface BrandUsageRow {
