@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getBrand, listFontPairs } from "@/lib/memory";
 import { FontManager } from "@/components/memory/FontManager";
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +19,18 @@ export default async function FontsPage({
   const pairs = await listFontPairs(brandId);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">Fonts</h1>
-          <p className="text-muted-foreground">역할별 폰트 조합 (Tier 0~3)</p>
-        </div>
-        <Link href={`/brands/${brandId}`}>
-          <Button variant="outline">← 대시보드</Button>
-        </Link>
-      </div>
+    <PageContainer size="narrow">
+      <PageHeader
+        title="Fonts"
+        description="역할별 폰트 조합 (Tier 0~3)"
+        overline={brand.name}
+        actions={
+          <Link href={`/brands/${brandId}`}>
+            <Button variant="outline">← 대시보드</Button>
+          </Link>
+        }
+      />
       <FontManager brandId={brandId} initialPairs={pairs} />
-    </div>
+    </PageContainer>
   );
 }

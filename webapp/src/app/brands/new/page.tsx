@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export default function NewBrandPage() {
   const router = useRouter();
@@ -111,13 +113,11 @@ export default function NewBrandPage() {
   }
 
   return (
-    <div className="max-w-xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">새 브랜드</h1>
-        <p className="text-muted-foreground">
-          기본 정보만 먼저 등록하고, 상세 메모리(Identity·Offer·Audience·BP·폰트)는 이후 섹션별로 입력합니다.
-        </p>
-      </div>
+    <PageContainer size="slim">
+      <PageHeader
+        title="새 브랜드"
+        description="기본 정보만 먼저 등록하고, 상세 메모리(Identity·Offer·Audience·BP·폰트)는 이후 섹션별로 입력합니다."
+      />
 
       <Card>
         <CardHeader>
@@ -198,6 +198,6 @@ export default function NewBrandPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/common/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -20,37 +23,42 @@ export default async function CampaignsListPage({
   const campaigns = await listCampaigns(brandId);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">Campaigns</h1>
-          <p className="text-muted-foreground">캠페인 {campaigns.length}개</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/brands/${brandId}`}>
-            <Button variant="outline">← 브랜드</Button>
-          </Link>
-          <Link href={`/brands/${brandId}/campaigns/new`}>
-            <Button>+ 새 캠페인</Button>
-          </Link>
-        </div>
-      </div>
+    <PageContainer size="narrow">
+      <PageHeader
+        title="Campaigns"
+        description={`캠페인 ${campaigns.length}개`}
+        overline={brand.name}
+        actions={
+          <>
+            <Link href={`/brands/${brandId}`}>
+              <Button variant="outline">← 브랜드</Button>
+            </Link>
+            <Link href={`/brands/${brandId}/campaigns/new`}>
+              <Button>+ 새 캠페인</Button>
+            </Link>
+          </>
+        }
+      />
 
       {campaigns.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">등록된 캠페인이 없습니다</p>
+        <EmptyState
+          icon="🚀"
+          title="등록된 캠페인이 없습니다"
+          description="Intent 입력 → Strategy·Copy·Visual 파이프라인으로 첫 캠페인을 시작하세요."
+          action={
             <Link href={`/brands/${brandId}/campaigns/new`}>
               <Button>첫 캠페인 시작</Button>
             </Link>
-          </CardContent>
-        </Card>
+          }
+        />
       ) : (
         <div className="space-y-3">
           {campaigns.map((c) => (
             <div key={c.id} className="relative">
-              <Link href={`/campaigns/${c.id}`}>
+              <Link
+                href={`/campaigns/${c.id}`}
+                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
                 <Card className="hover:border-primary/50 transition-colors cursor-pointer">
                   <CardHeader>
                     <div className="flex items-center gap-2 pr-10">
@@ -77,6 +85,6 @@ export default async function CampaignsListPage({
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

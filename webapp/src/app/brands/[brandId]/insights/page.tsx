@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
 import { RecomputeButton } from "@/components/insights/RecomputeButton";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
@@ -72,24 +74,24 @@ export default async function InsightsPage({
   const archiveCount = references.filter((r) => r.source_type === "own_archive").length;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs text-muted-foreground">
-            <Link href={`/brands/${brandId}`} className="hover:underline">
-              {brand.name}
-            </Link>
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight">Insights</h1>
-          <p className="text-muted-foreground">선호도 학습 현황</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/brands/${brandId}`}>
-            <Button variant="outline">← 대시보드</Button>
+    <PageContainer>
+      <PageHeader
+        title="Insights"
+        description="선호도 학습 현황"
+        overline={
+          <Link href={`/brands/${brandId}`} className="hover:underline">
+            {brand.name}
           </Link>
-          <RecomputeButton brandId={brandId} />
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <Link href={`/brands/${brandId}`}>
+              <Button variant="outline">← 대시보드</Button>
+            </Link>
+            <RecomputeButton brandId={brandId} />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
@@ -261,6 +263,6 @@ export default async function InsightsPage({
           </p>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

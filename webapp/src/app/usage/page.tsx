@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
 import { FilterChipGroup, type FilterOption } from "@/components/filters/FilterChipGroup";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
@@ -49,10 +51,10 @@ function buildUsageHref(
 ): string {
   const merged: SearchParamsShape = { ...current, ...overrides };
   const params = new URLSearchParams();
-  if (merged.period) params.set("period", merged.period);
+  if (merged.period && merged.period !== "month") params.set("period", merged.period);
   if (merged.provider) params.set("provider", merged.provider);
   if (merged.operation) params.set("operation", merged.operation);
-  if (merged.pageSize) params.set("pageSize", merged.pageSize);
+  if (merged.pageSize && merged.pageSize !== "50") params.set("pageSize", merged.pageSize);
   if (merged.page && merged.page !== "1") params.set("page", merged.page);
   const qs = params.toString();
   return qs ? `/usage?${qs}` : "/usage";
@@ -167,11 +169,11 @@ export default async function UsagePage({
   }));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">API Usage</h1>
-        <p className="text-muted-foreground">Claude · Gemini 호출 비용 추적</p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="API Usage"
+        description="Claude · Gemini 호출 비용 추적"
+      />
 
       <div>
         <FilterChipGroup
@@ -388,7 +390,7 @@ export default async function UsagePage({
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

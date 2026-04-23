@@ -28,6 +28,7 @@ import {
   type StepDef,
 } from "@/components/campaign/stepper-utils";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
+import { PageContainer } from "@/components/layout/PageContainer";
 
 export const dynamic = "force-dynamic";
 
@@ -174,7 +175,7 @@ export default async function CampaignPage({
   const initialStage = pickInitialStage(steps);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <PageContainer>
       <Breadcrumb
         items={[
           { label: "Brands", href: "/brands" },
@@ -307,6 +308,6 @@ export default async function CampaignPage({
           initialStage={shipStage}
         />
       </CampaignStepper>
-    </div>
+    </PageContainer>
   );
 }

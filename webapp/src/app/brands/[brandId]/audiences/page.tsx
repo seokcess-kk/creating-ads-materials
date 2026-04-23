@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getBrand, listAudiences } from "@/lib/memory";
 import { AudienceManager } from "@/components/memory/AudienceManager";
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +19,18 @@ export default async function AudiencesPage({
   const audiences = await listAudiences(brandId);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">Audiences</h1>
-          <p className="text-muted-foreground">타겟 페르소나</p>
-        </div>
-        <Link href={`/brands/${brandId}`}>
-          <Button variant="outline">← 대시보드</Button>
-        </Link>
-      </div>
+    <PageContainer size="narrow">
+      <PageHeader
+        title="Audiences"
+        description="타겟 페르소나"
+        overline={brand.name}
+        actions={
+          <Link href={`/brands/${brandId}`}>
+            <Button variant="outline">← 대시보드</Button>
+          </Link>
+        }
+      />
       <AudienceManager brandId={brandId} initial={audiences} />
-    </div>
+    </PageContainer>
   );
 }

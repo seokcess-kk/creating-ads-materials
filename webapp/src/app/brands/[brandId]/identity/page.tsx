@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getBrand, getIdentity } from "@/lib/memory";
 import { IdentityForm } from "@/components/memory/IdentityForm";
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -17,22 +19,22 @@ export default async function IdentityPage({
   const identity = await getIdentity(brandId);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">Identity</h1>
-          <p className="text-muted-foreground">보이스·금지어·컬러·로고</p>
-        </div>
-        <Link href={`/brands/${brandId}`}>
-          <Button variant="outline">← 대시보드</Button>
-        </Link>
-      </div>
+    <PageContainer size="narrow">
+      <PageHeader
+        title="Identity"
+        description="보이스·금지어·컬러·로고"
+        overline={brand.name}
+        actions={
+          <Link href={`/brands/${brandId}`}>
+            <Button variant="outline">← 대시보드</Button>
+          </Link>
+        }
+      />
       <IdentityForm
         brandId={brandId}
         initial={identity}
         brandWebsiteUrl={brand.website_url}
       />
-    </div>
+    </PageContainer>
   );
 }

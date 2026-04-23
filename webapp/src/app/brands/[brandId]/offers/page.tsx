@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getBrand, listOffers } from "@/lib/memory";
 import { OfferManager } from "@/components/memory/OfferManager";
 import { Button } from "@/components/ui/button";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -17,18 +19,18 @@ export default async function OffersPage({
   const offers = await listOffers(brandId);
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">Offers</h1>
-          <p className="text-muted-foreground">USP·가격·혜택·긴급성·증거</p>
-        </div>
-        <Link href={`/brands/${brandId}`}>
-          <Button variant="outline">← 대시보드</Button>
-        </Link>
-      </div>
+    <PageContainer size="narrow">
+      <PageHeader
+        title="Offers"
+        description="USP·가격·혜택·긴급성·증거"
+        overline={brand.name}
+        actions={
+          <Link href={`/brands/${brandId}`}>
+            <Button variant="outline">← 대시보드</Button>
+          </Link>
+        }
+      />
       <OfferManager brandId={brandId} initial={offers} />
-    </div>
+    </PageContainer>
   );
 }

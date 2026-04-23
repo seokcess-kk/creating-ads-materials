@@ -4,10 +4,14 @@ import { listBrands } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import type { Campaign } from "@/lib/campaigns/types";
 import { formatKst } from "@/lib/format/date";
 import { FilterChipGroup, type FilterOption } from "@/components/filters/FilterChipGroup";
+import { PageContainer } from "@/components/layout/PageContainer";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState } from "@/components/common/EmptyState";
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +47,11 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Campaigns</h1>
-        <p className="text-muted-foreground">전체 브랜드의 캠페인 목록</p>
-      </div>
+    <PageContainer>
+      <PageHeader
+        title="Campaigns"
+        description="전체 브랜드의 캠페인 목록"
+      />
 
       <div>
         <FilterChipGroup
@@ -59,13 +63,23 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
       </div>
 
       {campaigns.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {currentStatus === "all"
-              ? "아직 생성된 캠페인이 없습니다. 브랜드 페이지에서 새 캠페인을 만들어보세요."
-              : `${STATUS_FILTERS.find((f) => f.id === currentStatus)?.label} 상태 캠페인이 없습니다.`}
-          </CardContent>
-        </Card>
+        currentStatus === "all" ? (
+          <EmptyState
+            icon="📭"
+            title="아직 생성된 캠페인이 없습니다"
+            description="브랜드 페이지에서 Intent 입력으로 새 캠페인을 시작하세요."
+            action={
+              <Link href="/brands">
+                <Button variant="outline">브랜드로 이동</Button>
+              </Link>
+            }
+          />
+        ) : (
+          <EmptyState
+            title={`${STATUS_FILTERS.find((f) => f.id === currentStatus)?.label} 상태 캠페인이 없습니다`}
+            description="다른 상태 필터로 전환해 보세요."
+          />
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {campaigns.map((c) => {
@@ -73,7 +87,10 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
             const channel = getChannel(c.channel);
             return (
               <div key={c.id} className="relative">
-                <Link href={`/campaigns/${c.id}`}>
+                <Link
+                  href={`/campaigns/${c.id}`}
+                  className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
+                >
                 <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
                   <CardHeader className="pb-2">
                     {brand && (
@@ -146,6 +163,6 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
           })}
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
