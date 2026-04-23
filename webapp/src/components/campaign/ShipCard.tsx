@@ -14,6 +14,7 @@ import {
   previewLayoutClass,
   type ChannelAspectRatio,
 } from "./aspect-layout";
+import { formatKst } from "@/lib/format/date";
 
 interface ShipCardProps {
   campaignId: string;
@@ -206,7 +207,7 @@ export function ShipCard({
                 <p className="text-xs font-medium">주관 평가</p>
                 {run?.rated_at && (
                   <span className="text-[10px] text-muted-foreground">
-                    마지막 저장: {new Date(run.rated_at).toLocaleString()}
+                    마지막 저장: {formatKst(run.rated_at)}
                   </span>
                 )}
               </div>

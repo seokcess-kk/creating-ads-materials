@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import type { Campaign } from "@/lib/campaigns/types";
+import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
@@ -125,7 +126,7 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
                       </Badge>
                     </div>
                     <p className="text-[10px] text-muted-foreground">
-                      {new Date(c.created_at).toLocaleDateString("ko", {
+                      {formatKst(c.created_at, {
                         month: "short",
                         day: "numeric",
                       })}{" "}

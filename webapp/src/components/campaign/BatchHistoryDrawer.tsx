@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import type { BatchSummary, CreativeStageName } from "@/lib/campaigns/types";
+import { formatKst } from "@/lib/format/date";
 
 interface BatchHistoryDrawerProps {
   campaignId: string;
@@ -129,7 +130,7 @@ export function BatchHistoryDrawer({
                       </span>
                     </div>
                     <span className="text-[10px] text-muted-foreground">
-                      {new Date(b.created_at).toLocaleString("ko", {
+                      {formatKst(b.created_at, {
                         month: "short",
                         day: "numeric",
                         hour: "2-digit",

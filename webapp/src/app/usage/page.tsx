@@ -8,6 +8,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
+import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
@@ -217,7 +218,7 @@ export default async function UsagePage({
                   {recent.map((r) => (
                     <tr key={r.id} className="border-b last:border-0">
                       <td className="py-2 pr-2 whitespace-nowrap">
-                        {new Date(r.created_at).toLocaleString()}
+                        {formatKst(r.created_at)}
                       </td>
                       <td className="py-2 pr-2">
                         <Badge variant="outline" className="text-[10px]">

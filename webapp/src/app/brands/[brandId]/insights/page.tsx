@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
 import { RecomputeButton } from "@/components/insights/RecomputeButton";
+import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
@@ -248,7 +249,7 @@ export default async function InsightsPage({
 
       {learnings?.computed_at && (
         <p className="text-[11px] text-muted-foreground text-right">
-          마지막 재계산: {new Date(learnings.computed_at).toLocaleString()}
+          마지막 재계산: {formatKst(learnings.computed_at)}
         </p>
       )}
 
