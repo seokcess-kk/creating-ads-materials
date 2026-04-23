@@ -36,7 +36,8 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
   const [uploading, setUploading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importUrl, setImportUrl] = useState("");
+  const [importImageUrl, setImportImageUrl] = useState("");
+  const [importSourceUrl, setImportSourceUrl] = useState("");
   const [importing, setImporting] = useState(false);
 
   async function uploadOne(file: File): Promise<BrandReference | null> {
@@ -119,16 +120,18 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
   }
 
   async function importFromUrl() {
-    const url = importUrl.trim();
-    if (!url) return;
+    const imageUrl = importImageUrl.trim();
+    const sourceUrl = importSourceUrl.trim();
+    if (!imageUrl && !sourceUrl) return;
     setImporting(true);
-    toast.info("URL에서 광고 크리에이티브 가져오는 중...");
+    toast.info("광고 크리에이티브 가져오는 중...");
     try {
       const res = await fetch(`/api/brands/${brandId}/references/import-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
+          image_url: imageUrl || undefined,
+          source_url: sourceUrl || undefined,
           source_type: sourceType,
           source_note: sourceNote || null,
           is_negative: isNegative,
@@ -140,7 +143,8 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
       if (!res.ok) throw new Error(data?.error ?? "임포트 실패");
       const reference = data.reference as BrandReference;
       setList((prev) => [reference, ...prev]);
-      setImportUrl("");
+      setImportImageUrl("");
+      setImportSourceUrl("");
       toast.success(`${data?.meta?.platform ?? "광고"} 임포트 완료`);
       router.refresh();
     } catch (e) {
@@ -284,27 +288,43 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               업로드 즉시 Claude Vision이 8축으로 자동 분석
             </p>
           </label>
-          <div className="pt-4 border-t space-y-2">
-            <Label>URL로 가져오기</Label>
-            <p className="text-xs text-muted-foreground">
-              Google Ads Transparency · Meta Ad Library · TikTok Creative Center의 광고 공유 URL을 붙여넣으면
-              썸네일(og:image)을 자동 추출해 Vision 분석까지 수행합니다.
-            </p>
-            <div className="flex gap-2">
+          <div className="pt-4 border-t space-y-3">
+            <div>
+              <Label>URL로 가져오기</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                이미지 URL(필수)과 원본 광고 URL(선택)을 입력하면 Vision 분석까지 자동 수행합니다.
+                ATC는 크리에이티브 우클릭 → 이미지 주소 복사로 얻을 수 있습니다.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">이미지 URL *</Label>
               <Input
-                value={importUrl}
-                onChange={(e) => setImportUrl(e.target.value)}
-                placeholder="https://www.facebook.com/ads/library/?id=... / https://adstransparency.google.com/... / https://ads.tiktok.com/business/creativecenter/..."
+                value={importImageUrl}
+                onChange={(e) => setImportImageUrl(e.target.value)}
+                placeholder="https://tpc.googlesyndication.com/simgad/... (광고 크리에이티브 이미지 URL)"
                 disabled={importing || uploading}
               />
-              <Button
-                type="button"
-                onClick={importFromUrl}
-                disabled={importing || uploading || !importUrl.trim()}
-              >
-                {importing ? "가져오는 중..." : "가져오기"}
-              </Button>
             </div>
+            <div className="space-y-2">
+              <Label className="text-xs">원본 광고 URL (선택 — 중복 방지·추적용)</Label>
+              <Input
+                value={importSourceUrl}
+                onChange={(e) => setImportSourceUrl(e.target.value)}
+                placeholder="https://adstransparency.google.com/... / https://www.facebook.com/ads/library/?id=..."
+                disabled={importing || uploading}
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={importFromUrl}
+              disabled={
+                importing ||
+                uploading ||
+                (!importImageUrl.trim() && !importSourceUrl.trim())
+              }
+            >
+              {importing ? "가져오는 중..." : "가져오기"}
+            </Button>
           </div>
         </CardContent>
       </Card>

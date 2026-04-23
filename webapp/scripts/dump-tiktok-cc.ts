@@ -112,8 +112,8 @@ async function importCard(
     ? `TikTok Top #${card.rank + 1} · ${card.advertiser}`
     : `TikTok Top #${card.rank + 1}`;
   const body = {
-    url: card.detailUrl,
-    override_image_url: card.imageUrl,
+    image_url: card.imageUrl,
+    source_url: card.detailUrl,
     override_title: card.advertiser,
     source_type: "industry" as const,
     source_note: note,
