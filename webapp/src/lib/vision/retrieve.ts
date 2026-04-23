@@ -135,11 +135,42 @@ export async function embedAndStoreBP(input: EmbedBPInput): Promise<void> {
 export interface RelevantBPMatch {
   reference: BrandReference;
   similarity: number;
+  finalScore: number;
+}
+
+const DEFAULT_WEIGHT = 50;
+
+/**
+ * weight(0~100, default 50) → 0.5 ~ 1.5 배수.
+ * ship 평점으로 재가중된 자사 학습 신호를 반영한다.
+ */
+function weightMultiplier(w: number | null | undefined): number {
+  const v = w ?? DEFAULT_WEIGHT;
+  return 0.5 + v / 100;
+}
+
+/**
+ * performance_score(1~5, null=미평가) → 0.7 ~ 1.3 배수.
+ * 미평가(null)는 1.0(중립)으로 취급해 수동 큐레이션 부담을 줄인다.
+ */
+function performanceMultiplier(score: number | null | undefined): number {
+  if (score == null) return 1.0;
+  return 0.7 + ((score - 1) / 4) * 0.6;
+}
+
+function combineScore(
+  similarity: number,
+  weight: number | null | undefined,
+  performanceScore: number | null | undefined,
+): number {
+  return similarity * weightMultiplier(weight) * performanceMultiplier(performanceScore);
 }
 
 /**
  * brand_id 내에서 쿼리 텍스트와 의미상 가까운 BP Top-K 검색.
- * Supabase RPC match_brand_references 사용.
+ * RPC는 유사도 기반 상위 N(=limit*3)을 과다추출(over-fetch)하고,
+ * TS 레이어에서 weight·performance_score를 곱해 최종 점수로 재정렬한다.
+ * 이렇게 하면 공식 튜닝이 SQL 재배포 없이 가능하다.
  */
 export async function retrieveRelevantBPs(
   brandId: string,
@@ -151,6 +182,8 @@ export async function retrieveRelevantBPs(
   },
 ): Promise<RelevantBPMatch[]> {
   if (!queryText.trim()) return [];
+  const limit = opts?.limit ?? 5;
+  const overFetch = Math.min(30, limit * 3);
   const queryVector = await embedText({
     text: queryText,
     taskType: "RETRIEVAL_QUERY",
@@ -160,18 +193,25 @@ export async function retrieveRelevantBPs(
   const { data, error } = await supabase.rpc("match_brand_references", {
     p_brand_id: brandId,
     p_embedding: queryVector,
-    p_limit: opts?.limit ?? 5,
+    p_limit: overFetch,
     p_min_similarity: opts?.minSimilarity ?? 0.3,
   });
   if (error) throw error;
-  const rows = (data ?? []) as Array<{ id: string; similarity: number }>;
-  const results: RelevantBPMatch[] = [];
+  const rows = (data ?? []) as Array<{
+    id: string;
+    similarity: number;
+    weight: number | null;
+    performance_score: number | null;
+  }>;
+  const scored: RelevantBPMatch[] = [];
   for (const row of rows) {
     const ref = await getReference(row.id);
     if (!ref) continue;
-    results.push({ reference: ref, similarity: row.similarity });
+    const finalScore = combineScore(row.similarity, row.weight, row.performance_score);
+    scored.push({ reference: ref, similarity: row.similarity, finalScore });
   }
-  return results;
+  scored.sort((a, b) => b.finalScore - a.finalScore);
+  return scored.slice(0, limit);
 }
 
 /**
@@ -189,7 +229,9 @@ export function formatRelevantBPsDigest(matches: RelevantBPMatch[]): string {
       if (a.color?.mood) parts.push(`mood=${a.color.mood}`);
       if (a.brandElements?.ctaStyle) parts.push(`cta=${a.brandElements.ctaStyle}`);
       const tag = m.reference.is_negative ? " [NEG]" : "";
-      return `  Rel#${i + 1} (sim=${m.similarity.toFixed(2)}, w=${m.reference.weight}${tag}): ${parts.join(", ")}`;
+      const perf = m.reference.performance_score;
+      const perfTag = perf != null ? `, perf=${perf}` : "";
+      return `  Rel#${i + 1} (score=${m.finalScore.toFixed(2)}, sim=${m.similarity.toFixed(2)}, w=${m.reference.weight}${perfTag}${tag}): ${parts.join(", ")}`;
     })
     .join("\n");
 }

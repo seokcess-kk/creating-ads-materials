@@ -33,6 +33,7 @@ const PostSchema = z.object({
   source_note: z.string().max(500).nullable().optional(),
   is_negative: z.boolean().optional(),
   weight: z.number().min(0).max(100).optional(),
+  performance_score: z.number().int().min(1).max(5).nullable().optional(),
 });
 
 export async function POST(
@@ -50,6 +51,7 @@ export async function POST(
       source_note: input.source_note ?? null,
       is_negative: input.is_negative ?? false,
       weight: input.weight ?? 50,
+      performance_score: input.performance_score ?? null,
     });
 
     try {

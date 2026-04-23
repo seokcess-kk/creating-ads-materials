@@ -9,8 +9,10 @@ const REFERENCE_FIELDS = [
   "file_name",
   "source_type",
   "source_note",
+  "source_url",
   "is_negative",
   "weight",
+  "performance_score",
   "vision_analysis_json",
   "vision_prompt_version",
   "vision_status",
@@ -44,13 +46,30 @@ export async function getReference(referenceId: string): Promise<BrandReference 
   return (data as unknown as BrandReference | null) ?? null;
 }
 
+export async function getReferenceBySourceUrl(
+  brandId: string,
+  sourceUrl: string,
+): Promise<BrandReference | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("brand_references")
+    .select(REFERENCE_FIELDS)
+    .eq("brand_id", brandId)
+    .eq("source_url", sourceUrl)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as unknown as BrandReference | null) ?? null;
+}
+
 export interface ReferenceInput {
   file_url: string;
   file_name?: string | null;
   source_type?: ReferenceSource;
   source_note?: string | null;
+  source_url?: string | null;
   is_negative?: boolean;
   weight?: number;
+  performance_score?: number | null;
 }
 
 export async function createReference(
@@ -66,8 +85,10 @@ export async function createReference(
       file_name: input.file_name ?? null,
       source_type: input.source_type ?? "bp_upload",
       source_note: input.source_note ?? null,
+      source_url: input.source_url ?? null,
       is_negative: input.is_negative ?? false,
       weight: input.weight ?? 50,
+      performance_score: input.performance_score ?? null,
       vision_status: "pending",
     })
     .select()
@@ -81,6 +102,18 @@ export async function updateReferenceWeight(referenceId: string, weight: number)
   const { error } = await supabase
     .from("brand_references")
     .update({ weight })
+    .eq("id", referenceId);
+  if (error) throw error;
+}
+
+export async function updateReferencePerformance(
+  referenceId: string,
+  score: number | null,
+): Promise<void> {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("brand_references")
+    .update({ performance_score: score })
     .eq("id", referenceId);
   if (error) throw error;
 }

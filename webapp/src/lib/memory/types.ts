@@ -112,8 +112,10 @@ export interface BrandReference {
   file_name: string | null;
   source_type: ReferenceSource;
   source_note: string | null;
+  source_url: string | null;
   is_negative: boolean;
   weight: number;
+  performance_score: number | null;
   vision_analysis_json: VisionAnalysis;
   vision_prompt_version: string | null;
   vision_status: VisionStatus;

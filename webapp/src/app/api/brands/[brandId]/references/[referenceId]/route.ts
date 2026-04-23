@@ -1,10 +1,19 @@
 import { z } from "zod";
-import { deleteReference, updateReferenceWeight } from "@/lib/memory";
-import { ok, parseJson, serverError } from "@/lib/api-utils";
+import {
+  deleteReference,
+  updateReferencePerformance,
+  updateReferenceWeight,
+} from "@/lib/memory";
+import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
-const PatchSchema = z.object({
-  weight: z.number().int().min(0).max(100),
-});
+const PatchSchema = z
+  .object({
+    weight: z.number().int().min(0).max(100).optional(),
+    performance_score: z.number().int().min(1).max(5).nullable().optional(),
+  })
+  .refine((v) => v.weight !== undefined || v.performance_score !== undefined, {
+    message: "weight 또는 performance_score 중 하나는 필요합니다",
+  });
 
 export async function PATCH(
   request: Request,
@@ -12,10 +21,16 @@ export async function PATCH(
 ) {
   try {
     const { referenceId } = await params;
-    const { weight } = await parseJson(request, PatchSchema);
-    await updateReferenceWeight(referenceId, weight);
+    const input = await parseJson(request, PatchSchema);
+    if (input.weight !== undefined) {
+      await updateReferenceWeight(referenceId, input.weight);
+    }
+    if (input.performance_score !== undefined) {
+      await updateReferencePerformance(referenceId, input.performance_score);
+    }
     return ok({ success: true });
   } catch (e) {
+    if (e instanceof ApiError) return serverError(e);
     return serverError(e);
   }
 }

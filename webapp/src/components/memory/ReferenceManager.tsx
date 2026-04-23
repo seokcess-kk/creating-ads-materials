@@ -32,9 +32,12 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
   const [sourceNote, setSourceNote] = useState("");
   const [isNegative, setIsNegative] = useState(false);
   const [weight, setWeight] = useState(50);
+  const [performanceScore, setPerformanceScore] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
 
   async function uploadOne(file: File): Promise<BrandReference | null> {
     const resized = await resizeImageFile(file, { maxEdge: 2048, quality: 0.9 });
@@ -49,6 +52,7 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
         source_note: sourceNote || null,
         is_negative: isNegative,
         weight,
+        performance_score: performanceScore,
       }),
     });
     if (!res.ok) {
@@ -95,6 +99,54 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
       if (!res.ok) throw new Error("저장 실패");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
+    }
+  }
+
+  async function changePerformance(id: string, score: number | null) {
+    setList((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, performance_score: score } : r)),
+    );
+    try {
+      const res = await fetch(`/api/brands/${brandId}/references/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ performance_score: score }),
+      });
+      if (!res.ok) throw new Error("저장 실패");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    }
+  }
+
+  async function importFromUrl() {
+    const url = importUrl.trim();
+    if (!url) return;
+    setImporting(true);
+    toast.info("URL에서 광고 크리에이티브 가져오는 중...");
+    try {
+      const res = await fetch(`/api/brands/${brandId}/references/import-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url,
+          source_type: sourceType,
+          source_note: sourceNote || null,
+          is_negative: isNegative,
+          weight,
+          performance_score: performanceScore,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "임포트 실패");
+      const reference = data.reference as BrandReference;
+      setList((prev) => [reference, ...prev]);
+      setImportUrl("");
+      toast.success(`${data?.meta?.platform ?? "광고"} 임포트 완료`);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -180,6 +232,24 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
             </div>
           </div>
           <div className="space-y-2">
+            <Label>성과 점수 (선택, 1=실패 · 5=대박)</Label>
+            <select
+              value={performanceScore ?? ""}
+              onChange={(e) =>
+                setPerformanceScore(e.target.value === "" ? null : Number(e.target.value))
+              }
+              disabled={uploading}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">미평가</option>
+              <option value="1">1 — 실패</option>
+              <option value="2">2</option>
+              <option value="3">3 — 평균</option>
+              <option value="4">4</option>
+              <option value="5">5 — 대박</option>
+            </select>
+          </div>
+          <div className="space-y-2">
             <Label>메모 (선택)</Label>
             <Input
               value={sourceNote}
@@ -204,7 +274,7 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               accept="image/*"
               multiple
               onChange={(e) => handleFiles(e.target.files)}
-              disabled={uploading}
+              disabled={uploading || importing}
               className="hidden"
             />
             <p className="text-sm text-muted-foreground">
@@ -214,6 +284,28 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               업로드 즉시 Claude Vision이 8축으로 자동 분석
             </p>
           </label>
+          <div className="pt-4 border-t space-y-2">
+            <Label>URL로 가져오기</Label>
+            <p className="text-xs text-muted-foreground">
+              Google Ads Transparency · Meta Ad Library · TikTok Creative Center의 광고 공유 URL을 붙여넣으면
+              썸네일(og:image)을 자동 추출해 Vision 분석까지 수행합니다.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                placeholder="https://www.facebook.com/ads/library/?id=... / https://adstransparency.google.com/... / https://ads.tiktok.com/business/creativecenter/..."
+                disabled={importing || uploading}
+              />
+              <Button
+                type="button"
+                onClick={importFromUrl}
+                disabled={importing || uploading || !importUrl.trim()}
+              >
+                {importing ? "가져오는 중..." : "가져오기"}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -237,6 +329,16 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                         <p className="text-sm font-medium truncate">{r.file_name}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
                           <Badge variant="outline">{SOURCE_LABELS[r.source_type]}</Badge>
+                          {r.source_url && (
+                            <a
+                              href={r.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-xs text-muted-foreground underline hover:text-primary"
+                            >
+                              원본 광고 ↗
+                            </a>
+                          )}
                           {r.is_negative && <Badge variant="destructive">negative</Badge>}
                           {r.vision_status === "ready" && (
                             <Badge variant="secondary">분석 완료</Badge>
@@ -282,6 +384,26 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                         className="flex-1"
                       />
                       <span className="w-10 text-xs text-right">{r.weight}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-16">성과</span>
+                      <select
+                        value={r.performance_score ?? ""}
+                        onChange={(e) =>
+                          changePerformance(
+                            r.id,
+                            e.target.value === "" ? null : Number(e.target.value),
+                          )
+                        }
+                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                      >
+                        <option value="">미평가</option>
+                        <option value="1">1 실패</option>
+                        <option value="2">2</option>
+                        <option value="3">3 평균</option>
+                        <option value="4">4</option>
+                        <option value="5">5 대박</option>
+                      </select>
                     </div>
                     {r.vision_error && (
                       <p className="text-xs text-destructive">오류: {r.vision_error}</p>
