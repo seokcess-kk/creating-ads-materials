@@ -213,6 +213,9 @@ export function RetouchStudio({
   }
 
   const isStale = stage?.status === "stale";
+  // Visual 변경으로 이전 variants가 archive되어 빈 상태가 된 경우 — 일반 stale 경고 대신
+  // "새 Visual 기준으로 처음부터 시작" 안내로 대체한다.
+  const isFreshRestartNeeded = isStale && variants.length === 0;
 
   return (
     <Card>
@@ -231,14 +234,27 @@ export function RetouchStudio({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isStale && (
+        {isFreshRestartNeeded ? (
+          <div className="border border-amber-500/60 bg-amber-500/5 rounded-md p-3 flex items-start gap-3">
+            <span className="text-lg" aria-hidden>
+              🔄
+            </span>
+            <div className="flex-1 text-sm">
+              <p className="font-medium">Visual이 변경되었습니다</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                이전 편집 이력은 히스토리로 보관되었습니다. 새 Visual 기준으로 수정 지시를
+                입력하고 &lsquo;턴 추가&rsquo;를 눌러 시작하세요.
+              </p>
+            </div>
+          </div>
+        ) : isStale ? (
           <StaleBanner
             stage="Retouch"
             upstreamStage="Visual"
             onRegenerate={run}
             running={running}
           />
-        )}
+        ) : null}
         <div className={`grid ${previewLayoutClass(aspectRatio)}`}>
           <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">

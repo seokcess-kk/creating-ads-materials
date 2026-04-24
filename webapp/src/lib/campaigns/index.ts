@@ -249,13 +249,20 @@ export async function markDownstreamStale(
   if (downstream.length === 0) return;
   const supabase = createAdminClient();
   // ready 상태만 stale로 전환 (pending/running/failed는 그대로)
-  const { error } = await supabase
+  const { data: staled, error } = await supabase
     .from("creative_stages")
     .update({ status: "stale" })
     .eq("run_id", runId)
     .in("stage", downstream)
-    .eq("status", "ready");
+    .eq("status", "ready")
+    .select("id");
   if (error) throw error;
+  // stale로 전환된 stage의 활성 variants는 archive 처리.
+  // upstream이 바뀌었으므로 이전 결과는 더 이상 valid하지 않음.
+  // 히스토리는 BatchHistoryDrawer에서 복원 가능.
+  for (const s of (staled ?? []) as Array<{ id: string }>) {
+    await archiveActiveBatches(s.id);
+  }
 }
 
 export async function getStage(
