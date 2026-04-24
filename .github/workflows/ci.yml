@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  webapp:
+    name: webapp (lint / test / typecheck / build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webapp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint --max-warnings=0 .
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        env:
+          # 빌드 시 env 검증을 통과시키기 위한 더미 값 — 런타임 접근 전이라 실제 키가 없어도 된다.
+          ANTHROPIC_API_KEY: ci-dummy
+          GEMINI_API_KEY: ci-dummy
+          NEXT_PUBLIC_SUPABASE_URL: https://ci.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy
+          SUPABASE_SERVICE_ROLE_KEY: ci-dummy
+        run: npm run build

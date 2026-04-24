@@ -61,6 +61,16 @@ npm run test         # vitest unit tests
 npm run test:e2e     # playwright smoke tests (dev 서버가 실행 중이어야 함)
 ```
 
+### Windows 개발자용 팁
+
+- 소스 파일은 모두 UTF-8로 저장된다. PowerShell/cmd에서 한국어가 `?`나 `□`로 보이면 콘솔 코드 페이지 때문이다. 다음 중 하나로 해결:
+  ```powershell
+  chcp 65001            # 현재 세션만
+  # 또는 Windows Terminal에서 기본 폰트를 "Cascadia Mono" 등으로
+  ```
+- Git의 `core.autocrlf`는 true로 둬도 무해하다. 저장소에 들어갈 때 LF로 정규화된다.
+- Vitest는 v3(esbuild)을 쓴다. v4(rolldown)의 네이티브 바이너리가 Windows Application Control 정책에 막히는 경우가 있어 의도적으로 v3으로 고정했다.
+
 ## 주요 디렉터리
 
 ```
