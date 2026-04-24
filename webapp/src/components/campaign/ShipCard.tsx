@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   type ChannelAspectRatio,
 } from "./aspect-layout";
 import { formatKst } from "@/lib/format/date";
+import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 interface ShipCardProps {
   campaignId: string;
@@ -39,17 +40,12 @@ export function ShipCard({
 }: ShipCardProps) {
   const ac = aspectClass(aspectRatio);
   const router = useRouter();
-  const [run, setRun] = useState<CreativeRun | null>(initialRun);
-  const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
+  const [run, setRun] = useStateFromProps<CreativeRun | null>(initialRun);
+  const [stage] = useStateFromProps<CreativeStageRow | null>(initialStage);
   const [finalizing, setFinalizing] = useState(false);
-  const [rating, setRating] = useState<number | null>(initialRun?.rating ?? null);
-  const [note, setNote] = useState<string>(initialRun?.note ?? "");
+  const [rating, setRating] = useStateFromProps<number | null>(initialRun?.rating ?? null);
+  const [note, setNote] = useStateFromProps<string>(initialRun?.note ?? "");
   const [savingRating, setSavingRating] = useState(false);
-
-  useEffect(() => setRun(initialRun), [initialRun]);
-  useEffect(() => setStage(initialStage), [initialStage]);
-  useEffect(() => setRating(initialRun?.rating ?? null), [initialRun?.rating]);
-  useEffect(() => setNote(initialRun?.note ?? ""), [initialRun?.note]);
 
   async function saveRating() {
     setSavingRating(true);

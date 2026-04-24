@@ -637,7 +637,7 @@ function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove 
       }
     >
       <div className="aspect-square rounded bg-muted/40 border flex items-center justify-center overflow-hidden relative">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        { }
         <img
           src={logo.url}
           alt={logo.label ?? "logo"}

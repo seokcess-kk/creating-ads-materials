@@ -287,7 +287,7 @@ export async function POST(
       }
 
       // 배치 Validator: 생성된 variant들을 한 번의 Claude 호출로 평가 (기존 N회 → 1회).
-      let scoresMap = new Map<string, Record<string, unknown>>();
+      const scoresMap = new Map<string, Record<string, unknown>>();
       try {
         const batchResult = await validateVisualImagesBatch(
           generated.map((g) => ({

@@ -235,7 +235,6 @@ export default async function CampaignPage({
       {memoryForDefaults && (
         <BrandContextPanel
           brandId={campaign.brand_id}
-          brandName={brand?.name ?? ""}
           identity={memoryForDefaults.identity}
           offer={
             memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null

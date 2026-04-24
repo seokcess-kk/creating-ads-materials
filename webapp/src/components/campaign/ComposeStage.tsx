@@ -18,6 +18,7 @@ import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const COMPOSE_STEPS = [
   { label: "로고 · base 이미지 준비", atSec: 0 },
@@ -127,8 +128,8 @@ export function ComposeStage({
           ? "aspect-[16/9]"
           : "aspect-square";
   const router = useRouter();
-  const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
-  const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
+  const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
+  const [variants, setVariants] = useStateFromProps<CreativeVariant[]>(initialVariants);
   const [running, setRunning] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const { startOp, completeOp, failOp } = useNotifications();
@@ -138,7 +139,10 @@ export function ComposeStage({
   const [xRatio, setXRatio] = useState<number>(0);
   const [yRatio, setYRatio] = useState<number>(0);
   const [initialized, setInitialized] = useState(false);
-  const [baseAspectRatio, setBaseAspectRatio] = useState<string | null>(null);
+  const [baseAspectLoad, setBaseAspectLoad] = useState<{ url: string; aspect: string } | null>(
+    null,
+  );
+  const baseAspectRatio = baseAspectLoad && baseAspectLoad.url === baseImageUrl ? baseAspectLoad.aspect : null;
   const [selectedLogoUrl, setSelectedLogoUrl] = useState<string | null>(
     logoDefaults.logoUrl ?? null,
   );
@@ -152,9 +156,6 @@ export function ComposeStage({
     rectW: number;
     rectH: number;
   } | null>(null);
-
-  useEffect(() => setStage(initialStage), [initialStage]);
-  useEffect(() => setVariants(initialVariants), [initialVariants]);
 
   useStagePolling({
     campaignId,
@@ -198,14 +199,11 @@ export function ComposeStage({
   ]);
 
   useEffect(() => {
-    if (!baseImageUrl) {
-      setBaseAspectRatio(null);
-      return;
-    }
+    if (!baseImageUrl) return;
     const img = new Image();
     img.onload = () => {
       if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        setBaseAspectRatio(`${img.naturalWidth} / ${img.naturalHeight}`);
+        setBaseAspectLoad({ url: baseImageUrl, aspect: `${img.naturalWidth} / ${img.naturalHeight}` });
       }
     };
     img.src = baseImageUrl;
@@ -410,7 +408,7 @@ export function ComposeStage({
                           }
                           title={logo.label ?? (logo.is_primary ? "기본" : "")}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          { }
                           <img
                             src={logo.url}
                             alt={logo.label ?? "logo"}
@@ -445,7 +443,7 @@ export function ComposeStage({
                   baseAspectRatio ? "" : `${previewAspectClass}`
                 } mx-auto rounded-md border bg-muted/30 overflow-hidden select-none`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+                { }
                 <img
                   src={baseImageUrl}
                   alt="base"
@@ -466,7 +464,7 @@ export function ComposeStage({
                       height: `${logoHRatio * 100}%`,
                     }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    { }
                     <img
                       src={selectedLogoUrl ?? logoDefaults.logoUrl ?? ""}
                       alt="logo"
@@ -650,7 +648,7 @@ export function ComposeStage({
                     className={`${previewAspectClass} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
                   >
                     <a href={c.url} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      { }
                       <img src={c.url} alt="composed" className="w-full h-full object-contain" />
                     </a>
                   </div>

@@ -5,7 +5,6 @@ import { listCampaigns } from "@/lib/campaigns";
 import { recomputeLearnings, topN } from "@/lib/learning";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { BarList } from "@/components/insights/BarList";
 import { RecomputeButton } from "@/components/insights/RecomputeButton";
 import { PageContainer } from "@/components/layout/PageContainer";

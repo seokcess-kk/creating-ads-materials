@@ -88,6 +88,9 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
   }
 
   useEffect(() => {
+    // 마운트 시 폰트 목록 초기 조회 — 외부 fetch 트리거. runSearch는 검색/필터 상태를 참조하지만
+    // 초기 1회만 실행해야 하므로 의존성 분석에서 제외한다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

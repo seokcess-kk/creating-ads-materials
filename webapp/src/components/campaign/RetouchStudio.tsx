@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const RETOUCH_STEPS = [
   { label: "base 이미지 다운로드", atSec: 0 },
@@ -56,8 +57,8 @@ export function RetouchStudio({
 }: RetouchStudioProps) {
   const router = useRouter();
   const ac = aspectClass(aspectRatio);
-  const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
-  const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
+  const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
+  const [variants, setVariants] = useStateFromProps<CreativeVariant[]>(initialVariants);
   const [instruction, setInstruction] = useState("");
   const [strict, setStrict] = useState(false);
   const [baseVariantId, setBaseVariantId] = useState<string | null>(null);
@@ -65,9 +66,6 @@ export function RetouchStudio({
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
-
-  useEffect(() => setStage(initialStage), [initialStage]);
-  useEffect(() => setVariants(initialVariants), [initialVariants]);
 
   useStagePolling({
     campaignId,

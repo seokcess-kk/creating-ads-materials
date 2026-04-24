@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -26,7 +26,7 @@ export function BatchHistoryDrawer({
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(
@@ -40,12 +40,15 @@ export function BatchHistoryDrawer({
     } finally {
       setLoading(false);
     }
-  }
+  }, [campaignId, stage]);
 
   useEffect(() => {
+    // drawer가 열릴 때 / refreshToken이 바뀔 때만 서버 조회. 외부 fetch 트리거라 setState-in-effect가 불가피.
+    // refreshToken은 deps에 쓰이지만 변수 자체는 body에서 안 쓰므로 의존성 분석에서 참조 유도 목적이다.
+    void refreshToken;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, refreshToken]);
+  }, [open, refreshToken, load]);
 
   async function restore(batchId: string) {
     setRestoring(batchId);

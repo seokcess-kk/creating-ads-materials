@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,10 @@ import type { CreativeRun, CreativeStageRow, CreativeVariant } from "@/lib/campa
 import type { StrategyAlternative } from "@/lib/prompts/strategy";
 import { BatchRegenerateBox, type RegenMode } from "./BatchRegenerateBox";
 import { BatchHistoryDrawer } from "./BatchHistoryDrawer";
-import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const STRATEGY_STEPS = [
   { label: "브랜드 메모리 로드", atSec: 0 },
@@ -42,17 +42,13 @@ export function StrategyGate({
   initialVariants,
 }: StrategyGateProps) {
   const router = useRouter();
-  const [run, setRun] = useState<CreativeRun | null>(initialRun);
-  const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
-  const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
+  const [run, setRun] = useStateFromProps<CreativeRun | null>(initialRun);
+  const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
+  const [variants, setVariants] = useStateFromProps<CreativeVariant[]>(initialVariants);
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
-
-  useEffect(() => setRun(initialRun), [initialRun]);
-  useEffect(() => setStage(initialStage), [initialStage]);
-  useEffect(() => setVariants(initialVariants), [initialVariants]);
 
   useStagePolling({
     campaignId,

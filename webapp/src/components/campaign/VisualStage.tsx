@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { StaleBanner } from "./StaleBanner";
 import { RunningStatus } from "./RunningStatus";
 import { useStagePolling } from "./useStagePolling";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const VISUAL_STEPS = [
   { label: "프롬프트 3개 구성", atSec: 0 },
@@ -59,15 +60,12 @@ export function VisualStage({
 }: VisualStageProps) {
   const ac = aspectClass(aspectRatio);
   const router = useRouter();
-  const [stage, setStage] = useState<CreativeStageRow | null>(initialStage);
-  const [variants, setVariants] = useState<CreativeVariant[]>(initialVariants);
+  const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
+  const [variants, setVariants] = useStateFromProps<CreativeVariant[]>(initialVariants);
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
-
-  useEffect(() => setStage(initialStage), [initialStage]);
-  useEffect(() => setVariants(initialVariants), [initialVariants]);
 
   useStagePolling({
     campaignId,

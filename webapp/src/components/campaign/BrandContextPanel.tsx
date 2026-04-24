@@ -8,7 +8,6 @@ import type { BrandAudience, BrandIdentity, BrandOffer } from "@/lib/memory/type
 
 interface BrandContextPanelProps {
   brandId: string;
-  brandName: string;
   identity: BrandIdentity | null;
   offer: BrandOffer | null;
   audience: BrandAudience | null;
@@ -16,7 +15,6 @@ interface BrandContextPanelProps {
 
 export function BrandContextPanel({
   brandId,
-  brandName,
   identity,
   offer,
   audience,

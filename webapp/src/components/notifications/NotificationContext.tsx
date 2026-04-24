@@ -98,13 +98,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const opsRef = useRef(ops);
-  opsRef.current = ops;
+  useEffect(() => {
+    opsRef.current = ops;
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const enabled =
       localStorage.getItem(BROWSER_NOTIF_KEY) === "on" &&
       Notification.permission === "granted";
+    // 마운트 시 1회 브라우저 API를 읽어 동기화. SSR-safe한 초기값(false) + 마운트 후 보정 패턴.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNotificationsEnabled(enabled);
   }, []);
 
