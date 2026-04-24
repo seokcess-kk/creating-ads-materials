@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type {
   BrandKeyVisual,
   KeyVisualFocalArea,
@@ -6,7 +6,7 @@ import type {
 } from "./types";
 
 export async function listKeyVisuals(brandId: string): Promise<BrandKeyVisual[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_key_visuals")
     .select("*")
@@ -17,7 +17,7 @@ export async function listKeyVisuals(brandId: string): Promise<BrandKeyVisual[]>
 }
 
 export async function getKeyVisual(id: string): Promise<BrandKeyVisual | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_key_visuals")
     .select("*")
@@ -29,7 +29,7 @@ export async function getKeyVisual(id: string): Promise<BrandKeyVisual | null> {
 
 export async function listKeyVisualsByIds(ids: string[]): Promise<BrandKeyVisual[]> {
   if (ids.length === 0) return [];
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_key_visuals")
     .select("*")
@@ -52,7 +52,7 @@ export async function createKeyVisual(
   brandId: string,
   input: KeyVisualInput,
 ): Promise<BrandKeyVisual> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_key_visuals")
     .insert({
@@ -84,7 +84,7 @@ export async function updateKeyVisual(
   id: string,
   patch: KeyVisualUpdate,
 ): Promise<BrandKeyVisual> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_key_visuals")
     .update(patch)
@@ -99,7 +99,7 @@ export async function setKeyVisualVisionResult(
   id: string,
   patch: { description?: string | null; mood_tags?: string[] },
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_key_visuals")
     .update({
@@ -117,7 +117,7 @@ export async function setKeyVisualVisionFailed(
   id: string,
   errorMsg: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_key_visuals")
     .update({
@@ -130,7 +130,7 @@ export async function setKeyVisualVisionFailed(
 }
 
 export async function deleteKeyVisual(id: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("brand_key_visuals").delete().eq("id", id);
   if (error) throw error;
 }

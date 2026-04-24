@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
 const BUCKET = "brand-assets";
@@ -51,7 +51,7 @@ export async function POST(
       bucket = KEY_VISUAL_BUCKET;
     }
 
-    const supabase = createAdminClient();
+    const supabase = await createClient();
     const { data, error } = await supabase.storage
       .from(bucket)
       .createSignedUploadUrl(path);

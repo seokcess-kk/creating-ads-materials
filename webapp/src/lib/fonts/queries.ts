@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { FontRow, FontTier } from "@/lib/memory/types";
 
 export interface FontQueryOptions {
@@ -25,7 +25,7 @@ function sortByTierPriority<T extends { tier: FontTier }>(rows: T[]): T[] {
 }
 
 export async function listFonts(options: FontQueryOptions = {}): Promise<FontRow[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   let query = supabase.from("fonts").select("*");
 
   if (options.ids && options.ids.length > 0) {
@@ -51,7 +51,7 @@ export async function listFonts(options: FontQueryOptions = {}): Promise<FontRow
 }
 
 export async function getFont(fontId: string): Promise<FontRow | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("fonts")
     .select("*")
@@ -66,7 +66,7 @@ export async function findFont(
   weight: string | null,
   tier?: FontTier,
 ): Promise<FontRow | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   let query = supabase.from("fonts").select("*").eq("family", family);
   if (weight) query = query.eq("weight", weight);
   if (tier) query = query.eq("tier", tier);

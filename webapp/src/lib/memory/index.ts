@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { Brand, BrandMemory } from "./types";
 import { getIdentity } from "./identity";
 import { listOffers } from "./offers";
@@ -18,7 +18,7 @@ export * from "./learnings";
 export * from "./fonts";
 
 export async function getBrand(brandId: string): Promise<Brand | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brands")
     .select("*")
@@ -29,7 +29,7 @@ export async function getBrand(brandId: string): Promise<Brand | null> {
 }
 
 export async function listBrands(): Promise<Brand[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brands")
     .select("*")
@@ -47,7 +47,7 @@ export interface BrandInput {
 }
 
 export async function createBrand(input: BrandInput): Promise<Brand> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brands")
     .insert({
@@ -69,7 +69,7 @@ export async function updateBrand(
   brandId: string,
   input: Partial<BrandInput>,
 ): Promise<Brand> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brands")
     .update(input)
@@ -81,7 +81,7 @@ export async function updateBrand(
 }
 
 export async function deleteBrand(brandId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("brands").delete().eq("id", brandId);
   if (error) throw error;
 }

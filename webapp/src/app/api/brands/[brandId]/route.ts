@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { deleteBrand, getBrand, updateBrand, loadBrandMemory } from "@/lib/memory";
 import { ok, fail, parseJson, serverError } from "@/lib/api-utils";
 
@@ -52,7 +52,7 @@ export async function DELETE(
 ) {
   try {
     const { brandId } = await params;
-    const supabase = createAdminClient();
+    const supabase = await createClient();
     const buckets = ["brand-assets", "generated-images"];
     for (const bucket of buckets) {
       const { data: files } = await supabase.storage.from(bucket).list(brandId);

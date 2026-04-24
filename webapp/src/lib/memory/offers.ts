@@ -1,8 +1,8 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandOffer } from "./types";
 
 export async function listOffers(brandId: string): Promise<BrandOffer[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_offers")
     .select("*")
@@ -14,7 +14,7 @@ export async function listOffers(brandId: string): Promise<BrandOffer[]> {
 }
 
 export async function getOffer(offerId: string): Promise<BrandOffer | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_offers")
     .select("*")
@@ -35,12 +35,12 @@ export interface OfferInput {
 }
 
 async function clearDefault(brandId: string) {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   await supabase.from("brand_offers").update({ is_default: false }).eq("brand_id", brandId);
 }
 
 export async function createOffer(brandId: string, input: OfferInput): Promise<BrandOffer> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   if (input.is_default) await clearDefault(brandId);
   const { data, error } = await supabase
     .from("brand_offers")
@@ -64,7 +64,7 @@ export async function updateOffer(
   offerId: string,
   input: Partial<OfferInput>,
 ): Promise<BrandOffer> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   if (input.is_default) {
     const existing = await getOffer(offerId);
     if (existing) await clearDefault(existing.brand_id);
@@ -80,7 +80,7 @@ export async function updateOffer(
 }
 
 export async function deleteOffer(offerId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("brand_offers").delete().eq("id", offerId);
   if (error) throw error;
 }

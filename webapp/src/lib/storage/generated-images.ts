@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { ImagePart } from "@/lib/engines/gemini-image";
 
 export async function uploadGeneratedImage(
@@ -6,7 +6,7 @@ export async function uploadGeneratedImage(
   variantLabel: string,
   image: ImagePart,
 ): Promise<{ url: string; path: string }> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const ext = image.mimeType.split("/")[1] ?? "png";
   const path = `${campaignId}/visual/${Date.now()}_${variantLabel}.${ext}`;
   const buffer = Buffer.from(image.base64, "base64");

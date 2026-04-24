@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   createVariants,
   getCampaign,
@@ -75,7 +75,7 @@ export async function POST(
     let baseUrl: string;
     let baseLabel: string;
     if (input.baseVariantId) {
-      const supabase = createAdminClient();
+      const supabase = await createClient();
       const { data, error } = await supabase
         .from("creative_variants")
         .select("*")

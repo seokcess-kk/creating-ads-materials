@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 export interface UsageRow {
   id: string;
@@ -37,7 +37,7 @@ export interface UsageFilter {
 }
 
 export async function getUsageSummary(filter: UsageFilter = {}): Promise<UsageSummary> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   let query = supabase.from("api_usage").select("*");
   if (filter.from) query = query.gte("created_at", filter.from.toISOString());
   if (filter.to) query = query.lte("created_at", filter.to.toISOString());
@@ -104,7 +104,7 @@ export interface UsageListResult {
 }
 
 export async function getUsageList(filter: UsageListFilter = {}): Promise<UsageListResult> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const page = Math.max(1, filter.page ?? 1);
   const pageSize = Math.min(500, Math.max(10, filter.pageSize ?? 50));
   const rangeFrom = (page - 1) * pageSize;
@@ -141,7 +141,7 @@ export interface BrandUsageRow {
 }
 
 export async function getUsageByBrand(): Promise<BrandUsageRow[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data: usage } = await supabase
     .from("api_usage")
     .select("brand_id, estimated_cost_usd")

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandReference, ReferenceSource, VisionAnalysis } from "./types";
 
 // embedding 벡터는 클라이언트로 내려보내지 않는다 (용량·민감도).
@@ -25,7 +25,7 @@ const REFERENCE_FIELDS = [
 ].join(", ");
 
 export async function listReferences(brandId: string): Promise<BrandReference[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_references")
     .select(REFERENCE_FIELDS)
@@ -36,7 +36,7 @@ export async function listReferences(brandId: string): Promise<BrandReference[]>
 }
 
 export async function getReference(referenceId: string): Promise<BrandReference | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_references")
     .select(REFERENCE_FIELDS)
@@ -50,7 +50,7 @@ export async function getReferenceBySourceUrl(
   brandId: string,
   sourceUrl: string,
 ): Promise<BrandReference | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_references")
     .select(REFERENCE_FIELDS)
@@ -76,7 +76,7 @@ export async function createReference(
   brandId: string,
   input: ReferenceInput,
 ): Promise<BrandReference> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_references")
     .insert({
@@ -98,7 +98,7 @@ export async function createReference(
 }
 
 export async function updateReferenceWeight(referenceId: string, weight: number): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({ weight })
@@ -110,7 +110,7 @@ export async function updateReferencePerformance(
   referenceId: string,
   score: number | null,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({ performance_score: score })
@@ -123,7 +123,7 @@ export async function setVisionResult(
   analysis: VisionAnalysis,
   promptVersion: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({
@@ -138,7 +138,7 @@ export async function setVisionResult(
 }
 
 export async function setVisionFailed(referenceId: string, errorMsg: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({
@@ -155,7 +155,7 @@ export async function setReferenceEmbedding(
   embedding: number[],
   model: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({
@@ -168,7 +168,7 @@ export async function setReferenceEmbedding(
 }
 
 export async function setVisionPending(referenceId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_references")
     .update({ vision_status: "pending", vision_error: null })
@@ -177,7 +177,7 @@ export async function setVisionPending(referenceId: string): Promise<void> {
 }
 
 export async function deleteReference(referenceId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("brand_references").delete().eq("id", referenceId);
   if (error) throw error;
 }

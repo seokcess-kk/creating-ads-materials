@@ -1,9 +1,9 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandFontPair, FontRole } from "./types";
 
 /** 브랜드 기본 폰트 (campaign_id IS NULL). loadBrandMemory에서 사용. */
 export async function listFontPairs(brandId: string): Promise<BrandFontPair[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_font_pairs")
     .select("*")
@@ -18,7 +18,7 @@ export async function listCampaignFontPairs(
   brandId: string,
   campaignId: string,
 ): Promise<BrandFontPair[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_font_pairs")
     .select("*")
@@ -63,7 +63,7 @@ export async function upsertFontPair(
   const campaignId = opts.campaignId ?? null;
   const hierarchyRatio = opts.hierarchyRatio ?? 1.0;
 
-  const supabase = createAdminClient();
+  const supabase = await createClient();
 
   // partial unique index 충돌을 피하기 위해 수동으로 select → insert/update 분기.
   const query = supabase
@@ -107,7 +107,7 @@ export async function deleteFontPair(
   role: FontRole,
   options: { campaignId?: string | null } = {},
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const campaignId = options.campaignId ?? null;
   let query = supabase
     .from("brand_font_pairs")
@@ -126,7 +126,7 @@ export async function clearCampaignFontOverrides(
   brandId: string,
   campaignId: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("brand_font_pairs")
     .delete()

@@ -1,8 +1,8 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandAudience } from "./types";
 
 export async function listAudiences(brandId: string): Promise<BrandAudience[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_audiences")
     .select("*")
@@ -14,7 +14,7 @@ export async function listAudiences(brandId: string): Promise<BrandAudience[]> {
 }
 
 export async function getAudience(audienceId: string): Promise<BrandAudience | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_audiences")
     .select("*")
@@ -35,7 +35,7 @@ export interface AudienceInput {
 }
 
 async function clearDefault(brandId: string) {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   await supabase.from("brand_audiences").update({ is_default: false }).eq("brand_id", brandId);
 }
 
@@ -43,7 +43,7 @@ export async function createAudience(
   brandId: string,
   input: AudienceInput,
 ): Promise<BrandAudience> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   if (input.is_default) await clearDefault(brandId);
   const { data, error } = await supabase
     .from("brand_audiences")
@@ -67,7 +67,7 @@ export async function updateAudience(
   audienceId: string,
   input: Partial<AudienceInput>,
 ): Promise<BrandAudience> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   if (input.is_default) {
     const existing = await getAudience(audienceId);
     if (existing) await clearDefault(existing.brand_id);
@@ -83,7 +83,7 @@ export async function updateAudience(
 }
 
 export async function deleteAudience(audienceId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("brand_audiences").delete().eq("id", audienceId);
   if (error) throw error;
 }

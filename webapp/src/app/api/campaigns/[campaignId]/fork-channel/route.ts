@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   createCampaign,
   createRun,
@@ -82,7 +82,7 @@ export async function POST(
       ],
       { mode: "replace", instruction: "fork-channel: cloned" },
     );
-    const supabase = createAdminClient();
+    const supabase = await createClient();
     await supabase
       .from("creative_variants")
       .update({ selected: true })

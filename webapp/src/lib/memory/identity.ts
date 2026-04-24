@@ -1,8 +1,8 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandIdentity, BrandVoice, BrandColor, BrandLogo } from "./types";
 
 export async function getIdentity(brandId: string): Promise<BrandIdentity | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_identity")
     .select("*")
@@ -23,7 +23,7 @@ export async function upsertIdentity(
   brandId: string,
   input: IdentityInput,
 ): Promise<BrandIdentity> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const payload = {
     brand_id: brandId,
     voice_json: input.voice ?? {},

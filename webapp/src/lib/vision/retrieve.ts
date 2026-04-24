@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { embedText, EMBEDDING_MODEL } from "@/lib/engines/embedding";
 import { setReferenceEmbedding, getReference } from "@/lib/memory/references";
 import type {
@@ -189,7 +189,7 @@ export async function retrieveRelevantBPs(
     taskType: "RETRIEVAL_QUERY",
     usageContext: opts?.usageContext,
   });
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.rpc("match_brand_references", {
     p_brand_id: brandId,
     p_embedding: queryVector,

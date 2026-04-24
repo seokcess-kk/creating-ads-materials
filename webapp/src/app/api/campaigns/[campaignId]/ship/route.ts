@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   getCampaign,
   getLatestRun,
@@ -93,7 +93,7 @@ export async function POST(
         },
       };
 
-      const supabase = createAdminClient();
+      const supabase = await createClient();
       const { error } = await supabase
         .from("creative_runs")
         .update({

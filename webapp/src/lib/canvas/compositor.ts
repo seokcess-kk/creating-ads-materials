@@ -1,5 +1,5 @@
 import { createCanvas, GlobalFonts, loadImage, type CanvasRenderingContext2D } from "@napi-rs/canvas";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -329,7 +329,7 @@ export async function composeAd(config: ComposeConfig): Promise<string> {
   }
 
   const buffer = canvas.toBuffer("image/png");
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.storage
     .from(config.output.bucket)
     .upload(config.output.path, buffer, {

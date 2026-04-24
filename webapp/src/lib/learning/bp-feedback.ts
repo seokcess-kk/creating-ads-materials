@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { getSelectedVariant } from "@/lib/campaigns";
 import { listReferences, updateReferenceWeight } from "@/lib/memory/references";
 import type { BrandReference } from "@/lib/memory/types";
@@ -68,7 +68,7 @@ async function extractRunSignals(runId: string): Promise<RunSignals> {
 }
 
 async function getBrandIdForRun(runId: string): Promise<string | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_runs")
     .select("campaign_id, campaigns!inner(brand_id)")
@@ -101,7 +101,7 @@ function computeMatchScore(r: BrandReference, signals: RunSignals): number {
 }
 
 async function fetchExistingFeedback(runId: string): Promise<BPFeedbackRow[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("bp_rating_feedback")
     .select("*")
@@ -111,7 +111,7 @@ async function fetchExistingFeedback(runId: string): Promise<BPFeedbackRow[]> {
 }
 
 async function deleteExistingFeedback(runId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("bp_rating_feedback")
     .delete()
@@ -123,7 +123,7 @@ async function insertFeedback(
   rows: Array<Omit<BPFeedbackRow, "id" | "applied_at">>,
 ): Promise<void> {
   if (rows.length === 0) return;
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("bp_rating_feedback").insert(rows);
   if (error) throw error;
 }
@@ -151,7 +151,7 @@ export async function applyRatingToBPWeights(
   const existing = await fetchExistingFeedback(runId);
   if (existing.length > 0) {
     for (const row of existing) {
-      const supabase = createAdminClient();
+      const supabase = await createClient();
       const { data: ref } = await supabase
         .from("brand_references")
         .select("id, weight")

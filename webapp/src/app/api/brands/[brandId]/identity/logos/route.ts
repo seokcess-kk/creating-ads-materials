@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { getIdentity, upsertIdentity } from "@/lib/memory";
 import type { BrandLogo } from "@/lib/memory/types";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
@@ -125,7 +125,7 @@ export async function DELETE(
     if (!target) return ok({ identity: existing });
 
     // Storage에서 파일 삭제
-    const supabase = createAdminClient();
+    const supabase = await createClient();
     const storagePath = extractStoragePath(target.url, "brand-assets");
     if (storagePath) {
       await supabase.storage.from("brand-assets").remove([storagePath]);

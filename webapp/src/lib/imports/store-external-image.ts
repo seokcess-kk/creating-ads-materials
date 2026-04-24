@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 // storage/sign 라우트의 reference 경로 규칙과 동일하게 유지.
 const BUCKET = "brand-assets";
@@ -41,7 +41,7 @@ export async function downloadToReferenceBucket(
   const stem = sanitizeStem(suggestedName ?? "imported");
   const path = `${brandId}/references/${Date.now()}_${stem}.${ext}`;
 
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, buf, { contentType, upsert: false });

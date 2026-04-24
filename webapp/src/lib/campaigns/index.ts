@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type {
   BatchMode,
   BatchSummary,
@@ -15,7 +15,7 @@ import type {
 export * from "./types";
 
 export async function listCampaigns(brandId: string): Promise<Campaign[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("campaigns")
     .select("*")
@@ -28,7 +28,7 @@ export async function listCampaigns(brandId: string): Promise<Campaign[]> {
 export async function listAllCampaigns(
   filter?: { status?: Campaign["status"] },
 ): Promise<Campaign[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   let q = supabase.from("campaigns").select("*").order("created_at", { ascending: false });
   if (filter?.status) q = q.eq("status", filter.status);
   const { data, error } = await q;
@@ -43,7 +43,7 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("campaigns").select("status");
   if (error) throw error;
   const rows = (data ?? []) as Array<{ status: Campaign["status"] }>;
@@ -55,7 +55,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 export async function getCampaign(campaignId: string): Promise<Campaign | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("campaigns")
     .select("*")
@@ -69,7 +69,7 @@ export async function createCampaign(
   brandId: string,
   intent: CampaignIntent,
 ): Promise<Campaign> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("campaigns")
     .insert({
@@ -94,7 +94,7 @@ export async function updateCampaign(
   campaignId: string,
   patch: Partial<CampaignIntent & { status: Campaign["status"] }>,
 ): Promise<Campaign> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const updates: Record<string, unknown> = {};
   if (patch.name !== undefined) updates.name = patch.name;
   if (patch.goal !== undefined) updates.goal = patch.goal;
@@ -124,7 +124,7 @@ export async function updateCampaign(
 }
 
 export async function deleteCampaign(campaignId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("campaigns").delete().eq("id", campaignId);
   if (error) throw error;
 }
@@ -132,7 +132,7 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
 // Runs
 
 export async function createRun(campaignId: string): Promise<CreativeRun> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_runs")
     .insert({ campaign_id: campaignId, status: "pending" })
@@ -143,7 +143,7 @@ export async function createRun(campaignId: string): Promise<CreativeRun> {
 }
 
 export async function getLatestRun(campaignId: string): Promise<CreativeRun | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_runs")
     .select("*")
@@ -160,7 +160,7 @@ export async function rateRun(
   rating: number | null,
   note: string | null,
 ): Promise<CreativeRun> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_runs")
     .update({
@@ -180,7 +180,7 @@ export async function updateRunStatus(
   status: RunStatus,
   currentStage?: CreativeStageName,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const updates: Record<string, unknown> = { status };
   if (currentStage !== undefined) updates.current_stage = currentStage;
   if (status === "complete") updates.completed_at = new Date().toISOString();
@@ -195,7 +195,7 @@ export async function upsertStage(
   stage: CreativeStageName,
   input?: Record<string, unknown>,
 ): Promise<CreativeStageRow> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_stages")
     .upsert(
@@ -220,7 +220,7 @@ export async function setStageStatus(
   status: StageStatus,
   errorMsg?: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const updates: Record<string, unknown> = { status };
   if (status === "ready" || status === "failed") {
     updates.completed_at = new Date().toISOString();
@@ -247,7 +247,7 @@ export async function markDownstreamStale(
   if (fromIndex < 0) return;
   const downstream = STAGE_ORDER.slice(fromIndex + 1);
   if (downstream.length === 0) return;
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   // ready 상태만 stale로 전환 (pending/running/failed는 그대로)
   const { data: staled, error } = await supabase
     .from("creative_stages")
@@ -269,7 +269,7 @@ export async function getStage(
   runId: string,
   stage: CreativeStageName,
 ): Promise<CreativeStageRow | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_stages")
     .select("*")
@@ -281,7 +281,7 @@ export async function getStage(
 }
 
 export async function listStages(runId: string): Promise<CreativeStageRow[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_stages")
     .select("*")
@@ -299,7 +299,7 @@ function randomUUID(): string {
 }
 
 async function nextBatchIndex(stageId: string): Promise<number> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_variants")
     .select("batch_index")
@@ -312,7 +312,7 @@ async function nextBatchIndex(stageId: string): Promise<number> {
 }
 
 export async function archiveActiveBatches(stageId: string): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("creative_variants")
     .update({ archived_at: new Date().toISOString() })
@@ -325,7 +325,7 @@ export async function restoreBatch(
   stageId: string,
   batchId: string,
 ): Promise<void> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   // 현재 활성 batch 모두 archive
   await archiveActiveBatches(stageId);
   // 대상 batch 활성화
@@ -353,7 +353,7 @@ export async function createVariants(
   }>,
   batch: NewBatch,
 ): Promise<CreativeVariant[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
 
   if (batch.mode === "replace") {
     await archiveActiveBatches(stageId);
@@ -385,7 +385,7 @@ export async function listVariants(
   stageId: string,
   options: { includeArchived?: boolean } = {},
 ): Promise<CreativeVariant[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   let q = supabase.from("creative_variants").select("*").eq("stage_id", stageId);
   if (!options.includeArchived) q = q.is("archived_at", null);
   // created_at가 동점일 때(동일 INSERT로 들어온 배치) id를 tiebreaker로 사용해
@@ -417,7 +417,7 @@ export async function autoSelectBest(
 }
 
 export async function listBatches(stageId: string): Promise<BatchSummary[]> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_variants")
     .select("batch_id, batch_index, batch_mode, batch_instruction, created_at, archived_at")
@@ -449,7 +449,7 @@ export async function listBatches(stageId: string): Promise<BatchSummary[]> {
 export async function getVariantById(
   variantId: string,
 ): Promise<CreativeVariant | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_variants")
     .select("*")
@@ -463,7 +463,7 @@ export async function selectVariant(
   stageId: string,
   variantId: string,
 ): Promise<CreativeVariant> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   // 활성 배치 내에서만 선택 해제 (archived는 보존)
   await supabase
     .from("creative_variants")
@@ -486,7 +486,7 @@ export async function getSelectedVariant(
 ): Promise<CreativeVariant | null> {
   const stageRow = await getStage(runId, stage);
   if (!stageRow) return null;
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_variants")
     .select("*")

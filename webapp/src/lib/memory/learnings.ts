@@ -1,8 +1,8 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import type { BrandLearnings } from "./types";
 
 export async function getLearnings(brandId: string): Promise<BrandLearnings | null> {
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_learnings")
     .select("*")
@@ -15,7 +15,7 @@ export async function getLearnings(brandId: string): Promise<BrandLearnings | nu
 export async function ensureLearnings(brandId: string): Promise<BrandLearnings> {
   const existing = await getLearnings(brandId);
   if (existing) return existing;
-  const supabase = createAdminClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("brand_learnings")
     .insert({ brand_id: brandId })

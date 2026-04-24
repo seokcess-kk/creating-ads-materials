@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 //   - 배치/웹훅/크론
 //   - 시스템 테이블(api_usage 집계 등)
 // 사용자 요청에서 브랜드/캠페인을 직접 읽거나 쓸 때는 @/lib/supabase/server의
-// createClient()를 써서 RLS가 적용되도록 할 것. Plan B에서 이 규칙을 ESLint로 강제할 예정.
+// createClient()를 써서 RLS가 적용되도록 할 것. Plan B-3에서 ESLint로 강제 예정.
 export function createAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
