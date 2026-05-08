@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface BrandSummary {
   id: string;
@@ -110,6 +111,12 @@ export function Sidebar() {
           </div>
         )}
       </nav>
+      <div className="px-3 py-2 border-t flex items-center justify-between">
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          테마
+        </span>
+        <ThemeToggle />
+      </div>
       <form action="/api/auth/logout" method="post" className="p-2 border-t">
         <button
           type="submit"

@@ -108,7 +108,7 @@ export async function POST(
         }),
         baseImage: base,
         aspectRatio,
-        imageSize: "2K",
+        imageSize: "1K",
         usageContext: {
           operation: "retouch",
           brandId: campaign.brand_id,

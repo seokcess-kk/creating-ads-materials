@@ -201,7 +201,7 @@ export async function POST(
               prompt,
               baseImage,
               aspectRatio: channel.aspectRatio as AspectRatio,
-              imageSize: "2K",
+              imageSize: "1K",
               usageContext: {
                 operation: "visual_gen_asset",
                 brandId: campaign.brand_id,
@@ -227,7 +227,7 @@ export async function POST(
             const image = await generateImage({
               prompt,
               aspectRatio: channel.aspectRatio as AspectRatio,
-              imageSize: "2K",
+              imageSize: "1K",
               usageContext: {
                 operation: "visual_gen",
                 brandId: campaign.brand_id,

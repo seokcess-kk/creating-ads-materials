@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationProvider } from "@/components/notifications/NotificationContext";
 import { ShellChrome } from "@/components/layout/ShellChrome";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,13 +29,21 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full flex overflow-hidden">
-        <NotificationProvider>
-          <ShellChrome>{children}</ShellChrome>
-          <Toaster />
-        </NotificationProvider>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <NotificationProvider>
+            <ShellChrome>{children}</ShellChrome>
+            <Toaster />
+          </NotificationProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
