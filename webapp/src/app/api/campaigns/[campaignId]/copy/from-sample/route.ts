@@ -6,9 +6,9 @@ import {
   autoSelectBest,
   createVariants,
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
   markDownstreamStale,
+  resolveRun,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -22,7 +22,7 @@ import type {
 import { ApiError, ok, serverError } from "@/lib/api-utils";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
@@ -30,7 +30,8 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(400, "실행이 없습니다. Strategy부터 시작하세요.");
 
     const selectedStrategy = await getSelectedVariant(run.id, "strategy");

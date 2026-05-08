@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getCampaign, getLatestRun, rateRun } from "@/lib/campaigns";
+import { getCampaign, rateRun, resolveRun } from "@/lib/campaigns";
 import { applyRatingToBPWeights, recomputeLearnings } from "@/lib/learning";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
@@ -16,7 +16,8 @@ export async function POST(
     const { campaignId } = await params;
     const input = await parseJson(request, Schema);
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(404, "실행이 없습니다");
 
     const updated = await rateRun(run.id, input.rating, input.note);

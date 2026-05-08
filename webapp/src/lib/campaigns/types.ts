@@ -51,6 +51,11 @@ export interface CreativeRun {
   rating: number | null;
   note: string | null;
   rated_at: string | null;
+  // Multi-material run 메타 (migration 022)
+  label: string | null;
+  parent_run_id: string | null;
+  iteration_index: number | null;
+  archived_at: string | null;
 }
 
 export interface CreativeStageRow {

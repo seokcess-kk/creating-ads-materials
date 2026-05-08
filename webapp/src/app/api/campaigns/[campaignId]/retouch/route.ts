@@ -3,11 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import {
   createVariants,
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
   getStage,
   listVariants,
   markDownstreamStale,
+  resolveRun,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -24,12 +24,13 @@ import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 export const maxDuration = 180;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
     const { campaignId } = await params;
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) return ok({ run: null, stage: null, variants: [] });
     const stage = await getStage(run.id, "retouch");
     const variants = stage ? await listVariants(stage.id) : [];
@@ -63,7 +64,8 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(400, "실행이 없습니다");
 
     const selectedVisual = await getSelectedVariant(run.id, "visual");
@@ -113,6 +115,7 @@ export async function POST(
           operation: "retouch",
           brandId: campaign.brand_id,
           campaignId,
+          runId: run.id,
         },
       });
 

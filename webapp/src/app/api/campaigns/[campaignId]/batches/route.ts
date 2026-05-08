@@ -1,10 +1,10 @@
 import { z } from "zod";
 import {
-  getLatestRun,
   getStage,
   listBatches,
   listVariants,
   markDownstreamStale,
+  resolveRun,
   restoreBatch,
 } from "@/lib/campaigns";
 import type { CreativeStageName } from "@/lib/campaigns/types";
@@ -34,8 +34,9 @@ export async function GET(
     const { campaignId } = await params;
     const url = new URL(request.url);
     const stage = parseStage(url.searchParams.get("stage"));
+    const runIdHint = url.searchParams.get("runId");
 
-    const run = await getLatestRun(campaignId);
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) return ok({ batches: [], archivedVariants: [] });
 
     const stageRow = await getStage(run.id, stage);
@@ -71,7 +72,8 @@ export async function POST(
     const { campaignId } = await params;
     const { stage, batchId } = await parseJson(request, RestoreSchema);
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(400, "실행이 없습니다");
 
     const stageRow = await getStage(run.id, stage);

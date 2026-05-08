@@ -1,12 +1,12 @@
 import {
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
+  resolveRun,
 } from "@/lib/campaigns";
 import { ApiError, serverError } from "@/lib/api-utils";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
@@ -14,7 +14,8 @@ export async function GET(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인 없음");
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(404, "실행 없음");
     const compose = await getSelectedVariant(run.id, "compose");
     if (!compose) throw new ApiError(404, "선택된 Compose 없음");

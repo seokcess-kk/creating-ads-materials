@@ -5,8 +5,8 @@ import {
   createRun,
   createVariants,
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
+  resolveRun,
   updateRunStatus,
   upsertStage,
   setStageStatus,
@@ -17,6 +17,7 @@ import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 const Schema = z.object({
   targetChannel: z.string().min(1),
   nameSuffix: z.string().max(50).optional(),
+  sourceRunId: z.string().uuid().optional(),
 });
 
 export async function POST(
@@ -25,7 +26,7 @@ export async function POST(
 ) {
   try {
     const { campaignId } = await params;
-    const { targetChannel, nameSuffix } = await parseJson(request, Schema);
+    const { targetChannel, nameSuffix, sourceRunId } = await parseJson(request, Schema);
 
     if (!isActive(targetChannel)) {
       throw new ApiError(400, `지원되지 않는 채널: ${targetChannel}`);
@@ -38,7 +39,7 @@ export async function POST(
       throw new ApiError(400, "같은 채널로는 복제할 수 없습니다");
     }
 
-    const srcRun = await getLatestRun(campaignId);
+    const srcRun = await resolveRun(campaignId, sourceRunId);
     if (!srcRun) throw new ApiError(400, "원본 실행이 없습니다");
 
     const [srcStrategy, srcCopy] = await Promise.all([

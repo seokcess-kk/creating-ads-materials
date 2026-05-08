@@ -129,13 +129,42 @@ export async function deleteCampaign(campaignId: string): Promise<void> {
   if (error) throw error;
 }
 
-// Runs
+// Runs (Material runs — 캠페인 안의 소재 작업물 1개씩)
 
-export async function createRun(campaignId: string): Promise<CreativeRun> {
+async function nextIterationIndex(campaignId: string): Promise<number> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("creative_runs")
-    .insert({ campaign_id: campaignId, status: "pending" })
+    .select("iteration_index")
+    .eq("campaign_id", campaignId)
+    .order("iteration_index", { ascending: false, nullsFirst: false })
+    .limit(1);
+  if (error) throw error;
+  const max = (data?.[0]?.iteration_index as number | null | undefined) ?? 0;
+  return max + 1;
+}
+
+export interface CreateRunOptions {
+  label?: string | null;
+  parentRunId?: string | null;
+}
+
+export async function createRun(
+  campaignId: string,
+  options: CreateRunOptions = {},
+): Promise<CreativeRun> {
+  const supabase = await createClient();
+  const idx = await nextIterationIndex(campaignId);
+  const label = options.label?.trim() || `소재 ${idx}`;
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .insert({
+      campaign_id: campaignId,
+      status: "pending",
+      label,
+      iteration_index: idx,
+      parent_run_id: options.parentRunId ?? null,
+    })
     .select()
     .single();
   if (error) throw error;
@@ -148,11 +177,95 @@ export async function getLatestRun(campaignId: string): Promise<CreativeRun | nu
     .from("creative_runs")
     .select("*")
     .eq("campaign_id", campaignId)
+    .is("archived_at", null)
     .order("started_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
   return (data as CreativeRun | null) ?? null;
+}
+
+export async function getRunById(runId: string): Promise<CreativeRun | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .select("*")
+    .eq("id", runId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as CreativeRun | null) ?? null;
+}
+
+export async function listRuns(
+  campaignId: string,
+  options: { includeArchived?: boolean } = {},
+): Promise<CreativeRun[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("creative_runs")
+    .select("*")
+    .eq("campaign_id", campaignId);
+  if (!options.includeArchived) q = q.is("archived_at", null);
+  const { data, error } = await q
+    .order("iteration_index", { ascending: false, nullsFirst: false })
+    .order("started_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as CreativeRun[];
+}
+
+/**
+ * 라우트 표준 헬퍼: hint(query/body의 runId)가 있으면 해당 run, 없으면 캠페인 latest run.
+ * hint가 있는데 해당 run이 없거나 다른 캠페인 소속이면 null (라우트가 404/400 반환).
+ */
+export async function resolveRun(
+  campaignId: string,
+  runIdHint?: string | null,
+): Promise<CreativeRun | null> {
+  if (runIdHint) {
+    const run = await getRunById(runIdHint);
+    if (!run || run.campaign_id !== campaignId) return null;
+    return run;
+  }
+  return getLatestRun(campaignId);
+}
+
+export async function archiveRun(runId: string): Promise<CreativeRun> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .update({ archived_at: new Date().toISOString() })
+    .eq("id", runId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CreativeRun;
+}
+
+export async function unarchiveRun(runId: string): Promise<CreativeRun> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .update({ archived_at: null })
+    .eq("id", runId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CreativeRun;
+}
+
+export async function updateRunLabel(
+  runId: string,
+  label: string,
+): Promise<CreativeRun> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .update({ label: label.trim() || null })
+    .eq("id", runId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as CreativeRun;
 }
 
 export async function rateRun(

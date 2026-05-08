@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
-  getLatestRun,
   getSelectedVariant,
   getStage,
   markDownstreamStale,
+  resolveRun,
   selectVariant,
   updateRunStatus,
 } from "@/lib/campaigns";
@@ -21,7 +21,8 @@ export async function POST(
     const { campaignId } = await params;
     const { variant_id } = await parseJson(request, SelectSchema);
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(404, "실행이 없습니다");
     const stage = await getStage(run.id, "strategy");
     if (!stage) throw new ApiError(404, "Strategy 스테이지가 없습니다");

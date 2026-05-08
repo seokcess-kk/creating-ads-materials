@@ -1,7 +1,7 @@
 import {
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
+  resolveRun,
 } from "@/lib/campaigns";
 import {
   createReference,
@@ -15,7 +15,7 @@ import { ApiError, ok, serverError } from "@/lib/api-utils";
 export const maxDuration = 60;
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
@@ -23,7 +23,8 @@ export async function POST(
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(404, "실행이 없습니다");
     const compose = await getSelectedVariant(run.id, "compose");
     if (!compose) throw new ApiError(400, "선택된 Compose가 없습니다");

@@ -2,11 +2,11 @@ import {
   autoSelectBest,
   createVariants,
   getCampaign,
-  getLatestRun,
   getSelectedVariant,
   getStage,
   listVariants,
   markDownstreamStale,
+  resolveRun,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -46,12 +46,13 @@ const Body = z
 export const maxDuration = 120;
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   try {
     const { campaignId } = await params;
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) return ok({ run: null, stage: null, variants: [] });
     const stage = await getStage(run.id, "copy");
     const variants = stage ? await listVariants(stage.id) : [];
@@ -83,7 +84,8 @@ export async function POST(
       throw new ApiError(400, "remix 모드는 baseVariantId 필요");
     }
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = new URL(request.url).searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     if (!run) throw new ApiError(400, "실행이 없습니다. Strategy부터 시작하세요.");
 
     const selectedStrategy = await getSelectedVariant(run.id, "strategy");
@@ -136,6 +138,7 @@ export async function POST(
             operation: "bp_retrieve_copy",
             brandId: campaign.brand_id,
             campaignId,
+            runId: run.id,
           },
         });
         semanticBPDigest = formatRelevantBPsDigest(matches);
@@ -151,6 +154,7 @@ export async function POST(
           operation: "copy",
           brandId: campaign.brand_id,
           campaignId,
+          runId: run.id,
         },
         messages: buildCopyMessages({
           memory,

@@ -2,9 +2,10 @@ import { z } from "zod";
 import {
   deleteCampaign,
   getCampaign,
-  getLatestRun,
+  listRuns,
   listStages,
   markDownstreamStale,
+  resolveRun,
   updateCampaign,
 } from "@/lib/campaigns";
 import { ok, fail, parseJson, serverError } from "@/lib/api-utils";
@@ -22,7 +23,8 @@ export async function GET(
     const withRun = url.searchParams.get("run") === "1";
     if (!withRun) return ok({ campaign });
 
-    const run = await getLatestRun(campaignId);
+    const runIdHint = url.searchParams.get("runId");
+    const run = await resolveRun(campaignId, runIdHint);
     const stages = run ? await listStages(run.id) : [];
     return ok({ campaign, run, stages });
   } catch (e) {
@@ -65,8 +67,9 @@ export async function PATCH(
       JSON.stringify([...input.selected_key_visual_ids].sort()) !==
         JSON.stringify([...before.selected_key_visual_ids].sort());
     if (channelChanged || kvChanged) {
-      const run = await getLatestRun(campaignId);
-      if (run) await markDownstreamStale(run.id, "copy");
+      // 캠페인 단위 변경 → 모든 활성 소재의 visual 이후 stale 처리
+      const runs = await listRuns(campaignId);
+      await Promise.all(runs.map((r) => markDownstreamStale(r.id, "copy")));
     }
 
     return ok({ campaign });

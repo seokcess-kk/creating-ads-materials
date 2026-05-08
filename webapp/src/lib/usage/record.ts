@@ -7,6 +7,7 @@ export interface UsageContext {
   operation: string;
   brandId?: string | null;
   campaignId?: string | null;
+  runId?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -40,6 +41,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
     model: input.model ?? null,
     brand_id: input.brandId ?? null,
     campaign_id: input.campaignId ?? null,
+    run_id: input.runId ?? null,
     input_tokens: input.inputTokens ?? null,
     output_tokens: input.outputTokens ?? null,
     cache_read_tokens: input.cacheReadTokens ?? null,
