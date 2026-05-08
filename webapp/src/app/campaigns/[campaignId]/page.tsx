@@ -236,52 +236,47 @@ export default async function CampaignPage({
         </div>
       </div>
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="space-y-3 lg:w-80 lg:shrink-0">
-          <MaterialSwitcher
-            campaignId={campaignId}
-            runs={runs}
-            archivedRuns={archivedRuns}
-            activeRunId={run?.id ?? null}
-            hasBranchableSource={hasBranchableSource}
-            orientation="vertical"
-          />
+      <MaterialSwitcher
+        campaignId={campaignId}
+        runs={runs}
+        archivedRuns={archivedRuns}
+        activeRunId={run?.id ?? null}
+        hasBranchableSource={hasBranchableSource}
+      />
 
-          {memoryForDefaults && (
-            <BrandContextPanel
-              brandId={campaign.brand_id}
-              identity={memoryForDefaults.identity}
-              offer={
-                memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
-              }
-              audience={
-                memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
-                null
-              }
-            />
-          )}
+      {memoryForDefaults && (
+        <BrandContextPanel
+          brandId={campaign.brand_id}
+          identity={memoryForDefaults.identity}
+          offer={
+            memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
+          }
+          audience={
+            memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
+            null
+          }
+        />
+      )}
 
-          <CampaignKeyVisualEditor
-            campaignId={campaignId}
-            intent={campaign.key_visual_intent}
-            selectedIds={campaign.selected_key_visual_ids}
-            keyVisuals={memoryForDefaults?.keyVisuals ?? []}
-          />
+      <CampaignKeyVisualEditor
+        campaignId={campaignId}
+        intent={campaign.key_visual_intent}
+        selectedIds={campaign.selected_key_visual_ids}
+        keyVisuals={memoryForDefaults?.keyVisuals ?? []}
+      />
 
-          <CampaignFontPanel
-            campaignId={campaignId}
-            initialPresetId={overridePresetId}
-            initialPresetLabel={overridePresetLabel}
-            visualReady={visualReady}
-          />
-        </aside>
+      <CampaignFontPanel
+        campaignId={campaignId}
+        initialPresetId={overridePresetId}
+        initialPresetLabel={overridePresetLabel}
+        visualReady={visualReady}
+      />
 
-        <main className="min-w-0 flex-1">
-          <CampaignStepper
-            key={run?.id ?? "no-run"}
-            steps={steps}
-            initialStage={initialStage}
-          >
+      <CampaignStepper
+        key={run?.id ?? "no-run"}
+        steps={steps}
+        initialStage={initialStage}
+      >
         <StrategyGate
           campaignId={campaignId}
           runId={run?.id ?? null}
@@ -340,9 +335,7 @@ export default async function CampaignPage({
           initialRun={run}
           initialStage={shipStage}
         />
-          </CampaignStepper>
-        </main>
-      </div>
+      </CampaignStepper>
     </PageContainer>
   );
 }
