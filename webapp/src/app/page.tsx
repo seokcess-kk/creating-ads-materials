@@ -83,24 +83,24 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* 메모리 갭 — 막힌 브랜드 알림 */}
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight">
-              브랜드 메모리 갭
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              캠페인 시작 전에 채워야 할 항목
-            </p>
-          </div>
-          {memoryGaps.length === 0 ? (
-            <Card className="bg-muted/20">
-              <CardContent className="py-6 text-center text-xs text-muted-foreground">
-                ✓ 모든 브랜드의 Identity·Offer·Audience가 설정되어 있습니다
-              </CardContent>
-            </Card>
-          ) : (
+      <div
+        className={
+          memoryGaps.length > 0
+            ? "grid grid-cols-1 gap-6 lg:grid-cols-2"
+            : "space-y-3"
+        }
+      >
+        {/* 메모리 갭 — 막힌 브랜드 알림 (갭이 있을 때만 노출) */}
+        {memoryGaps.length > 0 && (
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold tracking-tight">
+                브랜드 메모리 갭
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                캠페인 시작 전에 채워야 할 항목
+              </p>
+            </div>
             <div className="space-y-2">
               {memoryGaps.map((gap) => (
                 <Link
@@ -135,10 +135,10 @@ export default async function DashboardPage() {
                 </Link>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        {/* 최근 ship된 소재 */}
+        {/* 최근 ship된 소재 — 갭 없을 때 풀 폭 그리드, 있을 때 우측 컬럼 */}
         <section className="space-y-3">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">
@@ -155,14 +155,20 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-2">
+            <div
+              className={
+                memoryGaps.length === 0
+                  ? "grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+                  : "space-y-2"
+              }
+            >
               {shippedRuns.map((m) => (
                 <Link
                   key={m.runId}
                   href={`/campaigns/${m.campaignId}?run=${m.runId}`}
                   className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Card className="transition-colors hover:border-primary/50 cursor-pointer">
+                  <Card className="h-full transition-colors hover:border-primary/50 cursor-pointer">
                     <CardContent className="space-y-1 py-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium">
