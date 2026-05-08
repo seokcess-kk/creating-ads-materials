@@ -15,8 +15,11 @@ import { VisualStage } from "@/components/campaign/VisualStage";
 import { RetouchStudio } from "@/components/campaign/RetouchStudio";
 import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
-import { ForkChannelMenu } from "@/components/campaign/ForkChannelMenu";
+import { CampaignChannelMenu } from "@/components/campaign/CampaignChannelMenu";
+import { CampaignAutomationToggle } from "@/components/campaign/CampaignAutomationToggle";
+import { CampaignKeyVisualEditor } from "@/components/campaign/CampaignKeyVisualEditor";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
+import { CampaignNameHeader } from "@/components/campaign/CampaignNameHeader";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
 import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
@@ -188,27 +191,18 @@ export default async function CampaignPage({
         ]}
       />
       <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">{campaign.name}</h1>
-          <div className="flex flex-wrap gap-2 pt-1">
+        <div className="space-y-1 min-w-0 flex-1">
+          <CampaignNameHeader campaignId={campaignId} name={campaign.name} />
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <Badge variant="secondary">{campaign.goal}</Badge>
-            {channel && <Badge variant="outline">{channel.label}</Badge>}
-            <Badge
-              variant={
-                campaign.automation_level === "auto"
-                  ? "destructive"
-                  : campaign.automation_level === "assist"
-                    ? "secondary"
-                    : "outline"
-              }
-              className="text-[10px]"
-            >
-              {campaign.automation_level === "auto"
-                ? "🚀 Auto"
-                : campaign.automation_level === "assist"
-                  ? "✨ Assist"
-                  : "🧑‍💻 Manual"}
-            </Badge>
+            <CampaignChannelMenu
+              campaignId={campaignId}
+              currentChannel={campaign.channel}
+            />
+            <CampaignAutomationToggle
+              campaignId={campaignId}
+              level={campaign.automation_level}
+            />
             <Badge variant={campaign.status === "completed" ? "secondary" : "outline"}>
               {campaign.status}
             </Badge>
@@ -216,12 +210,6 @@ export default async function CampaignPage({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {copyReady && (
-            <ForkChannelMenu
-              campaignId={campaignId}
-              currentChannel={campaign.channel}
-            />
-          )}
           <DeleteCampaignButton
             campaignId={campaignId}
             campaignName={campaign.name}
@@ -245,6 +233,13 @@ export default async function CampaignPage({
           }
         />
       )}
+
+      <CampaignKeyVisualEditor
+        campaignId={campaignId}
+        intent={campaign.key_visual_intent}
+        selectedIds={campaign.selected_key_visual_ids}
+        keyVisuals={memoryForDefaults?.keyVisuals ?? []}
+      />
 
       <CampaignFontPanel
         campaignId={campaignId}

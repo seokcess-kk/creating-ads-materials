@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeleteBrandButton } from "@/components/brand/DeleteBrandButton";
+import { BrandInfoEditButton } from "@/components/brand/BrandInfoEditButton";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageTabs, type PageTabItem } from "@/components/layout/PageTabs";
@@ -124,6 +125,7 @@ export default async function BrandDetailPage({
         description={brand.website_url ?? undefined}
         actions={
           <>
+            <BrandInfoEditButton brand={brand} />
             <Link href={`/brands/${brandId}/insights`}>
               <Button variant="outline" size="sm">
                 Insights
