@@ -17,9 +17,15 @@ import { toast } from "sonner";
 interface DeleteBrandButtonProps {
   brandId: string;
   brandName: string;
+  /** "button"(기본 헤더 액션) | "menu"(MoreActionsMenu 내부 아이템) */
+  variant?: "button" | "menu";
 }
 
-export function DeleteBrandButton({ brandId, brandName }: DeleteBrandButtonProps) {
+export function DeleteBrandButton({
+  brandId,
+  brandName,
+  variant = "button",
+}: DeleteBrandButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -44,8 +50,15 @@ export function DeleteBrandButton({ brandId, brandName }: DeleteBrandButtonProps
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger>
-        <span className="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-8 px-3 cursor-pointer text-destructive">
-          삭제
+        <span
+          role={variant === "menu" ? "menuitem" : undefined}
+          className={
+            variant === "menu"
+              ? "block w-full rounded-sm px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
+              : "inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-8 px-3 cursor-pointer text-destructive"
+          }
+        >
+          {variant === "menu" ? "브랜드 삭제" : "삭제"}
         </span>
       </DialogTrigger>
       <DialogContent>

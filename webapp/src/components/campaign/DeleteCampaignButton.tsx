@@ -17,7 +17,12 @@ interface DeleteCampaignButtonProps {
   campaignId: string;
   campaignName: string;
   redirectTo?: string;
-  variant?: "button" | "icon";
+  /**
+   * - "button": 기본 outline 버튼 (헤더 액션)
+   * - "icon": 작은 ✕ 아이콘 (목록 카드)
+   * - "menu": MoreActionsMenu 내부의 메뉴 아이템 스타일
+   */
+  variant?: "button" | "icon" | "menu";
 }
 
 export function DeleteCampaignButton({
@@ -61,15 +66,18 @@ export function DeleteCampaignButton({
     <>
       <button
         type="button"
+        role={variant === "menu" ? "menuitem" : undefined}
         onClick={handleTriggerClick}
         aria-label="캠페인 삭제"
         className={
           variant === "icon"
             ? "inline-flex h-7 w-7 items-center justify-center rounded-md border border-input bg-background text-destructive hover:bg-destructive/10 cursor-pointer text-xs"
-            : "inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-8 px-3 cursor-pointer text-destructive"
+            : variant === "menu"
+              ? "block w-full rounded-sm px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10 cursor-pointer"
+              : "inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent h-8 px-3 cursor-pointer text-destructive"
         }
       >
-        {variant === "icon" ? "✕" : "삭제"}
+        {variant === "icon" ? "✕" : variant === "menu" ? "캠페인 삭제" : "삭제"}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent>

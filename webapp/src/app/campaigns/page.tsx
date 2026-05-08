@@ -85,73 +85,82 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
           {campaigns.map((c) => {
             const brand = brandMap.get(c.brand_id);
             const channel = getChannel(c.channel);
+            const automationLabel =
+              c.automation_level === "auto"
+                ? "🚀 Auto"
+                : c.automation_level === "assist"
+                  ? "✨ Assist"
+                  : "🧑‍💻 Manual";
+            const automationEmoji =
+              c.automation_level === "auto"
+                ? "🚀"
+                : c.automation_level === "assist"
+                  ? "✨"
+                  : "🧑‍💻";
             return (
-              <div key={c.id} className="relative">
+              <div key={c.id} className="group relative">
                 <Link
                   href={`/campaigns/${c.id}`}
                   className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
                 >
-                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardHeader className="pb-2">
-                    {brand && (
-                      <CardDescription className="text-[10px]">
-                        {brand.name}
-                      </CardDescription>
-                    )}
-                    <CardTitle className="text-base line-clamp-2 pr-8">
-                      {c.name}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex flex-wrap gap-1">
-                      <Badge variant="secondary" className="text-[10px]">
-                        {c.goal}
-                      </Badge>
-                      {channel && (
+                  <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {brand && (
+                            <CardDescription className="text-[10px] truncate">
+                              {brand.name}
+                            </CardDescription>
+                          )}
+                          <CardTitle className="text-base line-clamp-2 pr-8">
+                            {c.name}
+                          </CardTitle>
+                        </div>
+                        <span
+                          title={automationLabel}
+                          aria-label={automationLabel}
+                          className="shrink-0 text-sm leading-none mt-0.5"
+                        >
+                          {automationEmoji}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <Badge variant="outline" className="text-[10px]">
-                          {channel.label}
+                          {c.goal}
                         </Badge>
-                      )}
-                      <Badge
-                        variant={
-                          c.status === "completed"
-                            ? "secondary"
-                            : c.status === "abandoned"
-                              ? "destructive"
-                              : "outline"
-                        }
-                        className="text-[10px]"
-                      >
-                        {c.status}
-                      </Badge>
-                      <Badge
-                        variant={
-                          c.automation_level === "auto"
-                            ? "destructive"
-                            : c.automation_level === "assist"
+                        {channel && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {channel.label}
+                          </Badge>
+                        )}
+                        <Badge
+                          variant={
+                            c.status === "completed"
                               ? "secondary"
-                              : "outline"
-                        }
-                        className="text-[10px]"
-                      >
-                        {c.automation_level === "auto"
-                          ? "🚀"
-                          : c.automation_level === "assist"
-                            ? "✨"
-                            : "🧑‍💻"}
-                      </Badge>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">
-                      {formatKst(c.created_at, {
-                        month: "short",
-                        day: "numeric",
-                      })}{" "}
-                      생성
-                    </p>
-                  </CardContent>
-                </Card>
+                              : c.status === "abandoned"
+                                ? "destructive"
+                                : c.status === "running"
+                                  ? "default"
+                                  : "outline"
+                          }
+                          className="text-[10px]"
+                        >
+                          {c.status}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatKst(c.created_at, {
+                          month: "short",
+                          day: "numeric",
+                        })}{" "}
+                        생성
+                      </p>
+                    </CardContent>
+                  </Card>
                 </Link>
-                <div className="absolute right-3 top-3">
+                <div className="absolute right-3 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                   <DeleteCampaignButton
                     campaignId={c.id}
                     campaignName={c.name}

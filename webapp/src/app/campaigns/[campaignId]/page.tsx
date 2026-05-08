@@ -22,6 +22,7 @@ import { CampaignKeyVisualEditor } from "@/components/campaign/CampaignKeyVisual
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import { CampaignNameHeader } from "@/components/campaign/CampaignNameHeader";
 import { MaterialSwitcher } from "@/components/campaign/MaterialSwitcher";
+import { MoreActionsMenu } from "@/components/common/MoreActionsMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
 import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
@@ -219,17 +220,19 @@ export default async function CampaignPage({
             <Badge variant={campaign.status === "completed" ? "secondary" : "outline"}>
               {campaign.status}
             </Badge>
-            {run && <Badge variant="outline">run: {run.status}</Badge>}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <DeleteCampaignButton
-            campaignId={campaignId}
-            campaignName={campaign.name}
-            redirectTo={
-              brand ? `/brands/${brand.id}/campaigns` : "/campaigns"
-            }
-          />
+          <MoreActionsMenu ariaLabel="캠페인 더보기">
+            <DeleteCampaignButton
+              campaignId={campaignId}
+              campaignName={campaign.name}
+              redirectTo={
+                brand ? `/brands/${brand.id}/campaigns` : "/campaigns"
+              }
+              variant="menu"
+            />
+          </MoreActionsMenu>
         </div>
       </div>
 
