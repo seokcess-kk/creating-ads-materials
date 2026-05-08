@@ -101,7 +101,7 @@ export function IntentForm({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-24">
       <Card className="bg-muted/30">
         <CardContent className="pt-6 space-y-2 text-sm">
           <p>
@@ -115,6 +115,14 @@ export function IntentForm({
           </div>
         </CardContent>
       </Card>
+
+      <section className="space-y-3" aria-labelledby="intent-section-basic">
+        <div className="px-1">
+          <h2 id="intent-section-basic" className="text-sm font-semibold tracking-tight">
+            1. 기본 정보
+          </h2>
+          <p className="text-xs text-muted-foreground">캠페인이 노출될 채널과 식별용 이름</p>
+        </div>
 
       <Card>
         <CardHeader>
@@ -174,6 +182,16 @@ export function IntentForm({
           />
         </CardContent>
       </Card>
+
+      </section>
+
+      <section className="space-y-3" aria-labelledby="intent-section-content">
+        <div className="px-1">
+          <h2 id="intent-section-content" className="text-sm font-semibold tracking-tight">
+            2. 콘텐츠
+          </h2>
+          <p className="text-xs text-muted-foreground">전환을 일으킬 오퍼와 대상 페르소나</p>
+        </div>
 
       <Card>
         <CardHeader>
@@ -276,6 +294,16 @@ export function IntentForm({
           )}
         </CardContent>
       </Card>
+
+      </section>
+
+      <section className="space-y-3" aria-labelledby="intent-section-options">
+        <div className="px-1">
+          <h2 id="intent-section-options" className="text-sm font-semibold tracking-tight">
+            3. 옵션
+          </h2>
+          <p className="text-xs text-muted-foreground">자동화 수준·실사 자산·제약 조건</p>
+        </div>
 
       <Card>
         <CardHeader>
@@ -444,13 +472,36 @@ export function IntentForm({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => router.back()} disabled={saving}>
-          취소
-        </Button>
-        <Button onClick={submit} disabled={!canSubmit || saving}>
-          {saving ? "생성 중..." : "캠페인 시작 →"}
-        </Button>
+      </section>
+
+      <div
+        role="region"
+        aria-label="캠페인 시작 막대"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur supports-backdrop-filter:bg-background/80"
+      >
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <span
+            className={`text-xs ${canSubmit ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}
+          >
+            {canSubmit
+              ? "준비됨 — 시작 시 Strategy 단계로 이동합니다"
+              : !name.trim()
+                ? "● 캠페인 이름을 입력하세요"
+                : offers.length === 0
+                  ? "● 오퍼를 등록하세요"
+                  : audiences.length === 0
+                    ? "● 페르소나를 등록하세요"
+                    : "● 필수 항목 확인"}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.back()} disabled={saving}>
+              취소
+            </Button>
+            <Button onClick={submit} disabled={!canSubmit || saving} size="sm">
+              {saving ? "생성 중..." : "캠페인 시작 →"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
