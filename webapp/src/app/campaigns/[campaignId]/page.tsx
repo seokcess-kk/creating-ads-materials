@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import {
   getCampaign,
-  getStage,
   listRuns,
+  listStages,
   listVariants,
-  resolveRun,
 } from "@/lib/campaigns";
+import type {
+  CreativeStageName,
+  CreativeStageRow,
+} from "@/lib/campaigns/types";
 import { getBrand, loadBrandMemory } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
 import { computeLogoDefaults } from "@/lib/canvas/compose-from-run";
@@ -55,13 +58,26 @@ export default async function CampaignPage({
 }) {
   const { campaignId } = await params;
   const { run: runHint } = await searchParams;
+
+  // Level 0 — campaign이 다른 모든 호출의 의존성
   const campaign = await getCampaign(campaignId);
   if (!campaign) notFound();
-  const brand = await getBrand(campaign.brand_id);
-  const allRuns = await listRuns(campaignId, { includeArchived: true });
+
+  // Level 1 — campaign만 의존하는 호출들을 병렬로
+  const [brand, allRuns, memoryForDefaults, campaignFontPairs] =
+    await Promise.all([
+      getBrand(campaign.brand_id),
+      listRuns(campaignId, { includeArchived: true }),
+      loadBrandMemory(campaign.brand_id),
+      listCampaignFontPairs(campaign.brand_id, campaignId),
+    ]);
+
   const runs = allRuns.filter((r) => r.archived_at == null);
   const archivedRuns = allRuns.filter((r) => r.archived_at != null);
-  const run = await resolveRun(campaignId, runHint);
+  // 활성 run을 allRuns에서 직접 결정 — resolveRun의 추가 쿼리 회피
+  const run = runHint
+    ? (runs.find((r) => r.id === runHint) ?? null)
+    : (runs[0] ?? null);
   const channel = getChannel(campaign.channel);
 
   // branch-from-copy 가능한 소재가 있는지 (Strategy+Copy 완료 + Visual 진입 이상)
@@ -72,18 +88,43 @@ export default async function CampaignPage({
   const isVisible = (status: string | undefined) =>
     status === "ready" || status === "stale";
 
-  const strategyStage = run ? await getStage(run.id, "strategy") : null;
-  const strategyVariants = strategyStage ? await listVariants(strategyStage.id) : [];
+  // Level 2 — run의 모든 stage를 한 번에 + 폰트 프리셋 추론 병렬
+  const [stagesArr, overridePresetId] = await Promise.all([
+    run ? listStages(run.id) : Promise.resolve([] as CreativeStageRow[]),
+    inferPresetFromCampaignPairs(campaignFontPairs),
+  ]);
+  const stageByName = stagesArr.reduce<
+    Partial<Record<CreativeStageName, CreativeStageRow>>
+  >((acc, s) => {
+    acc[s.stage] = s;
+    return acc;
+  }, {});
+  const strategyStage = stageByName.strategy ?? null;
+  const copyStage = stageByName.copy ?? null;
+  const visualStage = stageByName.visual ?? null;
+  const retouchStage = stageByName.retouch ?? null;
+  const composeStage = stageByName.compose ?? null;
+  const shipStage = stageByName.ship ?? null;
+
+  // Level 3 — 각 stage의 active variants를 병렬로
+  const [
+    strategyVariants,
+    copyVariants,
+    visualVariants,
+    retouchVariants,
+    composeVariants,
+  ] = await Promise.all([
+    strategyStage ? listVariants(strategyStage.id) : Promise.resolve([]),
+    copyStage ? listVariants(copyStage.id) : Promise.resolve([]),
+    visualStage ? listVariants(visualStage.id) : Promise.resolve([]),
+    retouchStage ? listVariants(retouchStage.id) : Promise.resolve([]),
+    composeStage ? listVariants(composeStage.id) : Promise.resolve([]),
+  ]);
+
   const strategyReady =
     isVisible(strategyStage?.status) && strategyVariants.some((v) => v.selected);
-
-  const copyStage = run ? await getStage(run.id, "copy") : null;
-  const copyVariants = copyStage ? await listVariants(copyStage.id) : [];
   const copyReady =
     isVisible(copyStage?.status) && copyVariants.some((v) => v.selected);
-
-  const visualStage = run ? await getStage(run.id, "visual") : null;
-  const visualVariants = visualStage ? await listVariants(visualStage.id) : [];
   const selectedVisual = visualVariants.find((v) => v.selected) ?? null;
   const visualReady = isVisible(visualStage?.status) && Boolean(selectedVisual);
   const baseImageUrl =
@@ -96,23 +137,14 @@ export default async function CampaignPage({
     return out;
   })();
 
-  const retouchStage = run ? await getStage(run.id, "retouch") : null;
-  const retouchVariants = retouchStage ? await listVariants(retouchStage.id) : [];
   const selectedRetouch = retouchVariants.find((v) => v.selected) ?? null;
-
   const composeReadyGate = Boolean(selectedRetouch) || visualReady;
 
-  const composeStage = run ? await getStage(run.id, "compose") : null;
-  const composeVariants = composeStage ? await listVariants(composeStage.id) : [];
   const selectedCompose = composeVariants.find((v) => v.selected) ?? null;
   const composeUrl =
     (selectedCompose?.content_json as UrlContent | undefined)?.url ?? null;
   const composeReady =
     Boolean(selectedCompose) && isVisible(composeStage?.status);
-
-  const shipStage = run ? await getStage(run.id, "ship") : null;
-
-  const memoryForDefaults = await loadBrandMemory(campaign.brand_id);
   const logoDefaults = memoryForDefaults
     ? (() => {
         const d = computeLogoDefaults(memoryForDefaults, {
@@ -140,12 +172,7 @@ export default async function CampaignPage({
   const composeBaseUrl =
     ((selectedRetouch ?? selectedVisual)?.content_json as UrlContent | undefined)?.url ?? null;
 
-  // 캠페인 폰트 오버라이드 현재 상태 추론
-  const campaignFontPairs = await listCampaignFontPairs(
-    campaign.brand_id,
-    campaignId,
-  );
-  const overridePresetId = await inferPresetFromCampaignPairs(campaignFontPairs);
+  // 폰트 프리셋 라벨 (overridePresetId는 Level 2에서 이미 계산됨)
   const overridePresetLabel = overridePresetId
     ? (getPresetById(overridePresetId)?.label ?? null)
     : null;

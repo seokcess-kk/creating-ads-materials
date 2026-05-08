@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRightIcon } from "lucide-react";
@@ -13,6 +13,10 @@ interface BrandSummary {
   id: string;
   name: string;
   category: string | null;
+}
+
+interface SidebarProps {
+  recentBrands: BrandSummary[];
 }
 
 const navItems = [
@@ -37,9 +41,9 @@ const icons: Record<string, React.ReactNode> = {
   ),
 };
 
-export function Sidebar() {
+export function Sidebar({ recentBrands }: SidebarProps) {
   const pathname = usePathname();
-  const [brands, setBrands] = useState<BrandSummary[]>([]);
+  const brands = recentBrands;
   const [recentOpen, setRecentOpen] = useState(() => {
     if (typeof window === "undefined") return true;
     return window.localStorage.getItem(RECENT_BRANDS_KEY) !== "0";
@@ -54,19 +58,6 @@ export function Sidebar() {
       return next;
     });
   }
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/brands")
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled && data.brands) setBrands(data.brands.slice(0, 6));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
 
   const currentBrandId = (() => {
     const m = pathname.match(/^\/brands\/([^/]+)/);
@@ -84,6 +75,7 @@ export function Sidebar() {
           <Link
             key={item.href}
             href={item.href}
+            prefetch
             className={cn(
               "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
               pathname === item.href
@@ -124,6 +116,7 @@ export function Sidebar() {
                     <Link
                       key={b.id}
                       href={`/brands/${b.id}`}
+                      prefetch
                       className={cn(
                         "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
                         currentBrandId === b.id

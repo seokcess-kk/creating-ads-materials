@@ -8,7 +8,19 @@ import { ActivityCenter } from "@/components/notifications/ActivityCenter";
 
 const BARE_PREFIXES = ["/login", "/auth"];
 
-export function ShellChrome({ children }: { children: React.ReactNode }) {
+interface RecentBrand {
+  id: string;
+  name: string;
+  category: string | null;
+}
+
+export function ShellChrome({
+  children,
+  recentBrands,
+}: {
+  children: React.ReactNode;
+  recentBrands: RecentBrand[];
+}) {
   const pathname = usePathname();
   const bare = BARE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
@@ -16,7 +28,7 @@ export function ShellChrome({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Sidebar />
+      <Sidebar recentBrands={recentBrands} />
       <main className="flex-1 overflow-auto">
         <TopProgressBar />
         <CompletionBanner />

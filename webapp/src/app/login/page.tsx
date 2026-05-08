@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { signIn } from "./actions";
 
-export const dynamic = "force-dynamic";
+// searchParams 사용으로 자동 dynamic — 명시 불필요
 
 export default async function LoginPage({
   searchParams,
