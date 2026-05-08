@@ -7,11 +7,13 @@ import { PencilIcon, PlusIcon, ArchiveIcon, CheckIcon, XIcon } from "lucide-reac
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { NewMaterialDialog } from "./NewMaterialDialog";
+import { ArchivedMaterialsDrawer } from "./ArchivedMaterialsDrawer";
 import type { CreativeRun } from "@/lib/campaigns/types";
 
 interface Props {
   campaignId: string;
   runs: CreativeRun[];
+  archivedRuns: CreativeRun[];
   activeRunId: string | null;
   /** 캠페인에 변형 가능한 Strategy+Copy 소재가 있는지 — branch-from-copy 활성화 조건 */
   hasBranchableSource: boolean;
@@ -36,6 +38,7 @@ function statusLabel(status: CreativeRun["status"]): {
 export function MaterialSwitcher({
   campaignId,
   runs,
+  archivedRuns,
   activeRunId,
   hasBranchableSource,
 }: Props) {
@@ -128,11 +131,17 @@ export function MaterialSwitcher({
         <p className="text-xs text-muted-foreground">
           아직 소재가 없습니다. Strategy 단계를 시작하거나 새 소재를 만드세요.
         </p>
-        <NewMaterialDialog
-          campaignId={campaignId}
-          existingRuns={runs}
-          hasBranchableSource={hasBranchableSource}
-        />
+        <div className="flex items-center gap-1">
+          <ArchivedMaterialsDrawer
+            campaignId={campaignId}
+            archivedRuns={archivedRuns}
+          />
+          <NewMaterialDialog
+            campaignId={campaignId}
+            existingRuns={runs}
+            hasBranchableSource={hasBranchableSource}
+          />
+        </div>
       </div>
     );
   }
@@ -160,11 +169,17 @@ export function MaterialSwitcher({
             </span>
           )}
         </p>
-        <NewMaterialDialog
-          campaignId={campaignId}
-          existingRuns={runs}
-          hasBranchableSource={hasBranchableSource}
-        />
+        <div className="flex items-center gap-1">
+          <ArchivedMaterialsDrawer
+            campaignId={campaignId}
+            archivedRuns={archivedRuns}
+          />
+          <NewMaterialDialog
+            campaignId={campaignId}
+            existingRuns={runs}
+            hasBranchableSource={hasBranchableSource}
+          />
+        </div>
       </div>
       <div
         role="tablist"

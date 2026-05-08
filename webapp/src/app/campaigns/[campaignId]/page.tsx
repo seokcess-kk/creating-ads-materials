@@ -57,7 +57,9 @@ export default async function CampaignPage({
   const campaign = await getCampaign(campaignId);
   if (!campaign) notFound();
   const brand = await getBrand(campaign.brand_id);
-  const runs = await listRuns(campaignId);
+  const allRuns = await listRuns(campaignId, { includeArchived: true });
+  const runs = allRuns.filter((r) => r.archived_at == null);
+  const archivedRuns = allRuns.filter((r) => r.archived_at != null);
   const run = await resolveRun(campaignId, runHint);
   const channel = getChannel(campaign.channel);
 
@@ -234,6 +236,7 @@ export default async function CampaignPage({
       <MaterialSwitcher
         campaignId={campaignId}
         runs={runs}
+        archivedRuns={archivedRuns}
         activeRunId={run?.id ?? null}
         hasBranchableSource={hasBranchableSource}
       />
