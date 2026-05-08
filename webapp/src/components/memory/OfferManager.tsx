@@ -248,13 +248,14 @@ export function OfferManager({
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5">
+                  <Label htmlFor="offer-title" className="flex items-center gap-1.5">
                     타이틀 *
                     <HelpHint text="오퍼 카드/광고에 노출되는 짧은 이름. 16자 이내 권장." />
                   </Label>
                   <CharCounter state={titleCount} />
                 </div>
                 <Input
+                  id="offer-title"
                   value={draft.title}
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                   placeholder={domain.titleHint}
@@ -265,13 +266,14 @@ export function OfferManager({
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label className="flex items-center gap-1.5">
+                    <Label htmlFor="offer-usp" className="flex items-center gap-1.5">
                       USP
                       <HelpHint text="이 오퍼만의 차별점 한 줄. 광고 헤드라인 후보로 활용됩니다." />
                     </Label>
                     <CharCounter state={uspCount} />
                   </div>
                   <Input
+                    id="offer-usp"
                     value={draft.usp ?? ""}
                     onChange={(e) => setDraft({ ...draft, usp: e.target.value || null })}
                     placeholder={domain.uspHint}
@@ -279,11 +281,12 @@ export function OfferManager({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="flex items-center gap-1.5">
+                  <Label htmlFor="offer-price" className="flex items-center gap-1.5">
                     가격
                     <HelpHint text="할인 노출 시 '원가 → 할인가' 형식 권장. 비공개면 비워두세요." />
                   </Label>
                   <Input
+                    id="offer-price"
                     value={draft.price ?? ""}
                     onChange={(e) => setDraft({ ...draft, price: e.target.value || null })}
                     placeholder="예: 35만원 → 25만원"
@@ -292,8 +295,8 @@ export function OfferManager({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
+              <div className="space-y-2" role="group" aria-labelledby="offer-benefits-label">
+                <Label id="offer-benefits-label" className="flex items-center gap-1.5">
                   혜택 (benefits)
                   <HelpHint text="검증 가능한 사실만. 3~5개 권장. 추천 칩 또는 직접 입력." />
                 </Label>
@@ -314,11 +317,12 @@ export function OfferManager({
               </div>
 
               <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
+                <Label htmlFor="offer-urgency" className="flex items-center gap-1.5">
                   긴급성 (urgency)
                   <HelpHint text="가짜 다급함 금지. 정원제·시즌 한정 등 사실 기반만." />
                 </Label>
                 <Textarea
+                  id="offer-urgency"
                   value={draft.urgency ?? ""}
                   onChange={(e) =>
                     setDraft({ ...draft, urgency: e.target.value || null })
@@ -342,8 +346,8 @@ export function OfferManager({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
+              <div className="space-y-2" role="group" aria-labelledby="offer-evidence-label">
+                <Label id="offer-evidence-label" className="flex items-center gap-1.5">
                   증거 (evidence)
                   <HelpHint text="검증 가능한 신뢰 신호 (수치·인증·경력). 추측 금지." />
                 </Label>

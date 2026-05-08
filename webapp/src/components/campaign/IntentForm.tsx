@@ -118,12 +118,14 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">채널 *</CardTitle>
+          <CardTitle id="intent-channel-label" className="text-base">채널 *</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex gap-3 items-start">
             <div className="flex-1">
               <select
+                id="intent-channel"
+                aria-labelledby="intent-channel-label"
                 value={channelId}
                 onChange={(e) => setChannelId(e.target.value)}
                 disabled={saving}
@@ -159,10 +161,12 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">캠페인 이름 *</CardTitle>
+          <CardTitle id="intent-name-label" className="text-base">캠페인 이름 *</CardTitle>
         </CardHeader>
         <CardContent>
           <Input
+            id="intent-name"
+            aria-labelledby="intent-name-label"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="예: 봄 신학기 전환 캠페인 3월"
@@ -173,7 +177,7 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">오퍼 선택 *</CardTitle>
+          <CardTitle id="intent-offer-label" className="text-base">오퍼 선택 *</CardTitle>
         </CardHeader>
         <CardContent>
           {offers.length === 0 ? (
@@ -186,7 +190,7 @@ export function IntentForm({
               </Link>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div role="radiogroup" aria-labelledby="intent-offer-label" className="space-y-2">
               {offers.map((o) => (
                 <label
                   key={o.id}
@@ -224,7 +228,7 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">타겟 페르소나 *</CardTitle>
+          <CardTitle id="intent-audience-label" className="text-base">타겟 페르소나 *</CardTitle>
         </CardHeader>
         <CardContent>
           {audiences.length === 0 ? (
@@ -237,7 +241,7 @@ export function IntentForm({
               </Link>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div role="radiogroup" aria-labelledby="intent-audience-label" className="space-y-2">
               {audiences.map((a) => (
                 <label
                   key={a.id}
@@ -275,10 +279,14 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">자동화 수준</CardTitle>
+          <CardTitle id="intent-automation-label" className="text-base">자동화 수준</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div
+            role="radiogroup"
+            aria-labelledby="intent-automation-label"
+            className="grid grid-cols-1 md:grid-cols-3 gap-2"
+          >
             {(
               [
                 {
@@ -338,8 +346,9 @@ export function IntentForm({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>주인공·포커스</Label>
+              <Label htmlFor="intent-kv-intent">주인공·포커스</Label>
               <Input
+                id="intent-kv-intent"
                 value={keyVisualIntent}
                 onChange={(e) => setKeyVisualIntent(e.target.value)}
                 placeholder="예: 원장님 전문성 어필 / 쾌적한 독서실 공간"
@@ -361,8 +370,14 @@ export function IntentForm({
               </div>
             ) : (
               <div className="space-y-2">
-                <Label>사용할 자산 (복수 선택 가능, 비워두면 AI 자유 생성)</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <Label id="intent-kv-grid-label">
+                  사용할 자산 (복수 선택 가능, 비워두면 AI 자유 생성)
+                </Label>
+                <div
+                  role="group"
+                  aria-labelledby="intent-kv-grid-label"
+                  className="grid grid-cols-2 md:grid-cols-3 gap-2"
+                >
                   {keyVisuals.map((kv) => {
                     const selected = selectedKvIds.includes(kv.id);
                     return (
@@ -414,10 +429,12 @@ export function IntentForm({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">제약사항 (선택)</CardTitle>
+          <CardTitle id="intent-note-label" className="text-base">제약사항 (선택)</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
+            id="intent-note"
+            aria-labelledby="intent-note-label"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="예: 가격 노출 필수 / 특정 이미지 금지 / 특정 키워드 포함"

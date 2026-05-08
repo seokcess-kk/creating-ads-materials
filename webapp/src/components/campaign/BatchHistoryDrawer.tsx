@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { BatchSummary, CreativeStageName } from "@/lib/campaigns/types";
 import { formatKst } from "@/lib/format/date";
@@ -73,100 +79,91 @@ export function BatchHistoryDrawer({
   const archivedCount = batches.filter((b) => b.archived).length;
 
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="text-xs"
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={<Button variant="ghost" size="sm" className="text-xs" />}
       >
         📚 히스토리 {archivedCount > 0 && `(${archivedCount})`}
-      </Button>
-
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end"
-          onClick={() => setOpen(false)}
-        >
-          <div className="fixed inset-0 bg-black/30" />
-          <div
-            className="relative w-full max-w-md bg-background border-l shadow-lg overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+      </DialogTrigger>
+      <DialogContent
+        showCloseButton={false}
+        className="top-0 right-0 left-auto translate-x-0 translate-y-0 w-full max-w-md sm:max-w-md h-screen rounded-none p-0 gap-0 flex flex-col"
+      >
+        <DialogTitle className="sr-only">{stage} 배치 히스토리</DialogTitle>
+        <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{stage} 배치 히스토리</h3>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="닫기"
           >
-            <div className="sticky top-0 bg-background border-b px-4 py-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">{stage} 배치 히스토리</h3>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
+            ✕
+          </button>
+        </div>
 
-            <div className="p-4 space-y-3">
-              {loading && (
-                <p className="text-sm text-muted-foreground">불러오는 중...</p>
-              )}
-              {!loading && batches.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  아직 생성된 배치가 없습니다
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {loading && (
+            <p className="text-sm text-muted-foreground">불러오는 중...</p>
+          )}
+          {!loading && batches.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              아직 생성된 배치가 없습니다
+            </p>
+          )}
+          {batches.map((b) => (
+            <div
+              key={b.batch_id}
+              className={
+                "border rounded-md p-3 " +
+                (b.archived ? "bg-muted/20" : "bg-primary/5 border-primary/40")
+              }
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px]">
+                    #{b.batch_index}
+                  </Badge>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {b.batch_mode}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {b.variant_count}개
+                  </span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {formatKst(b.created_at, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              {b.batch_instruction && (
+                <p className="text-xs text-muted-foreground italic mb-2">
+                  “{b.batch_instruction}”
                 </p>
               )}
-              {batches.map((b) => (
-                <div
-                  key={b.batch_id}
-                  className={
-                    "border rounded-md p-3 " +
-                    (b.archived ? "bg-muted/20" : "bg-primary/5 border-primary/40")
-                  }
+              {b.archived ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={restoring !== null}
+                  onClick={() => restore(b.batch_id)}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[10px]">
-                        #{b.batch_index}
-                      </Badge>
-                      <Badge variant="secondary" className="text-[10px]">
-                        {b.batch_mode}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        {b.variant_count}개
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatKst(b.created_at, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                  {b.batch_instruction && (
-                    <p className="text-xs text-muted-foreground italic mb-2">
-                      “{b.batch_instruction}”
-                    </p>
-                  )}
-                  {b.archived ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      disabled={restoring !== null}
-                      onClick={() => restore(b.batch_id)}
-                    >
-                      {restoring === b.batch_id ? "복원 중..." : "이 배치 복원"}
-                    </Button>
-                  ) : (
-                    <p className="text-[11px] text-primary font-medium">
-                      ✓ 현재 활성 배치
-                    </p>
-                  )}
-                </div>
-              ))}
+                  {restoring === b.batch_id ? "복원 중..." : "이 배치 복원"}
+                </Button>
+              ) : (
+                <p className="text-[11px] text-primary font-medium">
+                  ✓ 현재 활성 배치
+                </p>
+              )}
             </div>
-          </div>
+          ))}
         </div>
-      )}
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useNotifications } from "./NotificationContext";
 
 function timeAgo(ts: number): string {
@@ -28,12 +34,15 @@ export function ActivityCenter() {
   const total = ops.length + unseen;
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="relative p-2 rounded-md hover:bg-muted transition-colors"
-        aria-label="알림 센터"
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            aria-label="알림 센터"
+            className="relative p-2 rounded-md hover:bg-muted transition-colors"
+          />
+        }
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -57,121 +66,115 @@ export function ActivityCenter() {
         {ops.length > 0 && (
           <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary animate-ping opacity-60" />
         )}
-      </button>
-
-      {open && (
-        <div
-          className="fixed inset-0 z-50"
-          onClick={() => setOpen(false)}
-        >
-          <div className="fixed inset-0 bg-black/20" />
-          <div
-            className="fixed top-12 right-4 w-80 max-h-[80vh] bg-background border rounded-md shadow-lg overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
+      </DialogTrigger>
+      <DialogContent
+        showCloseButton={false}
+        className="top-12 right-4 left-auto translate-x-0 translate-y-0 w-80 max-w-[calc(100vw-2rem)] sm:max-w-sm max-h-[80vh] flex flex-col rounded-md p-0 gap-0 overflow-hidden"
+      >
+        <DialogTitle className="sr-only">활동 센터</DialogTitle>
+        <div className="px-3 py-2 border-b flex items-center justify-between">
+          <span className="text-sm font-semibold">활동</span>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="닫기"
           >
-            <div className="px-3 py-2 border-b flex items-center justify-between">
-              <span className="text-sm font-semibold">활동</span>
-              <button
-                onClick={() => setOpen(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                ✕
-              </button>
-            </div>
+            ✕
+          </button>
+        </div>
 
-            <div className="flex-1 overflow-y-auto">
-              {ops.length === 0 && completed.length === 0 && (
-                <p className="p-4 text-xs text-muted-foreground text-center">
-                  활동 내역이 없습니다
-                </p>
-              )}
+        <div className="flex-1 overflow-y-auto">
+          {ops.length === 0 && completed.length === 0 && (
+            <p className="p-4 text-xs text-muted-foreground text-center">
+              활동 내역이 없습니다
+            </p>
+          )}
 
-              {ops.length > 0 && (
-                <div className="border-b">
-                  <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    진행 중 ({ops.length})
-                  </p>
-                  {ops.map((op) => (
-                    <div key={op.id} className="px-3 py-2 hover:bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
-                        <span className="text-xs font-medium truncate">{op.title}</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground ml-3.5 mt-0.5">
-                        {timeAgo(op.startedAt)} 시작 · 예상 {op.estimatedSeconds}초
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {completed.length > 0 && (
-                <div>
-                  <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      최근 완료
-                    </span>
-                    <button
-                      type="button"
-                      onClick={clearAll}
-                      className="text-[10px] text-muted-foreground hover:text-foreground"
-                    >
-                      비우기
-                    </button>
+          {ops.length > 0 && (
+            <div className="border-b">
+              <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                진행 중 ({ops.length})
+              </p>
+              {ops.map((op) => (
+                <div key={op.id} className="px-3 py-2 hover:bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                    <span className="text-xs font-medium truncate">{op.title}</span>
                   </div>
-                  {completed.map((op) => {
-                    const failed = op.status === "failed";
-                    return (
-                      <div
-                        key={op.id}
-                        className="px-3 py-2 hover:bg-muted/50 flex items-center gap-2"
-                      >
-                        <span className="shrink-0 text-xs">
-                          {failed ? "❌" : "✅"}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">
-                            {op.title}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {op.completedAt ? timeAgo(op.completedAt) : ""}
-                            {failed && op.errorMsg && ` · ${op.errorMsg.slice(0, 40)}`}
-                          </p>
-                        </div>
-                        {op.href && !failed && (
-                          <Link
-                            href={op.href}
-                            onClick={() => setOpen(false)}
-                            className="text-[10px] text-primary hover:underline shrink-0"
-                          >
-                            이동
-                          </Link>
-                        )}
-                      </div>
-                    );
-                  })}
+                  <p className="text-[10px] text-muted-foreground ml-3.5 mt-0.5">
+                    {timeAgo(op.startedAt)} 시작 · 예상 {op.estimatedSeconds}초
+                  </p>
                 </div>
-              )}
+              ))}
             </div>
+          )}
 
-            <div className="border-t p-3 space-y-2">
-              {notificationsEnabled ? (
-                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <span>🔔</span> 브라우저 알림 활성화됨
-                </p>
-              ) : (
+          {completed.length > 0 && (
+            <div>
+              <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  최근 완료
+                </span>
                 <button
                   type="button"
-                  onClick={requestBrowserPermission}
-                  className="w-full text-xs text-primary hover:bg-primary/5 rounded px-2 py-1.5 border border-primary/40"
+                  onClick={clearAll}
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
                 >
-                  🔔 브라우저 푸시 알림 켜기
+                  비우기
                 </button>
-              )}
+              </div>
+              {completed.map((op) => {
+                const failed = op.status === "failed";
+                return (
+                  <div
+                    key={op.id}
+                    className="px-3 py-2 hover:bg-muted/50 flex items-center gap-2"
+                  >
+                    <span className="shrink-0 text-xs">
+                      {failed ? "❌" : "✅"}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {op.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {op.completedAt ? timeAgo(op.completedAt) : ""}
+                        {failed && op.errorMsg && ` · ${op.errorMsg.slice(0, 40)}`}
+                      </p>
+                    </div>
+                    {op.href && !failed && (
+                      <Link
+                        href={op.href}
+                        onClick={() => setOpen(false)}
+                        className="text-[10px] text-primary hover:underline shrink-0"
+                      >
+                        이동
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          )}
         </div>
-      )}
-    </>
+
+        <div className="border-t p-3 space-y-2">
+          {notificationsEnabled ? (
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+              <span>🔔</span> 브라우저 알림 활성화됨
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={requestBrowserPermission}
+              className="w-full text-xs text-primary hover:bg-primary/5 rounded px-2 py-1.5 border border-primary/40"
+            >
+              🔔 브라우저 푸시 알림 켜기
+            </button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

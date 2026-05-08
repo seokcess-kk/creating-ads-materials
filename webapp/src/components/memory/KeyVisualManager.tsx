@@ -135,8 +135,9 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>종류</Label>
+              <Label htmlFor="kv-kind">종류</Label>
               <select
+                id="kv-kind"
                 value={kind}
                 onChange={(e) => setKind(e.target.value as KeyVisualKind)}
                 disabled={uploading}
@@ -149,8 +150,9 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
               <p className="text-xs text-muted-foreground">{KIND_HINTS[kind]}</p>
             </div>
             <div className="space-y-2">
-              <Label>라벨</Label>
+              <Label htmlFor="kv-label">라벨</Label>
               <Input
+                id="kv-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={
@@ -233,6 +235,7 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
                   <div className="flex-1 space-y-2 min-w-0">
                     <div className="flex items-start gap-2">
                       <Input
+                        aria-label="실사 자산 라벨"
                         value={kv.label}
                         onChange={(e) => toggleLabel(kv.id, e.target.value)}
                         className="text-sm font-medium h-8"

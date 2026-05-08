@@ -42,7 +42,18 @@ export default async function BrandDetailPage({
     product: keyVisuals.filter((k) => k.kind === "product").length,
   };
 
-  const sections = [
+  type SectionGroup = "required" | "boosters" | "optional";
+  interface Section {
+    title: string;
+    description: string;
+    href: string;
+    status: string;
+    done: boolean;
+    detail: string;
+    group: SectionGroup;
+  }
+
+  const sections: Section[] = [
     {
       title: "Identity",
       description: "보이스·금지어·컬러·로고",
@@ -52,6 +63,7 @@ export default async function BrandDetailPage({
       detail: identity
         ? `${identity.colors_json.length} 컬러 · ${identity.taboos.length} 금지어`
         : "보이스·컬러를 설정하세요",
+      group: "required",
     },
     {
       title: "Offers",
@@ -60,6 +72,7 @@ export default async function BrandDetailPage({
       status: `${offers.length}개`,
       done: offers.length > 0,
       detail: offers[0]?.title ?? "오퍼를 등록하세요",
+      group: "required",
     },
     {
       title: "Audiences",
@@ -68,6 +81,7 @@ export default async function BrandDetailPage({
       status: `${audiences.length}개`,
       done: audiences.length > 0,
       detail: audiences[0]?.persona_name ?? "페르소나를 정의하세요",
+      group: "required",
     },
     {
       title: "References (BP)",
@@ -79,6 +93,16 @@ export default async function BrandDetailPage({
         references.length === 0
           ? "레퍼런스를 업로드하세요"
           : `대기 ${pendingRefs} · 실패 ${failedRefs}`,
+      group: "boosters",
+    },
+    {
+      title: "Fonts",
+      description: "역할별 폰트 조합",
+      href: `/brands/${brandId}/fonts`,
+      status: `${fontPairs.length}/5 설정`,
+      done: fontPairs.length === 5,
+      detail: fontPairs.length === 0 ? "조합을 설정하세요" : `${fontPairs.length}개 역할`,
+      group: "boosters",
     },
     {
       title: "Key Visuals",
@@ -90,18 +114,30 @@ export default async function BrandDetailPage({
         keyVisuals.length === 0
           ? "실사 사용 시 업로드 (선택)"
           : `공간 ${kvByKind.space} · 인물 ${kvByKind.person} · 제품 ${kvByKind.product}`,
-    },
-    {
-      title: "Fonts",
-      description: "역할별 폰트 조합",
-      href: `/brands/${brandId}/fonts`,
-      status: `${fontPairs.length}/5 설정`,
-      done: fontPairs.length === 5,
-      detail: fontPairs.length === 0 ? "조합을 설정하세요" : `${fontPairs.length}개 역할`,
+      group: "optional",
     },
   ];
 
   const memoryDoneCount = sections.filter((s) => s.done).length;
+
+  const groupMeta: Record<
+    SectionGroup,
+    { title: string; subtitle: string }
+  > = {
+    required: {
+      title: "Required to launch",
+      subtitle: "캠페인 시작 전에 반드시 설정",
+    },
+    boosters: {
+      title: "Creative quality boosters",
+      subtitle: "있으면 결과물 품질이 올라가는 항목",
+    },
+    optional: {
+      title: "Optional assets",
+      subtitle: "실사 합성을 쓸 때만 필요",
+    },
+  };
+  const groupOrder: SectionGroup[] = ["required", "boosters", "optional"];
 
   const tabs: PageTabItem[] = [
     {
@@ -150,27 +186,59 @@ export default async function BrandDetailPage({
       <PageTabs tabs={tabs} activeId={activeTab} />
 
       {activeTab === "memory" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {sections.map((s) => (
-            <Link
-              key={s.title}
-              href={s.href}
-              className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
-            >
-              <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{s.title}</CardTitle>
-                    <Badge variant={s.done ? "secondary" : "outline"}>{s.status}</Badge>
+        <div className="space-y-6">
+          {groupOrder.map((g) => {
+            const items = sections.filter((s) => s.group === g);
+            if (items.length === 0) return null;
+            const meta = groupMeta[g];
+            const doneInGroup = items.filter((s) => s.done).length;
+            return (
+              <section key={g} className="space-y-2" aria-labelledby={`group-${g}`}>
+                <div className="flex items-baseline justify-between gap-3">
+                  <div>
+                    <h2
+                      id={`group-${g}`}
+                      className="text-sm font-semibold tracking-tight"
+                    >
+                      {meta.title}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">{meta.subtitle}</p>
                   </div>
-                  <CardDescription className="text-xs">{s.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{s.detail}</p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    {doneInGroup}/{items.length}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {items.map((s) => (
+                    <Link
+                      key={s.title}
+                      href={s.href}
+                      className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
+                    >
+                      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base">{s.title}</CardTitle>
+                            <Badge variant={s.done ? "secondary" : "outline"}>
+                              {s.status}
+                            </Badge>
+                          </div>
+                          <CardDescription className="text-xs">
+                            {s.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {s.detail}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
 

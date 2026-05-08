@@ -138,8 +138,11 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-2">
-          <Label className="text-xs">어떤 광고를 만들고 싶나요?</Label>
+          <Label htmlFor="offer-draft-intent" className="text-xs">
+            어떤 광고를 만들고 싶나요?
+          </Label>
           <Textarea
+            id="offer-draft-intent"
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
             rows={2}
@@ -163,8 +166,11 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
 
         <div className="grid sm:grid-cols-3 gap-3">
           <div className="space-y-1 sm:col-span-2">
-            <Label className="text-xs">페르소나</Label>
+            <Label htmlFor="offer-draft-audience" className="text-xs">
+              페르소나
+            </Label>
             <select
+              id="offer-draft-audience"
               value={audienceId}
               onChange={(e) => setAudienceId(e.target.value)}
               disabled={loading || saving || audiences.length === 0}
@@ -180,8 +186,11 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
             </select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">생성 개수</Label>
+            <Label htmlFor="offer-draft-count" className="text-xs">
+              생성 개수
+            </Label>
             <select
+              id="offer-draft-count"
               value={count}
               onChange={(e) => setCount(Number(e.target.value))}
               disabled={loading || saving}

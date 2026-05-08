@@ -140,13 +140,19 @@ export function CampaignKeyVisualEditor({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label>사용할 자산 (복수 선택, 비워두면 AI 자유 생성)</Label>
+                  <Label id="kv-editor-grid-label">
+                    사용할 자산 (복수 선택, 비워두면 AI 자유 생성)
+                  </Label>
                   {keyVisuals.length === 0 ? (
                     <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
                       등록된 실사 자산이 없습니다
                     </p>
                   ) : (
-                    <div className="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto pr-1">
+                    <div
+                      role="group"
+                      aria-labelledby="kv-editor-grid-label"
+                      className="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto pr-1"
+                    >
                       {keyVisuals.map((kv) => {
                         const selected = draftIds.includes(kv.id);
                         return (

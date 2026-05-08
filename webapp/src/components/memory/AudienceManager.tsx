@@ -191,8 +191,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>페르소나 이름 *</Label>
+              <Label htmlFor="audience-persona-name">페르소나 이름 *</Label>
               <Input
+                id="audience-persona-name"
                 value={draft.persona_name}
                 onChange={(e) => setDraft({ ...draft, persona_name: e.target.value })}
                 placeholder="예: 고1 학부모, 30대 직장인"
@@ -201,8 +202,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
             </div>
             <div className="grid md:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>연령</Label>
+                <Label htmlFor="audience-age">연령</Label>
                 <Input
+                  id="audience-age"
                   value={draft.age ?? ""}
                   onChange={(e) => setDraft({ ...draft, age: e.target.value })}
                   placeholder="예: 40대"
@@ -210,8 +212,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>성별</Label>
+                <Label htmlFor="audience-gender">성별</Label>
                 <Input
+                  id="audience-gender"
                   value={draft.gender ?? ""}
                   onChange={(e) => setDraft({ ...draft, gender: e.target.value })}
                   placeholder="남/여/전체"
@@ -219,8 +222,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>지역</Label>
+                <Label htmlFor="audience-region">지역</Label>
                 <Input
+                  id="audience-region"
                   value={draft.region ?? ""}
                   onChange={(e) => setDraft({ ...draft, region: e.target.value })}
                   placeholder="예: 수도권"
@@ -228,8 +232,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>소득</Label>
+                <Label htmlFor="audience-income">소득</Label>
                 <Input
+                  id="audience-income"
                   value={draft.income ?? ""}
                   onChange={(e) => setDraft({ ...draft, income: e.target.value })}
                   placeholder="예: 중상층"
@@ -238,8 +243,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>언어 수준</Label>
+              <Label htmlFor="audience-language-level">언어 수준</Label>
               <select
+                id="audience-language-level"
                 value={draft.language_level}
                 onChange={(e) => setDraft({ ...draft, language_level: e.target.value })}
                 disabled={saving}
@@ -253,8 +259,8 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
               </select>
             </div>
             <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Pains (고민·문제)</Label>
+              <div className="space-y-2" role="group" aria-labelledby="audience-pains-label">
+                <Label id="audience-pains-label">Pains (고민·문제)</Label>
                 <TagInput
                   value={draft.pains}
                   onChange={(v) => setDraft({ ...draft, pains: v })}
@@ -270,8 +276,8 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
                   disabled={saving}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Desires (욕구·목표)</Label>
+              <div className="space-y-2" role="group" aria-labelledby="audience-desires-label">
+                <Label id="audience-desires-label">Desires (욕구·목표)</Label>
                 <TagInput
                   value={draft.desires}
                   onChange={(v) => setDraft({ ...draft, desires: v })}
@@ -289,8 +295,9 @@ export function AudienceManager({ brandId, initial }: AudienceManagerProps) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>메모</Label>
+              <Label htmlFor="audience-notes">메모</Label>
               <Textarea
+                id="audience-notes"
                 value={draft.notes}
                 onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
                 rows={3}

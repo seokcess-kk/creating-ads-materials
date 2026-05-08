@@ -206,8 +206,9 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
         <CardContent className="space-y-4">
           <div className="grid md:grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>출처</Label>
+              <Label htmlFor="ref-source-type">출처</Label>
               <select
+                id="ref-source-type"
                 value={sourceType}
                 onChange={(e) => setSourceType(e.target.value as ReferenceSource)}
                 disabled={uploading}
@@ -220,9 +221,10 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               </select>
             </div>
             <div className="space-y-2">
-              <Label>가중치 (0~100)</Label>
+              <Label htmlFor="ref-weight">가중치 (0~100)</Label>
               <div className="flex items-center gap-2">
                 <input
+                  id="ref-weight"
                   type="range"
                   min={0}
                   max={100}
@@ -231,13 +233,14 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                   disabled={uploading}
                   className="flex-1"
                 />
-                <span className="w-10 text-sm text-right">{weight}</span>
+                <span className="w-10 text-sm text-right" aria-hidden>{weight}</span>
               </div>
             </div>
           </div>
           <div className="space-y-2">
-            <Label>성과 점수 (선택, 1=실패 · 5=대박)</Label>
+            <Label htmlFor="ref-performance">성과 점수 (선택, 1=실패 · 5=대박)</Label>
             <select
+              id="ref-performance"
               value={performanceScore ?? ""}
               onChange={(e) =>
                 setPerformanceScore(e.target.value === "" ? null : Number(e.target.value))
@@ -254,8 +257,9 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
             </select>
           </div>
           <div className="space-y-2">
-            <Label>메모 (선택)</Label>
+            <Label htmlFor="ref-source-note">메모 (선택)</Label>
             <Input
+              id="ref-source-note"
               value={sourceNote}
               onChange={(e) => setSourceNote(e.target.value)}
               placeholder="출처·맥락 메모"
@@ -297,8 +301,9 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs">이미지 URL *</Label>
+              <Label htmlFor="ref-import-image-url" className="text-xs">이미지 URL *</Label>
               <Input
+                id="ref-import-image-url"
                 value={importImageUrl}
                 onChange={(e) => setImportImageUrl(e.target.value)}
                 placeholder="https://tpc.googlesyndication.com/simgad/... (광고 크리에이티브 이미지 URL)"
@@ -306,8 +311,11 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs">원본 광고 URL (선택 — 중복 방지·추적용)</Label>
+              <Label htmlFor="ref-import-source-url" className="text-xs">
+                원본 광고 URL (선택 — 중복 방지·추적용)
+              </Label>
               <Input
+                id="ref-import-source-url"
                 value={importSourceUrl}
                 onChange={(e) => setImportSourceUrl(e.target.value)}
                 placeholder="https://adstransparency.google.com/... / https://www.facebook.com/ads/library/?id=..."
@@ -396,6 +404,7 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-16">가중치</span>
                       <input
+                        aria-label="레퍼런스 가중치"
                         type="range"
                         min={0}
                         max={100}
@@ -403,11 +412,12 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                         onChange={(e) => changeWeight(r.id, Number(e.target.value))}
                         className="flex-1"
                       />
-                      <span className="w-10 text-xs text-right">{r.weight}</span>
+                      <span className="w-10 text-xs text-right" aria-hidden>{r.weight}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-16">성과</span>
                       <select
+                        aria-label="레퍼런스 성과 점수"
                         value={r.performance_score ?? ""}
                         onChange={(e) =>
                           changePerformance(

@@ -247,6 +247,7 @@ export function IdentityForm({
           </p>
           <div className="flex gap-2">
             <Input
+              aria-label="분석할 홈페이지 URL"
               value={websiteOverride}
               onChange={(e) => setWebsiteOverride(e.target.value)}
               placeholder={brandWebsiteUrl ?? "https://example.com"}
@@ -270,8 +271,9 @@ export function IdentityForm({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>톤 (한 줄)</Label>
+            <Label htmlFor="identity-tone">톤 (한 줄)</Label>
             <Input
+              id="identity-tone"
               value={voice.tone ?? ""}
               onChange={(e) => setVoice({ ...voice, tone: e.target.value })}
               placeholder="예: 신뢰감 있고 친근한"
@@ -286,8 +288,8 @@ export function IdentityForm({
               disabled={saving}
             />
           </div>
-          <div className="space-y-2">
-            <Label>성격 (personality)</Label>
+          <div className="space-y-2" role="group" aria-labelledby="identity-personality-label">
+            <Label id="identity-personality-label">성격 (personality)</Label>
             <TagInput
               value={voice.personality ?? []}
               onChange={(v) => setVoice({ ...voice, personality: v })}
@@ -307,8 +309,8 @@ export function IdentityForm({
             />
           </div>
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Do (지향)</Label>
+            <div className="space-y-2" role="group" aria-labelledby="identity-do-label">
+              <Label id="identity-do-label">Do (지향)</Label>
               <TagInput
                 value={voice.do ?? []}
                 onChange={(v) => setVoice({ ...voice, do: v })}
@@ -324,8 +326,8 @@ export function IdentityForm({
                 disabled={saving}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Don&apos;t (지양)</Label>
+            <div className="space-y-2" role="group" aria-labelledby="identity-dont-label">
+              <Label id="identity-dont-label">Don&apos;t (지양)</Label>
               <TagInput
                 value={voice.dont ?? []}
                 onChange={(v) => setVoice({ ...voice, dont: v })}
@@ -648,6 +650,7 @@ function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove 
         )}
       </div>
       <Input
+        aria-label="로고 라벨"
         value={labelDraft}
         onChange={(e) => setLabelDraft(e.target.value)}
         onBlur={() => {
