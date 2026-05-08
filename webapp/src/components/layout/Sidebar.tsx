@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+
+const RECENT_BRANDS_KEY = "ad-studio:sidebar:recent-brands-open";
 
 interface BrandSummary {
   id: string;
@@ -37,6 +40,20 @@ const icons: Record<string, React.ReactNode> = {
 export function Sidebar() {
   const pathname = usePathname();
   const [brands, setBrands] = useState<BrandSummary[]>([]);
+  const [recentOpen, setRecentOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.localStorage.getItem(RECENT_BRANDS_KEY) !== "0";
+  });
+
+  function toggleRecent() {
+    setRecentOpen((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(RECENT_BRANDS_KEY, next ? "1" : "0");
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -81,33 +98,53 @@ export function Sidebar() {
 
         {brands.length > 0 && (
           <div className="pt-4">
-            <p className="px-3 text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
-              최근 브랜드
-            </p>
-            <div className="space-y-0.5">
-              {brands.map((b) => (
-                <Link
-                  key={b.id}
-                  href={`/brands/${b.id}`}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
-                    currentBrandId === b.id
-                      ? "bg-primary/10 text-foreground font-medium"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                  title={b.category ?? undefined}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                  <span className="truncate">{b.name}</span>
-                </Link>
-              ))}
-            </div>
-            <Link
-              href="/brands/new"
-              className="block px-3 py-1.5 mt-1 text-[11px] text-muted-foreground hover:text-foreground"
+            <button
+              type="button"
+              onClick={toggleRecent}
+              aria-expanded={recentOpen}
+              aria-controls="sidebar-recent-brands"
+              className="flex w-full items-center gap-1 px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
             >
-              + 새 브랜드
-            </Link>
+              <ChevronRightIcon
+                className={cn(
+                  "h-3 w-3 transition-transform",
+                  recentOpen && "rotate-90",
+                )}
+                aria-hidden
+              />
+              <span>최근 브랜드</span>
+              <span className="ml-auto text-[10px] tabular-nums">
+                {brands.length}
+              </span>
+            </button>
+            {recentOpen && (
+              <div id="sidebar-recent-brands">
+                <div className="space-y-0.5">
+                  {brands.map((b) => (
+                    <Link
+                      key={b.id}
+                      href={`/brands/${b.id}`}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
+                        currentBrandId === b.id
+                          ? "bg-primary/10 text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                      title={b.category ?? undefined}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                      <span className="truncate">{b.name}</span>
+                    </Link>
+                  ))}
+                </div>
+                <Link
+                  href="/brands/new"
+                  className="block px-3 py-1.5 mt-1 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  + 새 브랜드
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </nav>
