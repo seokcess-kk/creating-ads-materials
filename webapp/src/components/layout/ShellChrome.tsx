@@ -20,8 +20,8 @@ export function ShellChrome({ children }: { children: React.ReactNode }) {
       <main className="flex-1 overflow-auto">
         <TopProgressBar />
         <CompletionBanner />
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="flex justify-end mb-2 -mt-2">
+        <div className="mx-auto max-w-[96rem] p-6">
+          <div className="-mt-2 mb-2 flex justify-end">
             <ActivityCenter />
           </div>
           {children}

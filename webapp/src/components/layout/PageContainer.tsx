@@ -6,7 +6,7 @@ const SIZE_CLASS: Record<PageContainerSize, string> = {
   default: "max-w-5xl",
   narrow: "max-w-3xl",
   slim: "max-w-xl",
-  wide: "max-w-7xl",
+  wide: "max-w-none",
 };
 
 interface PageContainerProps {
