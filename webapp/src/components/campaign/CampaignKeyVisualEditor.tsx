@@ -96,7 +96,7 @@ export function CampaignKeyVisualEditor({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="min-w-0 flex-1">
             <CardTitle className="text-sm">실사 자산 (Key Visuals)</CardTitle>
             <p className="mt-0.5 text-xs text-muted-foreground">
               주인공·포커스 + 사용할 사진을 캠페인에 연결합니다
@@ -110,7 +110,7 @@ export function CampaignKeyVisualEditor({
             }}
           >
             <DialogTrigger>
-              <span className="inline-flex h-7 cursor-pointer items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-accent">
+              <span className="inline-flex h-7 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-accent">
                 <PencilIcon className="h-3 w-3" />
                 수정
               </span>

@@ -29,22 +29,22 @@ export function BrandContextPanel({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-muted/30 transition-colors"
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/30"
       >
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <span className="text-sm font-medium">📋 브랜드 컨텍스트</span>
           {offer && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="max-w-full truncate text-xs">
               {offer.title}
             </Badge>
           )}
           {audience && (
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="max-w-full truncate text-xs">
               {audience.persona_name}
             </Badge>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {open ? "접기 ▲" : "펼치기 ▼"}
         </span>
       </button>

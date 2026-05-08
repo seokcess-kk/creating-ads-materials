@@ -237,7 +237,7 @@ export default async function CampaignPage({
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="space-y-3 lg:w-72 lg:shrink-0">
+        <aside className="space-y-3 lg:w-80 lg:shrink-0">
           <MaterialSwitcher
             campaignId={campaignId}
             runs={runs}
