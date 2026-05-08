@@ -137,11 +137,28 @@ export function MaterialSwitcher({
     );
   }
 
+  const shippedCount = runs.filter((r) => r.status === "complete").length;
+  const runningCount = runs.filter((r) =>
+    ["strategy", "copy", "visual", "retouch", "compose", "ship"].includes(
+      r.status,
+    ),
+  ).length;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
           소재 {runs.length}개
+          {shippedCount > 0 && (
+            <span className="ml-2 normal-case tracking-normal">
+              · 완료 {shippedCount}
+            </span>
+          )}
+          {runningCount > 0 && (
+            <span className="ml-2 normal-case tracking-normal">
+              · 진행 {runningCount}
+            </span>
+          )}
         </p>
         <NewMaterialDialog
           campaignId={campaignId}

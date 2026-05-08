@@ -5,7 +5,6 @@ import {
   getStage,
   resolveRun,
   setStageStatus,
-  updateCampaign,
   updateRunStatus,
   upsertStage,
 } from "@/lib/campaigns";
@@ -108,7 +107,8 @@ export async function POST(
 
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "complete");
-      await updateCampaign(campaignId, { status: "completed" });
+      // campaign.status는 다중 소재 모델에서 lifecycle 의미만 — 자동 변경하지 않음.
+      // 진행도는 페이지에서 derived(getCampaignProgress)로 표시.
 
       try {
         await recomputeLearnings(campaign.brand_id);
@@ -116,7 +116,7 @@ export async function POST(
         console.warn("Learnings 재계산 실패:", (learnErr as Error).message);
       }
 
-      return ok({ snapshot, campaign: { ...campaign, status: "completed" } });
+      return ok({ snapshot, campaign });
     } catch (shipErr) {
       const msg = shipErr instanceof Error ? shipErr.message : String(shipErr);
       await setStageStatus(stage.id, "failed", msg);

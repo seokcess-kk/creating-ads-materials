@@ -50,7 +50,7 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                진행 중 {stats.running} · 완료 {stats.completed}
+                진행 중 소재 {stats.runningMaterials} · ship 완료 {stats.shippedMaterials}
               </p>
             </CardContent>
           </Card>
@@ -65,11 +65,11 @@ export default async function DashboardPage() {
                   →
                 </span>
               </div>
-              <CardTitle className="text-3xl">{stats.completed}</CardTitle>
+              <CardTitle className="text-3xl">{stats.shippedMaterials}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                Ship 단계까지 완주한 캠페인
+                Ship 단계까지 완주한 소재
               </p>
             </CardContent>
           </Card>

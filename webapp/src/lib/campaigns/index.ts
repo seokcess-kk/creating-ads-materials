@@ -38,19 +38,73 @@ export async function listAllCampaigns(
 
 export interface DashboardStats {
   campaigns: number;
-  completed: number;
-  running: number;
+  /** ship까지 완료된 소재 수 (creative_runs.status='complete') */
+  shippedMaterials: number;
+  /** 진행 중 소재 수 (status가 strategy~ship 사이) */
+  runningMaterials: number;
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("campaigns").select("status");
-  if (error) throw error;
-  const rows = (data ?? []) as Array<{ status: Campaign["status"] }>;
+  const [campaignsRes, runsRes] = await Promise.all([
+    supabase.from("campaigns").select("id", { count: "exact", head: true }),
+    supabase
+      .from("creative_runs")
+      .select("status")
+      .is("archived_at", null),
+  ]);
+  if (campaignsRes.error) throw campaignsRes.error;
+  if (runsRes.error) throw runsRes.error;
+  const runs = (runsRes.data ?? []) as Array<{ status: string }>;
+  const shipped = runs.filter((r) => r.status === "complete").length;
+  const running = runs.filter(
+    (r) =>
+      r.status === "strategy" ||
+      r.status === "copy" ||
+      r.status === "visual" ||
+      r.status === "retouch" ||
+      r.status === "compose" ||
+      r.status === "ship",
+  ).length;
   return {
-    campaigns: rows.length,
-    completed: rows.filter((r) => r.status === "completed").length,
-    running: rows.filter((r) => r.status === "running").length,
+    campaigns: campaignsRes.count ?? 0,
+    shippedMaterials: shipped,
+    runningMaterials: running,
+  };
+}
+
+export interface CampaignProgress {
+  totalRuns: number;
+  shippedRuns: number;
+  runningRuns: number;
+  pendingRuns: number;
+  failedRuns: number;
+}
+
+/**
+ * 캠페인의 활성 소재 진행도를 derived로 계산. campaign.status에 의존하지 않음.
+ */
+export async function getCampaignProgress(
+  campaignId: string,
+): Promise<CampaignProgress> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .select("status")
+    .eq("campaign_id", campaignId)
+    .is("archived_at", null);
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{ status: string }>;
+  return {
+    totalRuns: rows.length,
+    shippedRuns: rows.filter((r) => r.status === "complete").length,
+    runningRuns: rows.filter((r) =>
+      ["strategy", "copy", "visual", "retouch", "compose", "ship"].includes(
+        r.status,
+      ),
+    ).length,
+    pendingRuns: rows.filter((r) => r.status === "pending").length,
+    failedRuns: rows.filter((r) => r.status === "failed").length,
   };
 }
 
