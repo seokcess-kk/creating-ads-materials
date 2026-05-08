@@ -18,11 +18,13 @@ import { ComposeStage } from "@/components/campaign/ComposeStage";
 import { ShipCard } from "@/components/campaign/ShipCard";
 import { CampaignChannelMenu } from "@/components/campaign/CampaignChannelMenu";
 import { CampaignAutomationToggle } from "@/components/campaign/CampaignAutomationToggle";
-import { CampaignMetaToolbar } from "@/components/campaign/CampaignMetaToolbar";
+import { CampaignKeyVisualEditor } from "@/components/campaign/CampaignKeyVisualEditor";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import { CampaignNameHeader } from "@/components/campaign/CampaignNameHeader";
 import { MaterialSwitcher } from "@/components/campaign/MaterialSwitcher";
 import { MoreActionsMenu } from "@/components/common/MoreActionsMenu";
+import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
+import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
 import { inferPresetFromCampaignPairs } from "@/lib/fonts/infer-preset";
 import { getPresetById } from "@/lib/fonts/tone-pairs";
@@ -235,7 +237,7 @@ export default async function CampaignPage({
       </div>
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="space-y-3 lg:w-72 lg:shrink-0">
+        <aside className="space-y-3 lg:w-80 lg:shrink-0">
           <MaterialSwitcher
             campaignId={campaignId}
             runs={runs}
@@ -244,29 +246,37 @@ export default async function CampaignPage({
             hasBranchableSource={hasBranchableSource}
             orientation="vertical"
           />
-        </aside>
 
-        <main className="min-w-0 flex-1 space-y-4">
-          <CampaignMetaToolbar
+          {memoryForDefaults && (
+            <BrandContextPanel
+              brandId={campaign.brand_id}
+              identity={memoryForDefaults.identity}
+              offer={
+                memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
+              }
+              audience={
+                memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
+                null
+              }
+            />
+          )}
+
+          <CampaignKeyVisualEditor
             campaignId={campaignId}
-            brandId={campaign.brand_id}
-            identity={memoryForDefaults?.identity ?? null}
-            offer={
-              memoryForDefaults?.offers.find((o) => o.id === campaign.offer_id) ?? null
-            }
-            audience={
-              memoryForDefaults?.audiences.find(
-                (a) => a.id === campaign.audience_id,
-              ) ?? null
-            }
             intent={campaign.key_visual_intent}
-            selectedKvIds={campaign.selected_key_visual_ids}
+            selectedIds={campaign.selected_key_visual_ids}
             keyVisuals={memoryForDefaults?.keyVisuals ?? []}
+          />
+
+          <CampaignFontPanel
+            campaignId={campaignId}
             initialPresetId={overridePresetId}
             initialPresetLabel={overridePresetLabel}
             visualReady={visualReady}
           />
+        </aside>
 
+        <main className="min-w-0 flex-1">
           <CampaignStepper
             key={run?.id ?? "no-run"}
             steps={steps}

@@ -11,8 +11,6 @@ interface BrandContextPanelProps {
   identity: BrandIdentity | null;
   offer: BrandOffer | null;
   audience: BrandAudience | null;
-  /** 다이얼로그/툴바 컨텍스트에서 항상 펼쳐 보일 때 true */
-  defaultOpen?: boolean;
 }
 
 export function BrandContextPanel({
@@ -20,9 +18,8 @@ export function BrandContextPanel({
   identity,
   offer,
   audience,
-  defaultOpen = false,
 }: BrandContextPanelProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   const voice = identity?.voice_json as
     | { tone?: string; personality?: string[] }
     | undefined;
