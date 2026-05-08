@@ -234,8 +234,17 @@ export function IdentityForm({
     }
   }
 
+  const initialSnap = JSON.stringify({
+    voice: initial?.voice_json ?? {},
+    taboos: initial?.taboos ?? [],
+    colors: initial?.colors_json ?? [{ role: "primary", hex: "#1A2335" }],
+    logos: initial?.logos_json ?? [],
+  });
+  const currentSnap = JSON.stringify({ voice, taboos, colors, logos });
+  const dirty = currentSnap !== initialSnap;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       <Card className="bg-muted/30 border-dashed">
         <CardHeader>
           <CardTitle className="text-base">홈페이지 자동 분석</CardTitle>
@@ -438,13 +447,31 @@ export function IdentityForm({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => router.back()} disabled={saving}>
-          돌아가기
-        </Button>
-        <Button onClick={save} disabled={saving}>
-          {saving ? "저장 중..." : "저장"}
-        </Button>
+      <div
+        role="region"
+        aria-label="저장 막대"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur supports-backdrop-filter:bg-background/80"
+      >
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <span
+            className={`text-xs ${dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+          >
+            {dirty ? "● 저장되지 않은 변경 사항이 있습니다" : "최신 상태로 저장됨"}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.back()}
+              disabled={saving}
+            >
+              돌아가기
+            </Button>
+            <Button onClick={save} disabled={saving || !dirty} size="sm">
+              {saving ? "저장 중..." : "저장"}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
