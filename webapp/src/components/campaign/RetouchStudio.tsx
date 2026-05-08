@@ -30,6 +30,7 @@ const RETOUCH_STEPS = [
 
 interface RetouchStudioProps {
   campaignId: string;
+  runId: string | null;
   visualReady: boolean;
   baseImageUrl: string | null;
   visualSuggestions: string[];
@@ -48,6 +49,7 @@ interface TurnContent {
 
 export function RetouchStudio({
   campaignId,
+  runId,
   visualReady,
   baseImageUrl,
   visualSuggestions,
@@ -67,8 +69,11 @@ export function RetouchStudio({
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
 
+  const runQS = runId ? `?runId=${runId}` : "";
+
   useStagePolling({
     campaignId,
+    runId,
     stage: "retouch",
     status: stage?.status,
     onUpdate: ({ stage: s, variants: v }) => {
@@ -80,7 +85,7 @@ export function RetouchStudio({
 
   async function onRestored() {
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/retouch`);
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch${runQS}`);
       const data = await res.json();
       if (res.ok) {
         setVariants(data.variants ?? []);
@@ -98,7 +103,7 @@ export function RetouchStudio({
     setRunning(true);
     toast.info("이전 턴 아카이브 + 새 편집 시작 (30~60초)");
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/retouch`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -143,7 +148,7 @@ export function RetouchStudio({
       href: `/campaigns/${campaignId}`,
     });
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/retouch`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -174,7 +179,7 @@ export function RetouchStudio({
   async function select(variantId: string) {
     setSelecting(variantId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/retouch/select`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/retouch/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
@@ -223,6 +228,7 @@ export function RetouchStudio({
           <div className="flex items-center gap-1">
             <BatchHistoryDrawer
               campaignId={campaignId}
+              runId={runId}
               stage="retouch"
               refreshToken={historyToken}
               onRestored={onRestored}

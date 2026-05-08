@@ -9,6 +9,7 @@ import type {
 
 interface UseStagePollingOptions {
   campaignId: string;
+  runId?: string | null;
   stage: CreativeStageName;
   status: string | undefined;
   intervalMs?: number;
@@ -24,6 +25,7 @@ interface UseStagePollingOptions {
  */
 export function useStagePolling({
   campaignId,
+  runId,
   stage,
   status,
   intervalMs = 3000,
@@ -34,7 +36,8 @@ export function useStagePolling({
     let cancelled = false;
     const tick = async () => {
       try {
-        const res = await fetch(`/api/campaigns/${campaignId}/${stage}`);
+        const qs = runId ? `?runId=${runId}` : "";
+        const res = await fetch(`/api/campaigns/${campaignId}/${stage}${qs}`);
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -52,5 +55,5 @@ export function useStagePolling({
       clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, campaignId, stage, intervalMs]);
+  }, [status, campaignId, runId, stage, intervalMs]);
 }

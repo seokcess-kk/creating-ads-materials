@@ -19,6 +19,7 @@ import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 interface ShipCardProps {
   campaignId: string;
+  runId: string | null;
   campaignName: string;
   campaignStatus: string;
   composeReady: boolean;
@@ -30,6 +31,7 @@ interface ShipCardProps {
 
 export function ShipCard({
   campaignId,
+  runId,
   campaignName,
   campaignStatus,
   composeReady,
@@ -38,6 +40,7 @@ export function ShipCard({
   initialRun,
   initialStage,
 }: ShipCardProps) {
+  const runQS = runId ? `?runId=${runId}` : "";
   const ac = aspectClass(aspectRatio);
   const router = useRouter();
   const [run, setRun] = useStateFromProps<CreativeRun | null>(initialRun);
@@ -50,7 +53,7 @@ export function ShipCard({
   async function saveRating() {
     setSavingRating(true);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/ship/rate`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/ship/rate${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating, note: note.trim() || null }),
@@ -70,7 +73,7 @@ export function ShipCard({
   async function finalize() {
     setFinalizing(true);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/ship`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/ship${runQS}`, {
         method: "POST",
       });
       const data = await res.json();
@@ -92,7 +95,7 @@ export function ShipCard({
     toast.info("자사 BP로 승격 + Vision 분석 (10~30초)");
     try {
       const res = await fetch(
-        `/api/campaigns/${campaignId}/ship/promote-to-bp`,
+        `/api/campaigns/${campaignId}/ship/promote-to-bp${runQS}`,
         { method: "POST" },
       );
       const data = await res.json();
@@ -158,7 +161,7 @@ export function ShipCard({
 
             <div className="flex gap-2 pt-2 flex-wrap">
               <a
-                href={`/api/campaigns/${campaignId}/ship/download`}
+                href={`/api/campaigns/${campaignId}/ship/download${runQS}`}
                 className="inline-flex"
               >
                 <Button>PNG 다운로드</Button>

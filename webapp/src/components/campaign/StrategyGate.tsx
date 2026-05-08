@@ -30,6 +30,7 @@ const COPY_STEPS = [
 
 interface StrategyGateProps {
   campaignId: string;
+  runId: string | null;
   initialRun: CreativeRun | null;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
@@ -37,6 +38,7 @@ interface StrategyGateProps {
 
 export function StrategyGate({
   campaignId,
+  runId,
   initialRun,
   initialStage,
   initialVariants,
@@ -50,8 +52,11 @@ export function StrategyGate({
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
 
+  const runQS = runId ? `?runId=${runId}` : "";
+
   useStagePolling({
     campaignId,
+    runId,
     stage: "strategy",
     status: stage?.status,
     onUpdate: ({ stage: s, variants: v }) => {
@@ -88,7 +93,7 @@ export function StrategyGate({
       href: `/campaigns/${campaignId}`,
     });
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/strategy`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/strategy${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -122,7 +127,7 @@ export function StrategyGate({
     if (selecting !== null) return;
     setSelecting(variantId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/strategy/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
@@ -151,14 +156,14 @@ export function StrategyGate({
       href: `/campaigns/${campaignId}`,
     });
     try {
-      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
+      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
       });
       if (!sel.ok) throw new Error((await sel.json()).error ?? "Strategy 선택 실패");
 
-      const gen = await fetch(`/api/campaigns/${campaignId}/copy`, {
+      const gen = await fetch(`/api/campaigns/${campaignId}/copy${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: "replace" }),
@@ -188,7 +193,7 @@ export function StrategyGate({
   async function selectAndBypass(variantId: string) {
     setSelecting(variantId);
     try {
-      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select`, {
+      const sel = await fetch(`/api/campaigns/${campaignId}/strategy/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
@@ -196,7 +201,7 @@ export function StrategyGate({
       if (!sel.ok) throw new Error((await sel.json()).error ?? "Strategy 선택 실패");
 
       const byp = await fetch(
-        `/api/campaigns/${campaignId}/copy/from-sample`,
+        `/api/campaigns/${campaignId}/copy/from-sample${runQS}`,
         { method: "POST" },
       );
       if (!byp.ok) {
@@ -218,7 +223,7 @@ export function StrategyGate({
   async function onRestored() {
     // 히스토리에서 배치 복원 → active variants 다시 로드
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/strategy`);
+      const res = await fetch(`/api/campaigns/${campaignId}/strategy${runQS}`);
       const data = await res.json();
       if (res.ok) {
         setVariants(data.variants ?? []);
@@ -301,6 +306,7 @@ export function StrategyGate({
           <div className="flex items-center gap-1">
             <BatchHistoryDrawer
               campaignId={campaignId}
+              runId={runId}
               stage="strategy"
               refreshToken={historyToken}
               onRestored={onRestored}

@@ -31,6 +31,7 @@ import {
 
 interface VisualStageProps {
   campaignId: string;
+  runId: string | null;
   copyReady: boolean;
   aspectRatio?: ChannelAspectRatio;
   initialStage: CreativeStageRow | null;
@@ -53,6 +54,7 @@ function scoreRow(label: string, value: number | undefined) {
 
 export function VisualStage({
   campaignId,
+  runId,
   copyReady,
   aspectRatio,
   initialStage,
@@ -67,8 +69,11 @@ export function VisualStage({
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
 
+  const runQS = runId ? `?runId=${runId}` : "";
+
   useStagePolling({
     campaignId,
+    runId,
     stage: "visual",
     status: stage?.status,
     onUpdate: ({ stage: s, variants: v }) => {
@@ -105,7 +110,7 @@ export function VisualStage({
       href: `/campaigns/${campaignId}`,
     });
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/visual`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/visual${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -138,7 +143,7 @@ export function VisualStage({
 
   async function onRestored() {
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/visual`);
+      const res = await fetch(`/api/campaigns/${campaignId}/visual${runQS}`);
       const data = await res.json();
       if (res.ok) {
         setVariants(data.variants ?? []);
@@ -151,7 +156,7 @@ export function VisualStage({
   async function select(variantId: string) {
     setSelecting(variantId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/visual/select`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/visual/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
@@ -251,6 +256,7 @@ export function VisualStage({
           <div className="flex items-center gap-1">
             <BatchHistoryDrawer
               campaignId={campaignId}
+              runId={runId}
               stage="visual"
               refreshToken={historyToken}
               onRestored={onRestored}

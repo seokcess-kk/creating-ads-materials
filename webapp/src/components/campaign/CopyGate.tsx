@@ -25,6 +25,7 @@ const COPY_STEPS = [
 
 interface CopyGateProps {
   campaignId: string;
+  runId: string | null;
   strategyReady: boolean;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
@@ -45,6 +46,7 @@ function scoreBar(label: string, value: number) {
 
 export function CopyGate({
   campaignId,
+  runId,
   strategyReady,
   initialStage,
   initialVariants,
@@ -57,8 +59,11 @@ export function CopyGate({
   const [historyToken, setHistoryToken] = useState(0);
   const { startOp, completeOp, failOp } = useNotifications();
 
+  const runQS = runId ? `?runId=${runId}` : "";
+
   useStagePolling({
     campaignId,
+    runId,
     stage: "copy",
     status: stage?.status,
     onUpdate: ({ stage: s, variants: v }) => {
@@ -95,7 +100,7 @@ export function CopyGate({
       href: `/campaigns/${campaignId}`,
     });
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/copy`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/copy${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -125,7 +130,7 @@ export function CopyGate({
 
   async function onRestored() {
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/copy`);
+      const res = await fetch(`/api/campaigns/${campaignId}/copy${runQS}`);
       const data = await res.json();
       if (res.ok) {
         setVariants(data.variants ?? []);
@@ -138,7 +143,7 @@ export function CopyGate({
   async function select(variantId: string) {
     setSelecting(variantId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/copy/select`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/copy/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),
@@ -238,6 +243,7 @@ export function CopyGate({
           <div className="flex items-center gap-1">
             <BatchHistoryDrawer
               campaignId={campaignId}
+              runId={runId}
               stage="copy"
               refreshToken={historyToken}
               onRestored={onRestored}

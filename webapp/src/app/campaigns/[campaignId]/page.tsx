@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import {
   getCampaign,
-  getLatestRun,
   getStage,
+  listRuns,
   listVariants,
+  resolveRun,
 } from "@/lib/campaigns";
 import { getBrand, loadBrandMemory } from "@/lib/memory";
 import { getChannel } from "@/lib/channels";
@@ -20,6 +21,7 @@ import { CampaignAutomationToggle } from "@/components/campaign/CampaignAutomati
 import { CampaignKeyVisualEditor } from "@/components/campaign/CampaignKeyVisualEditor";
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import { CampaignNameHeader } from "@/components/campaign/CampaignNameHeader";
+import { MaterialSwitcher } from "@/components/campaign/MaterialSwitcher";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
 import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
 import { listCampaignFontPairs } from "@/lib/memory/fonts";
@@ -45,15 +47,24 @@ interface VisualScores {
 
 export default async function CampaignPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ campaignId: string }>;
+  searchParams: Promise<{ run?: string }>;
 }) {
   const { campaignId } = await params;
+  const { run: runHint } = await searchParams;
   const campaign = await getCampaign(campaignId);
   if (!campaign) notFound();
   const brand = await getBrand(campaign.brand_id);
-  const run = await getLatestRun(campaignId);
+  const runs = await listRuns(campaignId);
+  const run = await resolveRun(campaignId, runHint);
   const channel = getChannel(campaign.channel);
+
+  // branch-from-copy 가능한 소재가 있는지 (Strategy+Copy 완료 + Visual 진입 이상)
+  const hasBranchableSource = runs.some((r) =>
+    ["visual", "retouch", "compose", "ship", "complete"].includes(r.status),
+  );
 
   const isVisible = (status: string | undefined) =>
     status === "ready" || status === "stale";
@@ -220,6 +231,13 @@ export default async function CampaignPage({
         </div>
       </div>
 
+      <MaterialSwitcher
+        campaignId={campaignId}
+        runs={runs}
+        activeRunId={run?.id ?? null}
+        hasBranchableSource={hasBranchableSource}
+      />
+
       {memoryForDefaults && (
         <BrandContextPanel
           brandId={campaign.brand_id}
@@ -248,9 +266,14 @@ export default async function CampaignPage({
         visualReady={visualReady}
       />
 
-      <CampaignStepper steps={steps} initialStage={initialStage}>
+      <CampaignStepper
+        key={run?.id ?? "no-run"}
+        steps={steps}
+        initialStage={initialStage}
+      >
         <StrategyGate
           campaignId={campaignId}
+          runId={run?.id ?? null}
           initialRun={run}
           initialStage={strategyStage}
           initialVariants={strategyVariants}
@@ -258,6 +281,7 @@ export default async function CampaignPage({
 
         <CopyGate
           campaignId={campaignId}
+          runId={run?.id ?? null}
           strategyReady={strategyReady}
           initialStage={copyStage}
           initialVariants={copyVariants}
@@ -265,6 +289,7 @@ export default async function CampaignPage({
 
         <VisualStage
           campaignId={campaignId}
+          runId={run?.id ?? null}
           copyReady={copyReady}
           aspectRatio={channel?.aspectRatio ?? "1:1"}
           initialStage={visualStage}
@@ -273,6 +298,7 @@ export default async function CampaignPage({
 
         <RetouchStudio
           campaignId={campaignId}
+          runId={run?.id ?? null}
           visualReady={visualReady}
           baseImageUrl={baseImageUrl}
           visualSuggestions={visualSuggestions}
@@ -283,6 +309,7 @@ export default async function CampaignPage({
 
         <ComposeStage
           campaignId={campaignId}
+          runId={run?.id ?? null}
           previousReady={composeReadyGate}
           baseImageUrl={composeBaseUrl}
           logoDefaults={logoDefaults}
@@ -293,6 +320,7 @@ export default async function CampaignPage({
 
         <ShipCard
           campaignId={campaignId}
+          runId={run?.id ?? null}
           campaignName={campaign.name}
           campaignStatus={campaign.status}
           composeReady={composeReady}

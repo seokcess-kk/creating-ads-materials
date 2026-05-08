@@ -46,6 +46,7 @@ export interface LogoDefaultsProp {
 
 interface ComposeStageProps {
   campaignId: string;
+  runId: string | null;
   previousReady: boolean;
   baseImageUrl: string | null;
   logoDefaults: LogoDefaultsProp;
@@ -112,6 +113,7 @@ function parseBaseRatio(baseAspectRatio: string | null): number {
 
 export function ComposeStage({
   campaignId,
+  runId,
   previousReady,
   baseImageUrl,
   logoDefaults,
@@ -119,6 +121,7 @@ export function ComposeStage({
   initialStage,
   initialVariants,
 }: ComposeStageProps) {
+  const runQS = runId ? `?runId=${runId}` : "";
   const previewAspectClass =
     aspectRatio === "9:16"
       ? "aspect-[9/16]"
@@ -159,6 +162,7 @@ export function ComposeStage({
 
   useStagePolling({
     campaignId,
+    runId,
     stage: "compose",
     status: stage?.status,
     onUpdate: ({ stage: s, variants: v }) => {
@@ -300,7 +304,7 @@ export function ComposeStage({
             logoUrl: selectedLogoUrl ?? undefined,
           }
         : {};
-      const res = await fetch(`/api/campaigns/${campaignId}/compose`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/compose${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -326,7 +330,7 @@ export function ComposeStage({
   async function select(variantId: string) {
     setSelecting(variantId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/compose/select`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/compose/select${runQS}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variant_id: variantId }),

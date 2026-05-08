@@ -15,6 +15,7 @@ import { formatKst } from "@/lib/format/date";
 
 interface BatchHistoryDrawerProps {
   campaignId: string;
+  runId?: string | null;
   stage: CreativeStageName;
   /** active batch가 바뀔 때 증가 — 이걸 key로 다시 fetch */
   refreshToken: number;
@@ -23,6 +24,7 @@ interface BatchHistoryDrawerProps {
 
 export function BatchHistoryDrawer({
   campaignId,
+  runId,
   stage,
   refreshToken,
   onRestored,
@@ -35,8 +37,9 @@ export function BatchHistoryDrawer({
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      const runQS = runId ? `&runId=${runId}` : "";
       const res = await fetch(
-        `/api/campaigns/${campaignId}/batches?stage=${stage}`,
+        `/api/campaigns/${campaignId}/batches?stage=${stage}${runQS}`,
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "조회 실패");
@@ -46,7 +49,7 @@ export function BatchHistoryDrawer({
     } finally {
       setLoading(false);
     }
-  }, [campaignId, stage]);
+  }, [campaignId, runId, stage]);
 
   useEffect(() => {
     // drawer가 열릴 때 / refreshToken이 바뀔 때만 서버 조회. 외부 fetch 트리거라 setState-in-effect가 불가피.
@@ -59,7 +62,8 @@ export function BatchHistoryDrawer({
   async function restore(batchId: string) {
     setRestoring(batchId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/batches`, {
+      const qs = runId ? `?runId=${runId}` : "";
+      const res = await fetch(`/api/campaigns/${campaignId}/batches${qs}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ stage, batchId }),
