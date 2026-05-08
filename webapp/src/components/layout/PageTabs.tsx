@@ -18,7 +18,7 @@ export function PageTabs({ tabs, activeId }: PageTabsProps) {
   return (
     <div
       role="tablist"
-      className="flex gap-1 border-b border-border/60 mb-2 overflow-x-auto"
+      className="flex gap-1 border-b border-border/60 mb-6 overflow-x-auto"
     >
       {tabs.map((t) => {
         const active = t.id === activeId;
