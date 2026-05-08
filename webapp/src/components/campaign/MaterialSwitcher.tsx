@@ -17,6 +17,8 @@ interface Props {
   activeRunId: string | null;
   /** 캠페인에 변형 가능한 Strategy+Copy 소재가 있는지 — branch-from-copy 활성화 조건 */
   hasBranchableSource: boolean;
+  /** "horizontal"(기본): 페이지 헤더 아래 가로 탭. "vertical": 사이드바 세로 리스트 */
+  orientation?: "horizontal" | "vertical";
 }
 
 function statusLabel(status: CreativeRun["status"]): {
@@ -41,7 +43,9 @@ export function MaterialSwitcher({
   archivedRuns,
   activeRunId,
   hasBranchableSource,
+  orientation = "horizontal",
 }: Props) {
+  const isVertical = orientation === "vertical";
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -184,7 +188,11 @@ export function MaterialSwitcher({
       <div
         role="tablist"
         aria-label="소재 선택"
-        className="flex flex-wrap gap-2"
+        aria-orientation={isVertical ? "vertical" : "horizontal"}
+        className={cn(
+          "flex gap-2",
+          isVertical ? "flex-col" : "flex-wrap",
+        )}
       >
         {runs.map((run) => {
           const isActive = run.id === activeRunId;
@@ -198,6 +206,7 @@ export function MaterialSwitcher({
               aria-selected={isActive}
               className={cn(
                 "group flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                isVertical && "w-full",
                 isActive
                   ? "border-primary bg-primary/5"
                   : "border-input bg-background hover:bg-muted",
@@ -252,11 +261,17 @@ export function MaterialSwitcher({
                     disabled={isPending}
                     className={cn(
                       "flex items-center gap-1.5 truncate font-medium",
+                      isVertical && "flex-1 min-w-0",
                       isActive ? "text-foreground" : "text-muted-foreground",
                     )}
                     title={run.label ?? fallbackLabel}
                   >
-                    <span className="max-w-[140px] truncate">
+                    <span
+                      className={cn(
+                        "truncate",
+                        isVertical ? "max-w-full" : "max-w-[140px]",
+                      )}
+                    >
                       {run.label ?? fallbackLabel}
                     </span>
                   </button>
