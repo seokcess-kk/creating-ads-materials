@@ -38,6 +38,62 @@ export async function listBrands(): Promise<Brand[]> {
   return (data ?? []) as Brand[];
 }
 
+export interface BrandMemoryGap {
+  id: string;
+  name: string;
+  needsIdentity: boolean;
+  needsOffer: boolean;
+  needsAudience: boolean;
+}
+
+/**
+ * Identity / Offer / Audience 중 하나라도 미설정인 브랜드 목록.
+ * 캠페인 시작 전에 채워야 할 항목을 대시보드에서 안내.
+ */
+export async function listBrandsWithMemoryGaps(
+  limit = 5,
+): Promise<BrandMemoryGap[]> {
+  const supabase = await createClient();
+  const { data: brandsData, error: brandsErr } = await supabase
+    .from("brands")
+    .select("id, name");
+  if (brandsErr) throw brandsErr;
+  const brands = (brandsData ?? []) as Array<{ id: string; name: string }>;
+  if (brands.length === 0) return [];
+
+  const ids = brands.map((b) => b.id);
+  const [identitiesRes, offersRes, audiencesRes] = await Promise.all([
+    supabase.from("brand_identity").select("brand_id").in("brand_id", ids),
+    supabase.from("brand_offers").select("brand_id").in("brand_id", ids),
+    supabase.from("brand_audiences").select("brand_id").in("brand_id", ids),
+  ]);
+  if (identitiesRes.error) throw identitiesRes.error;
+  if (offersRes.error) throw offersRes.error;
+  if (audiencesRes.error) throw audiencesRes.error;
+
+  const identitySet = new Set(
+    (identitiesRes.data ?? []).map((r) => (r as { brand_id: string }).brand_id),
+  );
+  const offerSet = new Set(
+    (offersRes.data ?? []).map((r) => (r as { brand_id: string }).brand_id),
+  );
+  const audienceSet = new Set(
+    (audiencesRes.data ?? []).map((r) => (r as { brand_id: string }).brand_id),
+  );
+
+  const gaps: BrandMemoryGap[] = brands
+    .map((b) => ({
+      id: b.id,
+      name: b.name,
+      needsIdentity: !identitySet.has(b.id),
+      needsOffer: !offerSet.has(b.id),
+      needsAudience: !audienceSet.has(b.id),
+    }))
+    .filter((g) => g.needsIdentity || g.needsOffer || g.needsAudience);
+
+  return gaps.slice(0, limit);
+}
+
 export interface BrandInput {
   name: string;
   website_url?: string | null;

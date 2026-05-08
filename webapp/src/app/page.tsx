@@ -1,14 +1,21 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { listBrands } from "@/lib/memory";
-import { getDashboardStats } from "@/lib/campaigns";
+import { Badge } from "@/components/ui/badge";
+import { listBrands, listBrandsWithMemoryGaps } from "@/lib/memory";
+import { getDashboardStats, listRecentShippedRuns } from "@/lib/campaigns";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const [brands, stats] = await Promise.all([listBrands(), getDashboardStats()]);
+  const [brands, stats, shippedRuns, memoryGaps] = await Promise.all([
+    listBrands(),
+    getDashboardStats(),
+    listRecentShippedRuns(5),
+    listBrandsWithMemoryGaps(5),
+  ]);
 
   return (
     <PageContainer>
@@ -74,6 +81,120 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         </Link>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* 메모리 갭 — 막힌 브랜드 알림 */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">
+              브랜드 메모리 갭
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              캠페인 시작 전에 채워야 할 항목
+            </p>
+          </div>
+          {memoryGaps.length === 0 ? (
+            <Card className="bg-muted/20">
+              <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                ✓ 모든 브랜드의 Identity·Offer·Audience가 설정되어 있습니다
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {memoryGaps.map((gap) => (
+                <Link
+                  key={gap.id}
+                  href={`/brands/${gap.id}`}
+                  className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Card className="transition-colors hover:border-primary/50 cursor-pointer">
+                    <CardContent className="flex items-center justify-between gap-2 py-3">
+                      <span className="truncate text-sm font-medium">
+                        {gap.name}
+                      </span>
+                      <div className="flex shrink-0 gap-1">
+                        {gap.needsIdentity && (
+                          <Badge variant="outline" className="text-[10px]">
+                            Identity 필요
+                          </Badge>
+                        )}
+                        {gap.needsOffer && (
+                          <Badge variant="outline" className="text-[10px]">
+                            Offer 필요
+                          </Badge>
+                        )}
+                        {gap.needsAudience && (
+                          <Badge variant="outline" className="text-[10px]">
+                            Audience 필요
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 최근 ship된 소재 */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">
+              최근 ship된 소재
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Ship 단계까지 완주한 최근 5개
+            </p>
+          </div>
+          {shippedRuns.length === 0 ? (
+            <Card className="bg-muted/20">
+              <CardContent className="py-6 text-center text-xs text-muted-foreground">
+                아직 ship된 소재가 없습니다
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {shippedRuns.map((m) => (
+                <Link
+                  key={m.runId}
+                  href={`/campaigns/${m.campaignId}?run=${m.runId}`}
+                  className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <Card className="transition-colors hover:border-primary/50 cursor-pointer">
+                    <CardContent className="space-y-1 py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">
+                          {m.runLabel ?? "소재"}
+                        </span>
+                        {m.rating != null && (
+                          <span
+                            className="shrink-0 text-[10px] text-amber-500"
+                            aria-label={`평점 ${m.rating}`}
+                          >
+                            {"★".repeat(m.rating)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {m.brandName} · {m.campaignName}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatKst(m.completedAt, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
       {brands.length > 0 && (

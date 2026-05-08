@@ -73,6 +73,57 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export interface ShippedMaterial {
+  runId: string;
+  runLabel: string | null;
+  campaignId: string;
+  campaignName: string;
+  brandId: string;
+  brandName: string;
+  rating: number | null;
+  completedAt: string;
+}
+
+export async function listRecentShippedRuns(
+  limit = 5,
+): Promise<ShippedMaterial[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_runs")
+    .select(
+      "id, label, rating, completed_at, campaign_id, campaigns!inner(id, name, brand_id, brands!inner(id, name))",
+    )
+    .eq("status", "complete")
+    .is("archived_at", null)
+    .not("completed_at", "is", null)
+    .order("completed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  type Row = {
+    id: string;
+    label: string | null;
+    rating: number | null;
+    completed_at: string;
+    campaign_id: string;
+    campaigns: {
+      id: string;
+      name: string;
+      brand_id: string;
+      brands: { id: string; name: string };
+    };
+  };
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    runId: r.id,
+    runLabel: r.label,
+    campaignId: r.campaigns.id,
+    campaignName: r.campaigns.name,
+    brandId: r.campaigns.brands.id,
+    brandName: r.campaigns.brands.name,
+    rating: r.rating,
+    completedAt: r.completed_at,
+  }));
+}
+
 export interface CampaignProgress {
   totalRuns: number;
   shippedRuns: number;
