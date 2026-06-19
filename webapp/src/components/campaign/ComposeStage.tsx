@@ -53,6 +53,7 @@ interface ComposeStageProps {
   aspectRatio?: "1:1" | "4:5" | "9:16" | "16:9";
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
+  automationLevel?: "manual" | "assist" | "auto";
 }
 
 interface ComposeContent {
@@ -120,8 +121,10 @@ export function ComposeStage({
   aspectRatio = "1:1",
   initialStage,
   initialVariants,
+  automationLevel = "manual",
 }: ComposeStageProps) {
   const runQS = runId ? `?runId=${runId}` : "";
+  const isAutoAdvance = automationLevel === "auto"; // 다음 단계까지 자동 진행
   const previewAspectClass =
     aspectRatio === "9:16"
       ? "aspect-[9/16]"
@@ -134,6 +137,7 @@ export function ComposeStage({
   const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
   const [variants, setVariants] = useStateFromProps<CreativeVariant[]>(initialVariants);
   const [running, setRunning] = useState(false);
+  const autoComposedRef = useRef(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const { startOp, completeOp, failOp } = useNotifications();
 
@@ -345,6 +349,49 @@ export function ComposeStage({
       setSelecting(null);
     }
   }
+
+  // assist/auto: 로고 기본값(서버 계산)으로 1패스 자동 합성($0, canvas). 빈 바디로 보내
+  // 서버가 position 기반 기본 좌표를 쓰게 한다(클라이언트 좌표 미초기화 회피).
+  // compose route가 non-manual에서 자동 선택 + Ship 승격까지 처리.
+  async function autoCompose() {
+    setRunning(true);
+    const opId = startOp({
+      kind: "compose",
+      title: "Compose 자동 합성",
+      estimatedSeconds: 15,
+      steps: COMPOSE_STEPS,
+      href: `/campaigns/${campaignId}`,
+    });
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/compose${runQS}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "합성 실패");
+      setStage(data.stage);
+      setVariants((prev) => [...prev, data.variant]);
+      completeOp(opId, { subtitle: "최종 이미지 준비 완료 — Ship", href: `/campaigns/${campaignId}` });
+      router.refresh();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  // auto 모드만: 마운트 시 1회, 직전 단계 준비됨 + Compose 미시작이면 자동 합성
+  useEffect(() => {
+    if (!isAutoAdvance) return;
+    if (previousReady && !stage && !running && !autoComposedRef.current) {
+      autoComposedRef.current = true;
+      autoCompose();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAutoAdvance, previousReady, stage, running]);
 
   if (!previousReady) return null;
 

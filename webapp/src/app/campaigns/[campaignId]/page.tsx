@@ -369,6 +369,7 @@ export default async function CampaignPage({
           aspectRatio={channel?.aspectRatio ?? "1:1"}
           initialStage={composeStage}
           initialVariants={composeVariants}
+          automationLevel={campaign.automation_level}
         />
 
         <ShipCard

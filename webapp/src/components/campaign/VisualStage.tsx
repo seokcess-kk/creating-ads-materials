@@ -81,7 +81,8 @@ export function VisualStage({
   const { startOp, completeOp, failOp } = useNotifications();
 
   const runQS = runId ? `?runId=${runId}` : "";
-  const isAuto = automationLevel !== "manual";
+  const isAuto = automationLevel !== "manual"; // 자동 선택(표시 축약)
+  const isAutoAdvance = automationLevel === "auto"; // 다음 단계까지 자동 진행
 
   useStagePolling({
     campaignId,
@@ -178,9 +179,9 @@ export function VisualStage({
         prev.map((v) => ({ ...v, selected: v.id === variantId })),
       );
 
-      // assist/auto: Retouch를 건너뛰고 로고 기본값으로 1패스 자동 합성 + Ship 승격.
+      // auto: Retouch를 건너뛰고 로고 기본값으로 1패스 자동 합성 + Ship 승격.
       // 합성은 모델 없이 빠르므로(≈15s) 선택 즉시 진행. 합성 실패해도 Visual 선택은 유지.
-      if (isAuto) {
+      if (isAutoAdvance) {
         const opId = startOp({
           kind: "compose",
           title: "Compose 자동 합성",
@@ -217,17 +218,17 @@ export function VisualStage({
     }
   }
 
-  // assist/auto: Copy가 준비되면 Visual 생성을 자동 시작('Visual 생성' 클릭 제거).
+  // auto 모드만: Copy가 준비되면 Visual 생성을 자동 시작('Visual 생성' 클릭 제거).
   // stage가 아예 없을 때(stale/실패는 사용자 판단)에만, 1회.
   useEffect(() => {
-    if (!isAuto) return;
+    if (!isAutoAdvance) return;
     if (copyReady && !stage && !generating && !autoStartedRef.current) {
       autoStartedRef.current = true;
       toast.message("자동 진행: Visual 생성 시작");
       generate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuto, copyReady, stage, generating]);
+  }, [isAutoAdvance, copyReady, stage, generating]);
 
   if (!copyReady) return null;
 
@@ -340,9 +341,11 @@ export function VisualStage({
           </p>
         )}
         <p className="text-sm text-muted-foreground">
-          {isAuto
-            ? "자동 선택된 시안입니다. 선택하면 로고를 자동 합성하고 Ship 단계로 넘어갑니다."
-            : "overall 점수 내림차순. 하나를 선택하면 Retouch/Compose/Ship 단계가 활성화됩니다."}
+          {isAutoAdvance
+            ? "자동 선택된 시안입니다. 로고 합성 → Ship까지 자동 진행됩니다. 다른 시안을 고르면 그 시안으로 다시 합성합니다."
+            : isAuto
+              ? "최고점 시안이 자동 선택됐습니다. 그대로 Compose로 진행하거나 다른 시안을 선택하세요."
+              : "overall 점수 내림차순. 하나를 선택하면 Retouch/Compose/Ship 단계가 활성화됩니다."}
         </p>
         {collapsed && (
           <button
@@ -420,12 +423,12 @@ export function VisualStage({
                     disabled={selecting !== null || isSelected}
                   >
                     {selecting === v.id
-                      ? isAuto
+                      ? isAutoAdvance
                         ? "합성 중..."
                         : "선택 중..."
                       : isSelected
                         ? "선택됨"
-                        : isAuto
+                        : isAutoAdvance
                           ? "이 시안으로 합성"
                           : "이 비주얼 선택"}
                   </Button>

@@ -211,50 +211,47 @@ export function CampaignKeyVisualEditor({
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 pt-0">
-        <div className="space-y-1">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            주인공·포커스
+      <CardContent className="pt-0">
+        {!intent && selectedItems.length === 0 ? (
+          // 미설정 상태는 한 줄로 (첫 화면 인지부하 완화)
+          <p className="text-xs text-muted-foreground">
+            주인공·포커스 미설정 · 자산 미선택 — AI가 자유 생성합니다
           </p>
-          <p className="text-sm">
-            {intent ?? (
-              <span className="text-muted-foreground">미설정</span>
+        ) : (
+          <div className="space-y-2">
+            {intent && (
+              <p className="text-sm">
+                <span className="mr-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  주인공·포커스
+                </span>
+                {intent}
+              </p>
             )}
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            선택된 자산 {selectedItems.length}개
-          </p>
-          {selectedItems.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              선택된 자산 없음 — AI가 자유 생성합니다
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                선택 자산 {selectedItems.length}개
+              </span>
               {selectedItems.map((kv) => (
                 <div
                   key={kv.id}
-                  className="flex items-center gap-2 rounded-md border bg-muted/30 p-1.5"
+                  className="flex items-center gap-1.5 rounded-md border bg-muted/30 p-1"
                 >
                   <img
                     src={kv.storage_url}
                     alt={kv.label}
-                    className="h-10 w-10 rounded object-cover"
+                    className="h-8 w-8 rounded object-cover"
                   />
-                  <div className="space-y-0.5">
-                    <Badge variant="outline" className="text-[9px]">
-                      {KIND_LABEL[kv.kind]}
-                    </Badge>
-                    <p className="line-clamp-1 max-w-[140px] text-[11px] font-medium">
-                      {kv.label}
-                    </p>
-                  </div>
+                  <Badge variant="outline" className="text-[9px]">
+                    {KIND_LABEL[kv.kind]}
+                  </Badge>
+                  <span className="line-clamp-1 max-w-[120px] text-[11px] font-medium">
+                    {kv.label}
+                  </span>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

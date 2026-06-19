@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,8 +60,10 @@ export function CopyGate({
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const autoAdoptedRef = useRef(false);
   const { startOp, completeOp, failOp } = useNotifications();
-  const isAuto = automationLevel !== "manual";
+  const isAuto = automationLevel !== "manual"; // 자동 선택(표시 축약)
+  const isAutoAdvance = automationLevel === "auto"; // 다음 단계까지 자동 진행
 
   const runQS = runId ? `?runId=${runId}` : "";
 
@@ -165,6 +167,35 @@ export function CopyGate({
     }
   }
 
+  // assist/auto: Strategy의 sampleCopy를 Claude 호출 없이($0) 자동 채택해 Copy 단계를 통과.
+  // 이래야 Strategy 자동선택 후에도 빠른 경로가 이어지고 Visual 자동 생성으로 연쇄된다.
+  async function autoAdoptSample() {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/copy/from-sample${runQS}`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "샘플 카피 채택 실패");
+      const data = await res.json();
+      if (data.stage) setStage(data.stage);
+      if (data.variants) setVariants(data.variants);
+      router.refresh();
+    } catch (e) {
+      // 실패해도 막지 않음 — 사용자가 'Copy 생성'으로 진행 가능
+      toast.error(e instanceof Error ? e.message : "자동 카피 채택 실패");
+    }
+  }
+
+  // auto 모드만: 마운트 시 1회 sampleCopy 자동 채택(다음 단계 자동 진행).
+  // assist/manual은 아래 '샘플 카피로 진행' 버튼으로 사용자가 직접.
+  useEffect(() => {
+    if (!isAutoAdvance) return;
+    if (strategyReady && !stage && !generating && !autoAdoptedRef.current) {
+      autoAdoptedRef.current = true;
+      autoAdoptSample();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAutoAdvance, strategyReady, stage, generating]);
+
   if (!strategyReady) return null;
 
   if (!stage) {
@@ -175,11 +206,23 @@ export function CopyGate({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            선택된 Strategy 기반 5~8변형 + 표준 self-critique(4축)
+            선택한 전략의 샘플 카피로 바로 진행하거나, 5~8개 변형 + self-critique(4축)을 생성합니다.
           </p>
-          <Button onClick={() => generate()} disabled={generating}>
-            {generating ? "생성 중..." : "Copy 생성"}
-          </Button>
+          {/* 빠른 경로(primary): Strategy의 sampleCopy 채택 — Claude 0콜·$0 */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={() => {
+                autoAdoptedRef.current = true;
+                autoAdoptSample();
+              }}
+              disabled={generating}
+            >
+              샘플 카피로 진행 (빠름)
+            </Button>
+            <Button variant="outline" onClick={() => generate()} disabled={generating}>
+              {generating ? "생성 중..." : "Copy 변형 생성"}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );

@@ -21,19 +21,19 @@ const OPTIONS: Array<{
     id: "manual",
     label: "Manual",
     icon: "🧑‍💻",
-    desc: "모든 선택을 수동으로",
+    desc: "모든 선택·생성을 직접",
   },
   {
     id: "assist",
     label: "Assist",
     icon: "✨",
-    desc: "최고점 자동 pre-select",
+    desc: "각 단계 최고점을 자동 선택 (생성은 직접)",
   },
   {
     id: "auto",
     label: "Auto",
     icon: "🚀",
-    desc: "다음 단계까지 자동 진행",
+    desc: "선택·생성·합성을 Ship 직전까지 자동 진행",
   },
 ];
 
