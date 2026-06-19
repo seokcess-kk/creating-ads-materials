@@ -13,6 +13,7 @@ import type {
 } from "./types";
 
 export * from "./types";
+export * from "./labels";
 
 export async function listCampaigns(brandId: string): Promise<Campaign[]> {
   const supabase = await createClient();

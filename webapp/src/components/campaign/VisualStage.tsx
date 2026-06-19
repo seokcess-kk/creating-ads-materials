@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import type { CreativeStageRow, CreativeVariant } from "@/lib/campaigns/types";
 import type { VisualValidatorResult } from "@/lib/prompts/visual";
@@ -77,6 +78,7 @@ export function VisualStage({
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [zoom, setZoom] = useState<{ url: string; label: string } | null>(null);
   const autoStartedRef = useRef(false);
   const { startOp, completeOp, failOp } = useNotifications();
 
@@ -377,11 +379,20 @@ export function VisualStage({
                 }
               >
                 <div
-                  className={`${ac} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                  className={`${ac} relative overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
                 >
-                  <a href={c.url} target="_blank" rel="noreferrer">
-                    <img src={c.url} alt={c.focusLabel} className="w-full h-full object-contain" />
-                  </a>
+                  {/* 클릭 시 라이트박스로 확대 — 한국어 타이포 가독성 판단용 */}
+                  <button
+                    type="button"
+                    onClick={() => setZoom({ url: c.url, label: c.focusLabel })}
+                    className="group h-full w-full cursor-zoom-in"
+                    aria-label={`${c.focusLabel} 시안 확대`}
+                  >
+                    <img src={c.url} alt={c.focusLabel} className="h-full w-full object-contain" />
+                    <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      확대 ⤢
+                    </span>
+                  </button>
                 </div>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
@@ -455,6 +466,30 @@ export function VisualStage({
           />
         </div>
       </CardContent>
+
+      {/* 라이트박스 — 시안 확대(한국어 타이포 가독성 판단) */}
+      <Dialog open={zoom !== null} onOpenChange={(o) => !o && setZoom(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogTitle className="text-sm">{zoom?.label ?? "시안"}</DialogTitle>
+          {zoom && (
+            <div className="space-y-2">
+              <img
+                src={zoom.url}
+                alt={zoom.label}
+                className="mx-auto max-h-[78vh] w-auto rounded-md border object-contain"
+              />
+              <a
+                href={zoom.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                원본 열기 ↗
+              </a>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

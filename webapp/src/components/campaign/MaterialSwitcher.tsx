@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { NewMaterialDialog } from "./NewMaterialDialog";
 import { ArchivedMaterialsDrawer } from "./ArchivedMaterialsDrawer";
+import { runStatusLabel } from "@/lib/campaigns/labels";
 import type { CreativeRun } from "@/lib/campaigns/types";
 
 interface Props {
@@ -33,7 +34,8 @@ function statusLabel(status: CreativeRun["status"]): {
     case "pending":
       return { text: "대기", tone: "outline" };
     default:
-      return { text: status, tone: "outline" };
+      // strategy/copy/visual/retouch/compose/ship — 진행 단계는 한글 라벨로
+      return { text: `${runStatusLabel(status)} 진행`, tone: "outline" };
   }
 }
 

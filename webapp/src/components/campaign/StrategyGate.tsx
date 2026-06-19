@@ -400,14 +400,22 @@ export function StrategyGate({
                     <p className="font-medium text-muted-foreground">핵심 메시지</p>
                     <p>{c.keyMessage}</p>
                   </div>
-                  <div>
-                    <p className="font-medium text-muted-foreground">비주얼 방향</p>
-                    <p>{c.visualDirection}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium text-muted-foreground">근거</p>
-                    <p>{c.whyItWorks}</p>
-                  </div>
+                  {/* 보조 정보는 접어 카드 밀도를 낮춘다 */}
+                  <details className="group">
+                    <summary className="cursor-pointer list-none font-medium text-muted-foreground hover:text-foreground">
+                      비주얼 방향 · 근거 <span className="text-[10px]">▾</span>
+                    </summary>
+                    <div className="mt-1 space-y-2">
+                      <div>
+                        <p className="font-medium text-muted-foreground">비주얼 방향</p>
+                        <p>{c.visualDirection}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium text-muted-foreground">근거</p>
+                        <p>{c.whyItWorks}</p>
+                      </div>
+                    </div>
+                  </details>
                   {c.sampleCopy && (
                     <div className="mt-2 p-2 rounded-md border bg-muted/40 space-y-1">
                       <p className="text-[9px] uppercase tracking-wider text-muted-foreground">

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { campaignStatusLabel, runStatusLabel } from "@/lib/campaigns/labels";
 import type { CreativeRun, CreativeStageRow } from "@/lib/campaigns/types";
 import {
   aspectClass,
@@ -153,9 +154,9 @@ export function ShipCard({
               <p className="text-xs text-muted-foreground">상태</p>
               <div className="flex gap-1 pt-0.5">
                 <Badge variant={isCompleted ? "secondary" : "outline"}>
-                  {campaignStatus}
+                  {campaignStatusLabel(campaignStatus)}
                 </Badge>
-                {run && <Badge variant="outline">run: {run.status}</Badge>}
+                {run && <Badge variant="outline">소재: {runStatusLabel(run.status)}</Badge>}
               </div>
             </div>
 

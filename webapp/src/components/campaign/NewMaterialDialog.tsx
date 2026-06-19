@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { runStatusLabel } from "@/lib/campaigns/labels";
 import type { CreativeRun } from "@/lib/campaigns/types";
 
 type Mode = "fresh" | "branch-from-strategy" | "branch-from-copy";
@@ -258,7 +259,7 @@ export function NewMaterialDialog({
               >
                 {sourceCandidates.map((r) => (
                   <option key={r.id} value={r.id}>
-                    {r.label ?? `소재 ${r.iteration_index ?? "?"}`} · {r.status}
+                    {r.label ?? `소재 ${r.iteration_index ?? "?"}`} · {runStatusLabel(r.status)}
                   </option>
                 ))}
               </select>

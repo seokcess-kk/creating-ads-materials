@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import {
+  campaignStatusLabel,
   getCampaign,
   listRuns,
   listStages,
@@ -247,7 +248,7 @@ export default async function CampaignPage({
               level={campaign.automation_level}
             />
             <Badge variant={campaign.status === "completed" ? "secondary" : "outline"}>
-              {campaign.status}
+              {campaignStatusLabel(campaign.status)}
             </Badge>
             <Badge
               variant="outline"
