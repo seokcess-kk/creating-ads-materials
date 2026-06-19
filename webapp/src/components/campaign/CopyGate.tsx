@@ -29,6 +29,7 @@ interface CopyGateProps {
   strategyReady: boolean;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
+  automationLevel?: "manual" | "assist" | "auto";
 }
 
 function scoreBar(label: string, value: number) {
@@ -50,6 +51,7 @@ export function CopyGate({
   strategyReady,
   initialStage,
   initialVariants,
+  automationLevel = "manual",
 }: CopyGateProps) {
   const router = useRouter();
   const [stage, setStage] = useStateFromProps<CreativeStageRow | null>(initialStage);
@@ -57,7 +59,9 @@ export function CopyGate({
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const [showAll, setShowAll] = useState(false);
   const { startOp, completeOp, failOp } = useNotifications();
+  const isAuto = automationLevel !== "manual";
 
   const runQS = runId ? `?runId=${runId}` : "";
 
@@ -226,6 +230,11 @@ export function CopyGate({
     const sb = (b.scores_json as Partial<CopyCritique["scores"]>)?.overall ?? 0;
     return sb - sa;
   });
+  // assist/auto: 자동 선택된 카피 1개만 기본 노출, 나머지는 펼침
+  const collapsed = isAuto && !showAll && selectedId != null && variants.length > 1;
+  const displayVariants = collapsed
+    ? sorted.filter((v) => v.id === selectedId)
+    : sorted;
 
   const currentBatchIndex = variants[0]?.batch_index ?? 1;
   const currentInstruction = variants[0]?.batch_instruction ?? null;
@@ -267,10 +276,21 @@ export function CopyGate({
           </p>
         )}
         <p className="text-sm text-muted-foreground">
-          overall 점수 내림차순 정렬. 하나를 선택하면 Visual 단계가 활성화됩니다.
+          {collapsed
+            ? "자동 선택된 카피입니다. Visual은 자동으로 생성됩니다."
+            : "overall 점수 내림차순 정렬. 하나를 선택하면 Visual 단계가 활성화됩니다."}
         </p>
+        {collapsed && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            다른 카피 {variants.length - 1}개 보기
+          </button>
+        )}
         <div className="grid md:grid-cols-2 gap-3">
-          {sorted.map((v) => {
+          {displayVariants.map((v) => {
             const c = v.content_json as unknown as CopyVariant;
             const s = v.scores_json as unknown as CopyCritique["scores"] & {
               issues?: string[];

@@ -424,35 +424,50 @@ export function StrategyGate({
                       </Badge>
                     </div>
                   )}
-                  <div className="flex gap-1 mt-2">
-                    {c.sampleCopy && (
+                  <div className="mt-2 space-y-1">
+                    {c.sampleCopy ? (
+                      <>
+                        {/* 빠른 경로(primary): 샘플 카피 채택 → Visual 직행, Claude 0콜 */}
+                        <Button
+                          size="sm"
+                          variant={isSelected ? "outline" : "default"}
+                          className="w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectAndBypass(v.id);
+                          }}
+                          disabled={selecting !== null}
+                        >
+                          {selecting === v.id ? "진행 중..." : "이 안으로 진행 →"}
+                        </Button>
+                        {/* 느린 경로(secondary): 카피 5~6변형 풀생성(Opus 1콜) */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-full text-xs text-muted-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectAndGenerateCopy(v.id);
+                          }}
+                          disabled={selecting !== null}
+                        >
+                          {selecting === v.id ? "생성 중..." : "카피 변형 더 생성"}
+                        </Button>
+                      </>
+                    ) : (
                       <Button
                         size="sm"
-                        variant={isSelected ? "outline" : "default"}
-                        className="flex-1"
+                        variant="default"
+                        className="w-full"
                         onClick={(e) => {
                           e.stopPropagation();
-                          selectAndBypass(v.id);
+                          selectAndGenerateCopy(v.id);
                         }}
                         disabled={selecting !== null}
                       >
-                        {selecting === v.id
-                          ? "진행 중..."
-                          : "샘플로 진행"}
+                        {selecting === v.id ? "생성 중..." : "카피 생성"}
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectAndGenerateCopy(v.id);
-                      }}
-                      disabled={selecting !== null}
-                    >
-                      {selecting === v.id ? "생성 중..." : "카피 더 보기"}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>

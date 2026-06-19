@@ -4,6 +4,7 @@ import {
   getStage,
   listVariants,
   resolveRun,
+  selectVariant,
   setStageStatus,
   updateRunStatus,
   upsertStage,
@@ -157,12 +158,23 @@ export async function POST(
 
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "compose", "compose");
+
+      // compose는 항상 단일 variant(replace)이므로 auto/assist에서는 자동 선택 후
+      // Ship 단계로 승격한다(확정 클릭 제거). manual은 ComposeStage에서 직접 확정.
+      let shipReady = false;
+      if (campaign.automation_level !== "manual") {
+        await selectVariant(stage.id, variant.id);
+        await updateRunStatus(run.id, "ship", "ship");
+        shipReady = true;
+      }
+
       return ok({
         stage,
-        variant,
+        variant: shipReady ? { ...variant, selected: true } : variant,
         logoApplied,
         appliedPosition: position,
         appliedSize: widthRatio,
+        autoSelected: shipReady,
       });
     } catch (genErr) {
       const msg = genErr instanceof Error ? genErr.message : String(genErr);

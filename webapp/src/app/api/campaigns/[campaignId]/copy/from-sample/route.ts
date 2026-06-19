@@ -83,11 +83,9 @@ export async function POST(
     await updateRunStatus(run.id, "copy", "copy");
     await markDownstreamStale(run.id, "copy");
 
-    // from-sample은 variant가 1개뿐이라 자동 선택.
-    let autoSelected = null;
-    if (campaign.automation_level !== "manual") {
-      autoSelected = await autoSelectBest(stage.id, variants);
-    }
+    // from-sample은 variant가 1개뿐이고 "샘플로 진행"이라는 명시적 선택이므로
+    // automation_level과 무관하게 항상 선택한다(미선택 시 manual에서 Visual이 잠김).
+    const autoSelected = await autoSelectBest(stage.id, variants);
     const respVariants = autoSelected
       ? variants.map((v) =>
           v.id === autoSelected.id ? { ...v, selected: true } : v,

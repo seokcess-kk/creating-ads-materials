@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,13 @@ const VISUAL_STEPS = [
   { label: "Claude Vision 4축 검증", atSec: 100 },
 ];
 
+const COMPOSE_STEPS = [
+  { label: "배경 + 로고 합성", atSec: 0 },
+  { label: "업로드", atSec: 8 },
+];
+
+type AutomationLevel = "manual" | "assist" | "auto";
+
 import {
   aspectClass,
   variantGridCols,
@@ -36,6 +43,7 @@ interface VisualStageProps {
   aspectRatio?: ChannelAspectRatio;
   initialStage: CreativeStageRow | null;
   initialVariants: CreativeVariant[];
+  automationLevel?: AutomationLevel;
 }
 
 function scoreRow(label: string, value: number | undefined) {
@@ -59,6 +67,7 @@ export function VisualStage({
   aspectRatio,
   initialStage,
   initialVariants,
+  automationLevel = "manual",
 }: VisualStageProps) {
   const ac = aspectClass(aspectRatio);
   const router = useRouter();
@@ -67,9 +76,12 @@ export function VisualStage({
   const [generating, setGenerating] = useState(false);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [historyToken, setHistoryToken] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const autoStartedRef = useRef(false);
   const { startOp, completeOp, failOp } = useNotifications();
 
   const runQS = runId ? `?runId=${runId}` : "";
+  const isAuto = automationLevel !== "manual";
 
   useStagePolling({
     campaignId,
@@ -165,7 +177,38 @@ export function VisualStage({
       setVariants((prev) =>
         prev.map((v) => ({ ...v, selected: v.id === variantId })),
       );
-      toast.success("Visual 선택 — Retouch 단계로");
+
+      // assist/auto: Retouch를 건너뛰고 로고 기본값으로 1패스 자동 합성 + Ship 승격.
+      // 합성은 모델 없이 빠르므로(≈15s) 선택 즉시 진행. 합성 실패해도 Visual 선택은 유지.
+      if (isAuto) {
+        const opId = startOp({
+          kind: "compose",
+          title: "Compose 자동 합성",
+          estimatedSeconds: 15,
+          steps: COMPOSE_STEPS,
+          href: `/campaigns/${campaignId}`,
+        });
+        try {
+          const cr = await fetch(`/api/campaigns/${campaignId}/compose${runQS}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({}),
+          });
+          const cd = await cr.json();
+          if (!cr.ok) throw new Error(cd.error ?? "합성 실패");
+          completeOp(opId, {
+            subtitle: cd.logoApplied ? "로고 합성 완료 — Ship 준비" : "합성 완료 — Ship 준비",
+            href: `/campaigns/${campaignId}`,
+          });
+          toast.success("자동 합성 완료 — Ship 단계로");
+        } catch (ce) {
+          const msg = ce instanceof Error ? ce.message : "합성 실패";
+          failOp(opId, msg);
+          toast.error(`자동 합성 실패 — Compose 단계에서 직접 합성하세요 (${msg})`);
+        }
+      } else {
+        toast.success("Visual 선택 — Retouch 단계로");
+      }
       router.refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -173,6 +216,18 @@ export function VisualStage({
       setSelecting(null);
     }
   }
+
+  // assist/auto: Copy가 준비되면 Visual 생성을 자동 시작('Visual 생성' 클릭 제거).
+  // stage가 아예 없을 때(stale/실패는 사용자 판단)에만, 1회.
+  useEffect(() => {
+    if (!isAuto) return;
+    if (copyReady && !stage && !generating && !autoStartedRef.current) {
+      autoStartedRef.current = true;
+      toast.message("자동 진행: Visual 생성 시작");
+      generate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuto, copyReady, stage, generating]);
 
   if (!copyReady) return null;
 
@@ -239,6 +294,11 @@ export function VisualStage({
     const sb = (b.scores_json as Partial<VisualValidatorResult>)?.overall ?? 0;
     return sb - sa;
   });
+  // assist/auto: 자동 선택된 시안 1개만 기본 노출, 나머지는 '다른 시안 보기'로 펼침
+  const collapsed = isAuto && !showAll && selectedId != null && variants.length > 1;
+  const displayVariants = collapsed
+    ? sorted.filter((v) => v.id === selectedId)
+    : sorted;
 
   const currentBatchIndex = variants[0]?.batch_index ?? 1;
   const currentInstruction = variants[0]?.batch_instruction ?? null;
@@ -280,10 +340,21 @@ export function VisualStage({
           </p>
         )}
         <p className="text-sm text-muted-foreground">
-          overall 점수 내림차순. 하나를 선택하면 Retouch/Compose/Ship 단계가 활성화됩니다.
+          {isAuto
+            ? "자동 선택된 시안입니다. 선택하면 로고를 자동 합성하고 Ship 단계로 넘어갑니다."
+            : "overall 점수 내림차순. 하나를 선택하면 Retouch/Compose/Ship 단계가 활성화됩니다."}
         </p>
+        {collapsed && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            다른 시안 {variants.length - 1}개 보기
+          </button>
+        )}
         <div className={`grid gap-3 ${variantGridCols(aspectRatio)}`}>
-          {sorted.map((v) => {
+          {displayVariants.map((v) => {
             const c = v.content_json as {
               url: string;
               focusLabel: string;
@@ -349,10 +420,14 @@ export function VisualStage({
                     disabled={selecting !== null || isSelected}
                   >
                     {selecting === v.id
-                      ? "선택 중..."
+                      ? isAuto
+                        ? "합성 중..."
+                        : "선택 중..."
                       : isSelected
-                        ? "선택됨 (Retouch 대기)"
-                        : "이 비주얼 선택"}
+                        ? "선택됨"
+                        : isAuto
+                          ? "이 시안으로 합성"
+                          : "이 비주얼 선택"}
                   </Button>
                 </CardContent>
               </Card>

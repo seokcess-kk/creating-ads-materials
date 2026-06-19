@@ -336,6 +336,7 @@ export default async function CampaignPage({
           strategyReady={strategyReady}
           initialStage={copyStage}
           initialVariants={copyVariants}
+          automationLevel={campaign.automation_level}
         />
 
         <VisualStage
@@ -345,6 +346,7 @@ export default async function CampaignPage({
           aspectRatio={channel?.aspectRatio ?? "1:1"}
           initialStage={visualStage}
           initialVariants={visualVariants}
+          automationLevel={campaign.automation_level}
         />
 
         <RetouchStudio
