@@ -9,7 +9,8 @@ AI 기반 광고 소재 제작 웹 앱. 브랜드 메모리를 중심으로 Stra
 - **DB/Auth/Storage**: Supabase (Postgres + RLS + Storage)
 - **Models**:
   - Claude (Anthropic) — Strategy, Copy, Vision validator, Retouch plan
-  - Gemini 3 Pro Image Preview (Google) — Visual 생성, Retouch 실행
+  - 이미지 생성·편집 — `IMAGE_PROVIDER`로 선택: OpenAI gpt-image-2(기본) 또는 Gemini 3 Pro Image(fallback)
+  - Gemini embedding (Google) — BP 시맨틱 검색 (provider와 무관하게 사용)
 - **Styling**: Tailwind CSS 4, shadcn/ui
 - **Canvas**: `@napi-rs/canvas` — 서버 사이드 로고 합성, `sharp` — 이미지 전처리
 
@@ -119,8 +120,8 @@ webapp/
 | -------- | --------------------- | -------------------------------- |
 | Strategy | Claude Opus          | 3개 대안 (angle/hook/value-prop) |
 | Copy     | Claude Sonnet        | 5~8개 카피 변형 + 4축 self-critique |
-| Visual   | Gemini 3 Pro Image   | 3장 이미지 + Claude Vision 검증  |
-| Retouch  | Gemini 3 Pro Image   | base 이미지 편집 변형            |
+| Visual   | 이미지 모델(OpenAI/Gemini) | 3장 이미지 + Claude Vision 검증  |
+| Retouch  | 이미지 모델(OpenAI/Gemini) | base 이미지 편집 변형            |
 | Compose  | `@napi-rs/canvas`    | 로고 합성된 최종 시안            |
 | Ship     | —                     | 레이팅·노트 기록, 캠페인 종료    |
 

@@ -207,7 +207,7 @@ export function buildStrategySystem(): string {
 - visualDirection은 사진을 배경으로 전제한 **타이포·레이아웃·여백 전략**만 서술
 - 피사체 재생성·재배치·보정 지시 절대 금지 (원본 픽셀 보존)
 - 사진 mood·여백을 반영해 카피 위치·하이라이트 영역 제안
-- 실사 미선택이면 Gemini 자유 생성 전제
+- 실사 미선택이면 이미지 모델 자유 생성 전제
 
 한국어 출력. 도구 ${STRATEGY_TOOL_NAME}로만 기록.`;
 }
@@ -274,7 +274,7 @@ function formatFrameworks(fs: Framework[]): string {
 
 function formatKeyVisuals(ctx: StrategyContext): string {
   const ids = ctx.selectedKeyVisualIds ?? [];
-  if (ids.length === 0) return "(실사 자산 미선택 — 이미지 단계에서 Gemini 자유 생성)";
+  if (ids.length === 0) return "(실사 자산 미선택 — 이미지 단계에서 이미지 모델 자유 생성)";
   const pool = ctx.memory.keyVisuals ?? [];
   const selected = pool.filter((kv) => ids.includes(kv.id));
   if (selected.length === 0) return "(선택된 실사 자산을 찾을 수 없음)";

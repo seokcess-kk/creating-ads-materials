@@ -199,21 +199,21 @@ export default async function UsagePage({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Gemini (이미지·임베딩)</CardDescription>
+            <CardDescription>Gemini (임베딩)</CardDescription>
             <CardTitle className="text-2xl">{fmtUsd(gemini.cost)}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            {fmtNum(gemini.count)} 호출 · {fmtNum(summary.totalImages)} 이미지
+            {fmtNum(gemini.count)} 호출
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>OpenAI (Image)</CardDescription>
+            <CardDescription>OpenAI (이미지)</CardDescription>
             <CardTitle className="text-2xl">{fmtUsd(openai.cost)}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
-            {fmtNum(openai.count)} 호출
+            {fmtNum(openai.count)} 호출 · {fmtNum(summary.totalImages)} 이미지
           </CardContent>
         </Card>
 

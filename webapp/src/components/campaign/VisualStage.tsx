@@ -18,7 +18,7 @@ import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const VISUAL_STEPS = [
   { label: "프롬프트 3개 구성", atSec: 0 },
-  { label: "Gemini 이미지 3장 병렬 생성", atSec: 8 },
+  { label: "AI 이미지 3장 병렬 생성", atSec: 8 },
   { label: "Storage 업로드", atSec: 85 },
   { label: "Claude Vision 4축 검증", atSec: 100 },
 ];
@@ -239,7 +239,7 @@ export function VisualStage({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Gemini 3 Pro Image로 3변형(제품·숫자·인물 포커스) 병렬 생성 + Claude Vision 4축 검증
+            AI 이미지 모델로 3변형(제품·숫자·인물 포커스) 병렬 생성 + Claude Vision 4축 검증
           </p>
           <Button onClick={() => generate()} disabled={generating}>
             {generating ? "생성 중..." : "Visual 생성"}
@@ -273,7 +273,7 @@ export function VisualStage({
         </CardHeader>
         <CardContent>
           <RunningStatus
-            label="Gemini 병렬 생성 + Vision 검증 중"
+            label="이미지 3장 병렬 생성 + Vision 검증 중"
             startedAt={stage.started_at}
             estimatedSeconds={135}
             steps={VISUAL_STEPS}

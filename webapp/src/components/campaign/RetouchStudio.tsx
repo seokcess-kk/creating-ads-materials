@@ -24,7 +24,7 @@ import { useStateFromProps } from "@/lib/hooks/use-state-from-props";
 
 const RETOUCH_STEPS = [
   { label: "base 이미지 다운로드", atSec: 0 },
-  { label: "Gemini 편집", atSec: 3 },
+  { label: "AI 이미지 편집", atSec: 3 },
   { label: "업로드", atSec: 35 },
 ];
 
@@ -205,7 +205,7 @@ export function RetouchStudio({
         </CardHeader>
         <CardContent>
           <RunningStatus
-            label="Gemini 이미지 편집 중"
+            label="AI 이미지 편집 중"
             startedAt={stage.started_at}
             estimatedSeconds={45}
             steps={RETOUCH_STEPS}

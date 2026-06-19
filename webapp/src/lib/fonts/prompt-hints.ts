@@ -1,5 +1,5 @@
-// Gemini 이미지 생성 프롬프트에 폰트 스타일을 서술하기 위한 힌트 매핑.
-// Gemini는 폰트 파일을 직접 읽지 못하지만, 학습 데이터에서 본 적 있는
+// 이미지 생성 프롬프트에 폰트 스타일을 서술하기 위한 힌트 매핑.
+// 이미지 모델은 폰트 파일을 직접 읽지 못하지만, 학습 데이터에서 본 적 있는
 // 폰트 family 이름·특성 키워드를 통해 유사 스타일을 재현할 수 있다.
 // 정확한 픽셀 재현은 아니며 브랜드 타이포그래피 방향성을 유도하는 용도.
 
@@ -24,7 +24,7 @@ export const FONT_STYLE_HINTS: Record<string, string> = {
     "neutral geometric sans-serif, widely readable, standard Korean hangul",
 };
 
-// Gemini 이미지 생성은 Bold vs ExtraBold 같은 미세 weight를 잘 구분하지 못한다.
+// 이미지 모델은 Bold vs ExtraBold 같은 미세 weight를 잘 구분하지 못한다.
 // heavy / medium / light 3단계로 거칠게 묶어 명확하게 전달한다.
 function categorizeWeight(weight: string | null | undefined): string {
   if (!weight) return "";
