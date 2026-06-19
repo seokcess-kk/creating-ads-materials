@@ -20,17 +20,24 @@
 
 ## 2. 환경변수 세팅
 
-Vercel 프로젝트 → Settings → Environment Variables → 다음 5개 추가 (Production + Preview + Development):
+Vercel 프로젝트 → Settings → Environment Variables → 다음 키 추가 (Production + Preview + Development):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
-GEMINI_API_KEY=AIza...
+GEMINI_API_KEY=AIza...                 # 임베딩(BP 검색)에 필수 — 이미지 provider와 무관
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
+
+# 이미지 생성 provider
+IMAGE_PROVIDER=openai                   # 미설정 시 기본 gemini로 동작
+OPENAI_API_KEY=sk-...                   # IMAGE_PROVIDER=openai 일 때 필수
 ```
 
-**주의**: `NEXT_PUBLIC_*`은 빌드 타임 embed, 나머지는 런타임. 모두 정확히 입력.
+**주의**:
+- `NEXT_PUBLIC_*`은 빌드 타임 embed, 나머지는 런타임. 모두 정확히 입력.
+- **`IMAGE_PROVIDER`를 빼면 OpenAI 키가 있어도 Gemini로 생성**된다(코드 기본값이 gemini).
+- 환경변수 추가/변경 후에는 **재배포해야** 반영된다.
 
 ## 3. Deploy
 
@@ -55,14 +62,16 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbG...
 | **504 Gateway Timeout** | maxDuration 부족 | `vercel.json` 함수 설정 확인, Pro 플랜 활성 확인 |
 | **Bucket not found** | Supabase Storage 버킷 public 미설정 | 대시보드 → Storage → bucket → Public 활성화 |
 | 이미지 URL 401 | Storage RLS 정책 | public bucket으로 전환 또는 RLS 허용 |
-| **환경변수 검증 실패** | 5개 키 중 누락 | Vercel Env 재확인, 저장 후 재배포 |
+| **환경변수 검증 실패** | 필수 키 누락 | Vercel Env 재확인, 저장 후 재배포 |
+| 배포본이 **여전히 Gemini로 생성** | `IMAGE_PROVIDER` 미설정(기본 gemini) | `IMAGE_PROVIDER=openai` 추가 후 재배포 |
+| OpenAI **billing hard limit** 에러 | OpenAI 크레딧 잔액/한도 | OpenAI Billing에서 크레딧 충전·한도 상향 |
 
 ## 5. 운영 팁
 
 ### 5.1 비용 관리
 - `/usage` 페이지에서 이번 달 지출 확인
 - Claude Opus 호출이 대부분 비용. Strategy·Copy·Vision validator 각 $0.05~0.15
-- Gemini Image 장당 $0.04
+- 이미지: OpenAI gpt-image-2 medium 장당 ~$0.05~0.08(세로형), Gemini Image 장당 $0.04. Visual은 1회 3장 병렬.
 
 ### 5.2 함수 타임아웃 조정
 `vercel.json`의 `maxDuration` 값이 실제 실행 시간보다 충분한지 모니터링.
