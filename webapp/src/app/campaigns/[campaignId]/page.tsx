@@ -26,6 +26,10 @@ import { CampaignKeyVisualEditor } from "@/components/campaign/CampaignKeyVisual
 import { DeleteCampaignButton } from "@/components/campaign/DeleteCampaignButton";
 import { CampaignNameHeader } from "@/components/campaign/CampaignNameHeader";
 import { MaterialSwitcher } from "@/components/campaign/MaterialSwitcher";
+import {
+  RunningOpsSync,
+  type RunningStageInfo,
+} from "@/components/campaign/RunningOpsSync";
 import { MoreActionsMenu } from "@/components/common/MoreActionsMenu";
 import { BrandContextPanel } from "@/components/campaign/BrandContextPanel";
 import { CampaignFontPanel } from "@/components/campaign/CampaignFontPanel";
@@ -221,8 +225,18 @@ export default async function CampaignPage({
   ];
   const initialStage = pickInitialStage(steps);
 
+  // 새로고침/탭 이동에도 전역 진행바가 유지되도록, 서버 running stage를 op로 복원
+  const runningStages: RunningStageInfo[] = stagesArr
+    .filter((s) => s.status === "running")
+    .map((s) => ({
+      stage: s.stage,
+      runId: run?.id ?? null,
+      startedAt: s.started_at ? Date.parse(s.started_at) : null,
+    }));
+
   return (
     <PageContainer size="wide">
+      <RunningOpsSync campaignId={campaignId} running={runningStages} />
       <Breadcrumb
         items={[
           { label: "Brands", href: "/brands" },

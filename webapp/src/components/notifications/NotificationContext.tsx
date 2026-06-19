@@ -44,19 +44,29 @@ export interface NotificationOp {
   celebrate?: boolean;
 }
 
+type StartOpInput = Omit<NotificationOp, "id" | "startedAt" | "status"> & {
+  id?: string;
+  startedAt?: number;
+};
+
 interface NotificationContextValue {
   ops: NotificationOp[];
   completed: NotificationOp[];
   dismissed: Set<string>;
-  startOp: (
-    input: Omit<NotificationOp, "id" | "startedAt" | "status"> & { id?: string },
-  ) => string;
+  startOp: (input: StartOpInput) => string;
+  /** id가 같은 running op가 없을 때만 생성 (서버 running 상태에서 복원용, 멱등) */
+  ensureOp: (input: StartOpInput & { id: string }) => void;
   completeOp: (id: string, result?: { href?: string; subtitle?: string }) => void;
   failOp: (id: string, errorMsg: string) => void;
   dismissCompleted: (id: string) => void;
   clearAll: () => void;
   notificationsEnabled: boolean;
   requestBrowserPermission: () => Promise<void>;
+}
+
+/** 안정적 op id — 같은 run+stage는 항상 같은 id (게이트/복원기 공유, 중복 방지) */
+export function stageOpId(runId: string | null | undefined, stage: string): string {
+  return `stage:${runId ?? "norun"}:${stage}`;
 }
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -119,7 +129,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       kind: input.kind,
       title: input.title,
       subtitle: input.subtitle,
-      startedAt: Date.now(),
+      startedAt: input.startedAt ?? Date.now(),
       estimatedSeconds: input.estimatedSeconds,
       steps: input.steps,
       href: input.href,
@@ -133,6 +143,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
     return id;
   }, []);
+
+  // 이미 running op가 있으면(게이트가 만든 풍부한 op 등) 건드리지 않는다.
+  const ensureOp = useCallback<NotificationContextValue["ensureOp"]>(
+    (input) => {
+      if (opsRef.current.some((o) => o.id === input.id)) return;
+      startOp(input);
+    },
+    [startOp],
+  );
 
   const completeOp = useCallback<NotificationContextValue["completeOp"]>(
     (id, result) => {
@@ -208,6 +227,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       completed,
       dismissed,
       startOp,
+      ensureOp,
       completeOp,
       failOp,
       dismissCompleted,
@@ -220,6 +240,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       completed,
       dismissed,
       startOp,
+      ensureOp,
       completeOp,
       failOp,
       dismissCompleted,
