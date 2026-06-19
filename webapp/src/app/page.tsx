@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/common/EmptyState";
 import { listBrands, listBrandsWithMemoryGaps } from "@/lib/memory";
 import { getDashboardStats, listRecentShippedRuns } from "@/lib/campaigns";
 import { PageContainer } from "@/components/layout/PageContainer";
@@ -16,6 +18,28 @@ export default async function DashboardPage() {
     listRecentShippedRuns(5),
     listBrandsWithMemoryGaps(5),
   ]);
+
+  // 첫 진입(브랜드 0개) — "어디서 시작하나"에 답하는 온보딩
+  if (brands.length === 0) {
+    return (
+      <PageContainer>
+        <PageHeader
+          title="Dashboard"
+          description="Creative System — Brand Memory 중심"
+        />
+        <EmptyState
+          icon="✨"
+          title="Ad Studio에 오신 걸 환영합니다"
+          description="브랜드를 등록해 Identity·Offer·Audience 메모리를 축적하면, 그 자산을 재활용해 일관된 광고 소재를 반복 생성할 수 있습니다."
+          action={
+            <Link href="/brands/new">
+              <Button>첫 브랜드 등록하기</Button>
+            </Link>
+          }
+        />
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
@@ -63,13 +87,13 @@ export default async function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/campaigns?status=completed" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        <Link href="#shipped" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Card className="h-full hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardDescription>완료된 소재</CardDescription>
                 <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  →
+                  ↓
                 </span>
               </div>
               <CardTitle className="text-3xl">{stats.shippedMaterials}</CardTitle>
@@ -139,7 +163,7 @@ export default async function DashboardPage() {
         )}
 
         {/* 최근 ship된 소재 — 갭 없을 때 풀 폭 그리드, 있을 때 우측 컬럼 */}
-        <section className="space-y-3">
+        <section id="shipped" className="space-y-3 scroll-mt-20">
           <div>
             <h2 className="text-sm font-semibold tracking-tight">
               최근 ship된 소재

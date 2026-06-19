@@ -14,7 +14,7 @@ import {
 } from "@/lib/campaigns";
 import type { CreativeVariant } from "@/lib/campaigns/types";
 import { loadBrandMemory } from "@/lib/memory";
-import { editImage, type AspectRatio } from "@/lib/engines/gemini-image";
+import { editImage, type AspectRatio } from "@/lib/engines";
 import { getChannel } from "@/lib/channels";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";

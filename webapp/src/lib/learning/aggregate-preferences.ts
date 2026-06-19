@@ -109,8 +109,17 @@ export async function aggregatePreferences(
     .in("run_id", runIds);
   const stageRows = (stages ?? []) as StageRow[];
   const stageMap = new Map(stageRows.map((s) => [s.id, s.stage]));
+  const stageRunMap = new Map(stageRows.map((s) => [s.id, s.run_id]));
   const stageIds = stageRows.map((s) => s.id);
   if (stageIds.length === 0) return { ...empty, totalRuns: runRows.length };
+
+  // 선호 신호는 "ship된(=완주) 또는 평점이 매겨진" 소재에서만 학습한다.
+  // 중간 실험·폐기 run의 일시적 선택이 선호를 오염시키지 않도록 모집단을 정렬한다.
+  const completedRunIds = new Set(
+    runRows
+      .filter((r) => r.status === "complete" || r.rating != null)
+      .map((r) => r.id),
+  );
 
   const { data: variants } = await supabase
     .from("creative_variants")
@@ -137,6 +146,9 @@ export async function aggregatePreferences(
       }
     }
     if (!v.selected) continue;
+    // 완주/평가된 run의 선택만 선호로 집계 (retouch 빈도는 위에서 마찰 신호로 별도 집계).
+    const runId = stageRunMap.get(v.stage_id);
+    if (!runId || !completedRunIds.has(runId)) continue;
     if (stage === "strategy") {
       inc(hookCounts, c.hookType as string | undefined);
       inc(frameworkCounts, c.frameworkId as string | undefined);

@@ -38,6 +38,7 @@ import {
 } from "@/components/campaign/stepper-utils";
 import { Breadcrumb } from "@/components/layout/Breadcrumb";
 import { PageContainer } from "@/components/layout/PageContainer";
+import { getCampaignCost } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -64,12 +65,13 @@ export default async function CampaignPage({
   if (!campaign) notFound();
 
   // Level 1 — campaign만 의존하는 호출들을 병렬로
-  const [brand, allRuns, memoryForDefaults, campaignFontPairs] =
+  const [brand, allRuns, memoryForDefaults, campaignFontPairs, campaignCost] =
     await Promise.all([
       getBrand(campaign.brand_id),
       listRuns(campaignId, { includeArchived: true }),
       loadBrandMemory(campaign.brand_id),
       listCampaignFontPairs(campaign.brand_id, campaignId),
+      getCampaignCost(campaignId),
     ]);
 
   const runs = allRuns.filter((r) => r.archived_at == null);
@@ -246,6 +248,22 @@ export default async function CampaignPage({
             />
             <Badge variant={campaign.status === "completed" ? "secondary" : "outline"}>
               {campaign.status}
+            </Badge>
+            <Badge
+              variant="outline"
+              className="font-normal tabular-nums text-muted-foreground"
+              title={`이 캠페인 ${campaignCost.totalCalls}회 호출 누적${
+                run && campaignCost.byRun[run.id] != null
+                  ? ` · 현재 소재 $${campaignCost.byRun[run.id].toFixed(4)}`
+                  : ""
+              }`}
+            >
+              💰 ${campaignCost.totalCost.toFixed(4)}
+              {run && campaignCost.byRun[run.id] != null && (
+                <span className="ml-1 opacity-60">
+                  (소재 ${campaignCost.byRun[run.id].toFixed(4)})
+                </span>
+              )}
             </Badge>
           </div>
         </div>

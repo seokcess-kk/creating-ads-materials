@@ -17,7 +17,7 @@ import {
   generateImage,
   editImage,
   type AspectRatio,
-} from "@/lib/engines/gemini-image";
+} from "@/lib/engines";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { composePersonVariant } from "@/lib/canvas/compose-person-variant";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";

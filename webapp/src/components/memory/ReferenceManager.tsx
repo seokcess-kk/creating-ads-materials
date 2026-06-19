@@ -89,8 +89,12 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
     router.refresh();
   }
 
-  async function changeWeight(id: string, newWeight: number) {
+  // 드래그 중에는 로컬 state만 갱신(매 틱 PATCH 방지). 커밋은 commitWeight에서 1회.
+  function previewWeight(id: string, newWeight: number) {
     setList((prev) => prev.map((r) => (r.id === id ? { ...r, weight: newWeight } : r)));
+  }
+
+  async function commitWeight(id: string, newWeight: number) {
     try {
       const res = await fetch(`/api/brands/${brandId}/references/${id}`, {
         method: "PATCH",
@@ -409,7 +413,14 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                         min={0}
                         max={100}
                         value={r.weight}
-                        onChange={(e) => changeWeight(r.id, Number(e.target.value))}
+                        onChange={(e) => previewWeight(r.id, Number(e.target.value))}
+                        onPointerUp={(e) =>
+                          commitWeight(r.id, Number((e.target as HTMLInputElement).value))
+                        }
+                        onKeyUp={(e) =>
+                          commitWeight(r.id, Number((e.target as HTMLInputElement).value))
+                        }
+                        onBlur={(e) => commitWeight(r.id, Number(e.target.value))}
                         className="flex-1"
                       />
                       <span className="w-10 text-xs text-right" aria-hidden>{r.weight}</span>

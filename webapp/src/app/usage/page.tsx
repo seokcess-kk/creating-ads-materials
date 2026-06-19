@@ -4,6 +4,7 @@ import {
   getUsageByBrand,
   getUsageList,
   getUsageSummary,
+  operationLabel,
 } from "@/lib/usage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,18 +15,6 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
-
-const OPERATION_LABELS: Record<string, string> = {
-  strategy: "Strategy 생성",
-  copy: "Copy 생성",
-  visual_gen: "Visual 생성",
-  visual_validator: "Visual 검증",
-  retouch: "Retouch 편집",
-  vision_bp: "BP 분석",
-  vision_bp_reanalyze: "BP 재분석",
-  vision_bp_promote: "자사 BP 승격 분석",
-  analyze_website: "홈페이지 분석",
-};
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200];
 
@@ -92,10 +81,11 @@ export default async function UsagePage({
 
   const anthropic = summary.byProvider["anthropic"] ?? { cost: 0, count: 0 };
   const gemini = summary.byProvider["gemini"] ?? { cost: 0, count: 0 };
+  const openai = summary.byProvider["openai"] ?? { cost: 0, count: 0 };
 
   const operationItems = Object.entries(summary.byOperation)
     .map(([k, v]) => ({
-      key: `${OPERATION_LABELS[k] ?? k} · ${fmtUsd(v.cost)}`,
+      key: `${operationLabel(k)} · ${fmtUsd(v.cost)}`,
       count: v.count,
     }))
     .sort((a, b) => b.count - a.count);
@@ -140,6 +130,7 @@ export default async function UsagePage({
     { id: "all", label: "전체" },
     { id: "anthropic", label: "Anthropic" },
     { id: "gemini", label: "Gemini" },
+    { id: "openai", label: "OpenAI" },
   ].map((o) => ({
     ...o,
     href: buildUsageHref(sp, {
@@ -152,7 +143,7 @@ export default async function UsagePage({
     { id: "all", label: "전체" },
     ...Object.keys(summary.byOperation).map((k) => ({
       id: k,
-      label: OPERATION_LABELS[k] ?? k,
+      label: operationLabel(k),
     })),
   ].map((o) => ({
     ...o,
@@ -172,7 +163,7 @@ export default async function UsagePage({
     <PageContainer>
       <PageHeader
         title="API Usage"
-        description="Claude · Gemini 호출 비용 추적"
+        description="Claude · Gemini · OpenAI 호출 비용 추적"
       />
 
       <div>
@@ -184,7 +175,7 @@ export default async function UsagePage({
         />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>총 비용 · {periodLabel}</CardDescription>
@@ -208,11 +199,21 @@ export default async function UsagePage({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Gemini (Image)</CardDescription>
+            <CardDescription>Gemini (이미지·임베딩)</CardDescription>
             <CardTitle className="text-2xl">{fmtUsd(gemini.cost)}</CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground">
             {fmtNum(gemini.count)} 호출 · {fmtNum(summary.totalImages)} 이미지
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>OpenAI (Image)</CardDescription>
+            <CardTitle className="text-2xl">{fmtUsd(openai.cost)}</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground">
+            {fmtNum(openai.count)} 호출
           </CardContent>
         </Card>
 
@@ -332,7 +333,7 @@ export default async function UsagePage({
                           </Badge>
                         </td>
                         <td className="py-2 pr-2">
-                          {OPERATION_LABELS[r.operation] ?? r.operation}
+                          {operationLabel(r.operation)}
                         </td>
                         <td className="py-2 pr-2 text-muted-foreground">{r.model ?? "—"}</td>
                         <td className="py-2 pr-2 text-right tabular-nums">

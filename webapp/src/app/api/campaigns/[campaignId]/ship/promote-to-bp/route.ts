@@ -14,6 +14,14 @@ import { ApiError, ok, serverError } from "@/lib/api-utils";
 
 export const maxDuration = 60;
 
+// BP 가중치를 소재 평점에 맞춘다. 평점 무관 하드코딩(80)이면 별 1점 소재도
+// "모범 사례"로 등록돼 rate 경로(±8 미세조정)와 상충한다.
+function weightFromRating(rating: number | null | undefined): number {
+  if (rating == null) return 60; // 미평가: 중립보다 약간 높게
+  // 1→40, 2→50, 3→65, 4→80, 5→95
+  return [40, 40, 50, 65, 80, 95][rating] ?? 60;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -34,11 +42,13 @@ export async function POST(
 
     const ref = await createReference(campaign.brand_id, {
       file_url: url,
+      // 승격본을 References에서 캠페인으로 역추적할 수 있도록 source_url 채움
+      source_url: `/campaigns/${campaignId}?run=${run.id}`,
       file_name: `${campaign.name}_archive.png`,
       source_type: "own_archive",
       source_note: `캠페인 승격: ${campaign.name} (${campaignId.slice(0, 8)})`,
       is_negative: false,
-      weight: 80,
+      weight: weightFromRating(run.rating),
     });
 
     try {

@@ -29,7 +29,7 @@ export async function GET(
 }
 
 const CreateSchema = z.object({
-  mode: z.enum(["fresh", "branch-from-copy"]),
+  mode: z.enum(["fresh", "branch-from-strategy", "branch-from-copy"]),
   sourceRunId: z.string().uuid().optional(),
   label: z.string().max(80).optional(),
 });
@@ -50,26 +50,33 @@ export async function POST(
       return ok({ run });
     }
 
-    // branch-from-copy: 부모 run의 Strategy+Copy를 복사한 후 visual부터 시작
+    // 분기 모드: 부모 run의 selected variant를 복제해 중간 단계부터 시작한다.
+    //   branch-from-strategy → Strategy만 복제, Copy부터 재생성 (가장 흔한 "각도 유지·문구 변형")
+    //   branch-from-copy     → Strategy+Copy 복제, Visual부터 재생성
+    const isStrategyBranch = input.mode === "branch-from-strategy";
     if (!input.sourceRunId) {
-      throw new ApiError(400, "branch-from-copy 모드는 sourceRunId 필요");
+      throw new ApiError(400, `${input.mode} 모드는 sourceRunId 필요`);
     }
     const source = await getRunById(input.sourceRunId);
     if (!source || source.campaign_id !== campaignId) {
       throw new ApiError(404, "원본 소재를 찾을 수 없습니다");
     }
 
-    const [srcStrategy, srcCopy] = await Promise.all([
-      getSelectedVariant(source.id, "strategy"),
-      getSelectedVariant(source.id, "copy"),
-    ]);
-    if (!srcStrategy || !srcCopy) {
+    const srcStrategy = await getSelectedVariant(source.id, "strategy");
+    if (!srcStrategy) {
+      throw new ApiError(400, "원본 소재에 선택된 Strategy가 있어야 합니다");
+    }
+    const srcCopy = isStrategyBranch
+      ? null
+      : await getSelectedVariant(source.id, "copy");
+    if (!isStrategyBranch && !srcCopy) {
       throw new ApiError(
         400,
         "원본 소재에 선택된 Strategy·Copy가 모두 있어야 합니다",
       );
     }
 
+    const cloneLabel = `${input.mode}: cloned`;
     const newRun = await createRun(campaignId, {
       label: input.label ?? null,
       parentRunId: source.id,
@@ -90,7 +97,7 @@ export async function POST(
           promptVersion: srcStrategy.prompt_version ?? undefined,
         },
       ],
-      { mode: "replace", instruction: "branch-from-copy: cloned" },
+      { mode: "replace", instruction: cloneLabel },
     );
     await supabase
       .from("creative_variants")
@@ -98,20 +105,29 @@ export async function POST(
       .eq("id", newStrategy.id);
     await setStageStatus(strategyStage.id, "ready");
 
+    if (isStrategyBranch) {
+      // Copy stage는 비워 두고 Copy 단계부터 재생성하도록 진입
+      await updateRunStatus(newRun.id, "copy", "copy");
+      return ok({
+        run: newRun,
+        branchedFrom: { runId: source.id, runLabel: source.label },
+      });
+    }
+
     const copyStage = await upsertStage(newRun.id, "copy", {
-      branchedFrom: srcCopy.id,
+      branchedFrom: srcCopy!.id,
     });
     const [newCopy] = await createVariants(
       copyStage.id,
       [
         {
-          label: srcCopy.label,
-          content: srcCopy.content_json,
-          scores: srcCopy.scores_json,
-          promptVersion: srcCopy.prompt_version ?? undefined,
+          label: srcCopy!.label,
+          content: srcCopy!.content_json,
+          scores: srcCopy!.scores_json,
+          promptVersion: srcCopy!.prompt_version ?? undefined,
         },
       ],
-      { mode: "replace", instruction: "branch-from-copy: cloned" },
+      { mode: "replace", instruction: cloneLabel },
     );
     await supabase
       .from("creative_variants")

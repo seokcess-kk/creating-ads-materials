@@ -34,6 +34,7 @@ export interface UsageFilter {
   to?: Date;
   brandId?: string;
   campaignId?: string;
+  runId?: string;
 }
 
 export async function getUsageSummary(filter: UsageFilter = {}): Promise<UsageSummary> {
@@ -43,6 +44,7 @@ export async function getUsageSummary(filter: UsageFilter = {}): Promise<UsageSu
   if (filter.to) query = query.lte("created_at", filter.to.toISOString());
   if (filter.brandId) query = query.eq("brand_id", filter.brandId);
   if (filter.campaignId) query = query.eq("campaign_id", filter.campaignId);
+  if (filter.runId) query = query.eq("run_id", filter.runId);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -120,6 +122,7 @@ export async function getUsageList(filter: UsageListFilter = {}): Promise<UsageL
   if (filter.to) query = query.lte("created_at", filter.to.toISOString());
   if (filter.brandId) query = query.eq("brand_id", filter.brandId);
   if (filter.campaignId) query = query.eq("campaign_id", filter.campaignId);
+  if (filter.runId) query = query.eq("run_id", filter.runId);
   if (filter.provider) query = query.eq("provider", filter.provider);
   if (filter.operation) query = query.eq("operation", filter.operation);
 
@@ -131,6 +134,37 @@ export async function getUsageList(filter: UsageListFilter = {}): Promise<UsageL
     page,
     pageSize,
   };
+}
+
+export interface CostBreakdown {
+  totalCost: number;
+  totalCalls: number;
+  byRun: Record<string, number>;
+}
+
+/**
+ * 캠페인 단위 누적 비용. byRun으로 run(소재)별 비용도 분리해 반환한다.
+ * api_usage.run_id / campaign_id 인덱스를 활용한다.
+ */
+export async function getCampaignCost(campaignId: string): Promise<CostBreakdown> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("api_usage")
+    .select("estimated_cost_usd, run_id")
+    .eq("campaign_id", campaignId);
+  if (error) throw error;
+  const rows = (data ?? []) as Array<{
+    estimated_cost_usd: number | null;
+    run_id: string | null;
+  }>;
+  let totalCost = 0;
+  const byRun: Record<string, number> = {};
+  for (const r of rows) {
+    const cost = Number(r.estimated_cost_usd ?? 0);
+    totalCost += cost;
+    if (r.run_id) byRun[r.run_id] = (byRun[r.run_id] ?? 0) + cost;
+  }
+  return { totalCost, totalCalls: rows.length, byRun };
 }
 
 export interface BrandUsageRow {

@@ -120,7 +120,7 @@ export function RunningStatus({
 
       {overdue && (
         <p className="relative text-xs text-amber-600">
-          예상보다 오래 걸립니다. 브라우저를 닫지 마세요 — 완료되면 자동 갱신됩니다.
+          예상보다 오래 걸립니다. 이 탭을 열어두면 완료 시 자동으로 갱신됩니다.
         </p>
       )}
 

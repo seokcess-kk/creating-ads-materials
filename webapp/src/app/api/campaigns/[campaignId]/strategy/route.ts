@@ -3,6 +3,8 @@ import {
   createRun,
   createVariants,
   getCampaign,
+  getSelectedVariant,
+  listRuns,
   listVariants,
   getStage,
   markDownstreamStale,
@@ -100,8 +102,8 @@ export async function POST(
     });
 
     const existingActive = await listVariants(stage.id);
-    // add 모드에서만 이전 각도를 "회피 대상"으로 전달
-    const previousAngles =
+    // add 모드: 같은 stage의 기존 각도를 회피 대상으로
+    const sameStageAngles =
       mode === "add"
         ? existingActive.map((v) => {
             const c = v.content_json as unknown as StrategyAlternative;
@@ -112,6 +114,32 @@ export async function POST(
             };
           })
         : [];
+
+    // 같은 캠페인의 다른 active run이 이미 선택한 angle도 회피 → run 간 angle 다양성 확보
+    // (fresh run을 여러 개 돌려도 같은 angle이 재생산되지 않게 한다)
+    const siblingRuns = (await listRuns(campaignId)).filter((r) => r.id !== run.id);
+    const siblingSelected = await Promise.all(
+      siblingRuns.map((r) => getSelectedVariant(r.id, "strategy")),
+    );
+    const siblingAngles = siblingSelected
+      .filter((v): v is NonNullable<typeof v> => v != null)
+      .map((v) => {
+        const c = v.content_json as unknown as StrategyAlternative;
+        return {
+          angleName: c.angleName,
+          hookType: c.hookType,
+          frameworkId: c.frameworkId,
+        };
+      });
+
+    // angleName 기준 dedupe
+    const seenAngles = new Set<string>();
+    const previousAngles = [...sameStageAngles, ...siblingAngles].filter((a) => {
+      const key = a.angleName ?? "";
+      if (!key || seenAngles.has(key)) return false;
+      seenAngles.add(key);
+      return true;
+    });
 
     try {
       const playbook = getPlaybook(campaign.channel, campaign.goal);

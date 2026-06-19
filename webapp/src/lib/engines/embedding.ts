@@ -41,6 +41,9 @@ export async function embedText(input: EmbedTextInput): Promise<number[]> {
       model: EMBEDDING_MODEL,
       brandId: input.usageContext.brandId,
       campaignId: input.usageContext.campaignId,
+      runId: input.usageContext.runId,
+      // 토큰 수 미상 → 문자 길이로 근사(임베딩을 이미지 단가로 과금하지 않기 위함)
+      approxTokens: Math.ceil(input.text.length / 4),
       metadata: {
         ...input.usageContext.metadata,
         textLength: input.text.length,

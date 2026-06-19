@@ -19,7 +19,12 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { CreativeRun } from "@/lib/campaigns/types";
 
-type Mode = "fresh" | "branch-from-copy";
+type Mode = "fresh" | "branch-from-strategy" | "branch-from-copy";
+
+// Strategy까지 선택된(=copy 단계 이상 진행) run — branch-from-strategy 후보
+const STRATEGY_BRANCHABLE = ["copy", "visual", "retouch", "compose", "ship", "complete"];
+// Strategy+Copy까지 완료된(=visual 단계 이상) run — branch-from-copy 후보
+const COPY_BRANCHABLE = ["visual", "retouch", "compose", "ship", "complete"];
 
 interface Props {
   campaignId: string;
@@ -36,20 +41,42 @@ export function NewMaterialDialog({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<Mode>(
-    hasBranchableSource ? "branch-from-copy" : "fresh",
+
+  const strategyBranchableRuns = existingRuns.filter((r) =>
+    STRATEGY_BRANCHABLE.includes(r.status),
   );
-  const [sourceRunId, setSourceRunId] = useState<string>(() => {
-    const branchable = existingRuns.find(
-      (r) => r.status === "complete" || r.status === "compose" || r.status === "ship" || r.status === "retouch" || r.status === "visual",
-    );
-    return branchable?.id ?? existingRuns[0]?.id ?? "";
-  });
+  const copyBranchableRuns = existingRuns.filter((r) =>
+    COPY_BRANCHABLE.includes(r.status),
+  );
+  const hasStrategyBranchable = strategyBranchableRuns.length > 0;
+
+  const defaultMode: Mode = hasBranchableSource
+    ? "branch-from-copy"
+    : hasStrategyBranchable
+      ? "branch-from-strategy"
+      : "fresh";
+
+  const [mode, setMode] = useState<Mode>(defaultMode);
+  const [sourceRunId, setSourceRunId] = useState<string>(
+    () =>
+      copyBranchableRuns[0]?.id ??
+      strategyBranchableRuns[0]?.id ??
+      existingRuns[0]?.id ??
+      "",
+  );
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
 
+  const isBranch = mode === "branch-from-strategy" || mode === "branch-from-copy";
+  const sourceCandidates =
+    mode === "branch-from-strategy" ? strategyBranchableRuns : copyBranchableRuns;
+  // 모드 전환 시 현재 선택이 후보에 없으면 첫 후보로 폴백
+  const effectiveSourceRunId = sourceCandidates.some((r) => r.id === sourceRunId)
+    ? sourceRunId
+    : (sourceCandidates[0]?.id ?? "");
+
   function reset() {
-    setMode(hasBranchableSource ? "branch-from-copy" : "fresh");
+    setMode(defaultMode);
     setLabel("");
   }
 
@@ -58,12 +85,12 @@ export function NewMaterialDialog({
     try {
       const body: Record<string, unknown> = { mode };
       if (label.trim()) body.label = label.trim();
-      if (mode === "branch-from-copy") {
-        if (!sourceRunId) {
+      if (isBranch) {
+        if (!effectiveSourceRunId) {
           toast.error("원본 소재를 선택하세요");
           return;
         }
-        body.sourceRunId = sourceRunId;
+        body.sourceRunId = effectiveSourceRunId;
       }
       const res = await fetch(`/api/campaigns/${campaignId}/runs`, {
         method: "POST",
@@ -75,7 +102,9 @@ export function NewMaterialDialog({
       toast.success(
         mode === "fresh"
           ? "새 소재 생성됨 — Strategy부터 시작"
-          : "새 소재 생성됨 — Visual부터 시작 (Strategy·Copy 복사됨)",
+          : mode === "branch-from-strategy"
+            ? "새 소재 생성됨 — Copy부터 시작 (Strategy 복사됨)"
+            : "새 소재 생성됨 — Visual부터 시작 (Strategy·Copy 복사됨)",
       );
       const params = new URLSearchParams(searchParams);
       params.set("run", data.run.id);
@@ -89,11 +118,6 @@ export function NewMaterialDialog({
       setCreating(false);
     }
   }
-
-  // branch-from-copy 가능한 후보: Strategy+Copy까지 진행된 run
-  const branchableRuns = existingRuns.filter((r) =>
-    ["visual", "retouch", "compose", "ship", "complete"].includes(r.status),
-  );
 
   return (
     <Dialog
@@ -153,6 +177,41 @@ export function NewMaterialDialog({
             <label
               className={cn(
                 "block rounded-md border p-3 transition-colors",
+                !hasStrategyBranchable && "cursor-not-allowed opacity-50",
+                hasStrategyBranchable && "cursor-pointer",
+                mode === "branch-from-strategy" && hasStrategyBranchable
+                  ? "border-primary bg-primary/5"
+                  : hasStrategyBranchable && "hover:bg-muted/50",
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="new-material-mode"
+                  checked={mode === "branch-from-strategy"}
+                  onChange={() => setMode("branch-from-strategy")}
+                  disabled={creating || !hasStrategyBranchable}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    Strategy만 복사 후 분기 (Branch from Strategy)
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    원본 소재의 전략(각도)은 그대로 두고 Copy부터 새로 생성. 같은
+                    각도로 문구·비주얼 변형을 만들 때.
+                  </p>
+                  {!hasStrategyBranchable && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Strategy가 선택된 소재가 없어 비활성화됨.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </label>
+            <label
+              className={cn(
+                "block rounded-md border p-3 transition-colors",
                 !hasBranchableSource && "cursor-not-allowed opacity-50",
                 hasBranchableSource && "cursor-pointer",
                 mode === "branch-from-copy" && hasBranchableSource
@@ -187,17 +246,17 @@ export function NewMaterialDialog({
             </label>
           </fieldset>
 
-          {mode === "branch-from-copy" && branchableRuns.length > 0 && (
+          {isBranch && sourceCandidates.length > 0 && (
             <div className="space-y-1.5">
               <Label htmlFor="new-material-source">원본 소재</Label>
               <select
                 id="new-material-source"
-                value={sourceRunId}
+                value={effectiveSourceRunId}
                 onChange={(e) => setSourceRunId(e.target.value)}
                 disabled={creating}
                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
               >
-                {branchableRuns.map((r) => (
+                {sourceCandidates.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.label ?? `소재 ${r.iteration_index ?? "?"}`} · {r.status}
                   </option>

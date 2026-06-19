@@ -1,7 +1,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { estimateClaudeCost, estimateGeminiImageCost } from "./pricing";
+import {
+  estimateClaudeCost,
+  estimateGeminiImageCost,
+  estimateGeminiEmbeddingCost,
+  estimateOpenAIImageCost,
+  GEMINI_IMAGE_PRICING,
+} from "./pricing";
 
-export type UsageProvider = "anthropic" | "gemini";
+export type UsageProvider = "anthropic" | "gemini" | "openai";
 
 export interface UsageContext {
   operation: string;
@@ -19,6 +25,12 @@ export interface RecordUsageInput extends UsageContext {
   cacheReadTokens?: number;
   cacheCreationTokens?: number;
   imageCount?: number;
+  /** OpenAI 이미지 단가 계산용 (예: "1024x1536") */
+  imageDimensions?: string | null;
+  /** OpenAI 이미지 단가 계산용 (low|medium|high) */
+  imageQuality?: string | null;
+  /** Gemini 임베딩 토큰 추정치 — 이미지 단가로 잘못 과금되지 않도록 */
+  approxTokens?: number | null;
 }
 
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
@@ -31,7 +43,19 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       cacheCreation: input.cacheCreationTokens,
     });
   } else if (input.provider === "gemini") {
-    cost = estimateGeminiImageCost(input.model, input.imageCount ?? 1);
+    // 이미지 모델만 장당 단가로 계산하고, 그 외(임베딩 등)는 토큰 기반으로 분리한다.
+    // 과거에는 임베딩도 이미지 단가($0.04/장)로 계상되는 버그가 있었다.
+    const isImageModel = input.model != null && input.model in GEMINI_IMAGE_PRICING;
+    cost = isImageModel
+      ? estimateGeminiImageCost(input.model, input.imageCount ?? 1)
+      : estimateGeminiEmbeddingCost(input.approxTokens ?? 0);
+  } else if (input.provider === "openai") {
+    cost = estimateOpenAIImageCost(
+      input.model,
+      input.imageDimensions,
+      input.imageQuality,
+      input.imageCount ?? 1,
+    );
   }
 
   const supabase = createAdminClient();

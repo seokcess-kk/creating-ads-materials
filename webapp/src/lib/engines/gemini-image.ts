@@ -1,6 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 import { serverEnv } from "@/lib/env";
-import { recordUsage, type UsageContext } from "@/lib/usage/record";
+import { recordUsage } from "@/lib/usage/record";
+import type {
+  AspectRatio,
+  ImageSize,
+  ImagePart,
+  GenerateImageInput,
+  EditImageInput,
+} from "./image-types";
+
+// 기존 `@/lib/engines/gemini-image`를 직접 import하던 코드 호환을 위해 타입 재노출
+export type { AspectRatio, ImageSize, ImagePart, GenerateImageInput, EditImageInput };
 
 let client: GoogleGenAI | null = null;
 
@@ -10,21 +20,6 @@ function getClient(): GoogleGenAI {
 }
 
 export const GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview";
-
-export type AspectRatio = "1:1" | "4:5" | "9:16" | "16:9" | "3:4" | "4:3";
-export type ImageSize = "1K" | "2K" | "4K";
-
-export interface ImagePart {
-  mimeType: string;
-  base64: string;
-}
-
-export interface GenerateImageInput {
-  prompt: string;
-  aspectRatio?: AspectRatio;
-  imageSize?: ImageSize;
-  usageContext?: UsageContext;
-}
 
 export async function generateImage(input: GenerateImageInput): Promise<ImagePart> {
   const response = await getClient().models.generateContent({
@@ -59,14 +54,6 @@ export async function generateImage(input: GenerateImageInput): Promise<ImagePar
   }
 
   return part;
-}
-
-export interface EditImageInput {
-  prompt: string;
-  baseImage: ImagePart;
-  aspectRatio?: AspectRatio;
-  imageSize?: ImageSize;
-  usageContext?: UsageContext;
 }
 
 export async function editImage(input: EditImageInput): Promise<ImagePart> {
