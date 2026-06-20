@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   campaignStatusLabel,
   getCampaign,
@@ -60,10 +61,10 @@ export default async function CampaignPage({
   searchParams,
 }: {
   params: Promise<{ campaignId: string }>;
-  searchParams: Promise<{ run?: string }>;
+  searchParams: Promise<{ run?: string; retouch?: string }>;
 }) {
   const { campaignId } = await params;
-  const { run: runHint } = await searchParams;
+  const { run: runHint, retouch: retouchParam } = await searchParams;
 
   // Level 0 — campaign이 다른 모든 호출의 의존성
   const campaign = await getCampaign(campaignId);
@@ -184,6 +185,13 @@ export default async function CampaignPage({
     ? (getPresetById(overridePresetId)?.label ?? null)
     : null;
 
+  // Retouch는 선택적 보정 단계 — 기본 흐름은 5스텝(Strategy→Copy→Visual→Compose→Ship).
+  // 이미 시작됐거나(결과/스테이지 존재) ?retouch=1 옵트인일 때만 스텝으로 노출.
+  const showRetouch =
+    retouchStage != null ||
+    retouchVariants.length > 0 ||
+    retouchParam === "1";
+
   const steps: StepDef[] = [
     {
       key: "strategy",
@@ -203,13 +211,17 @@ export default async function CampaignPage({
       status: visualStage?.status,
       locked: !copyReady,
     },
-    {
-      key: "retouch",
-      label: "Retouch",
-      status: retouchStage?.status,
-      locked: !visualReady,
-      optional: true,
-    },
+    ...(showRetouch
+      ? [
+          {
+            key: "retouch",
+            label: "Retouch",
+            status: retouchStage?.status,
+            locked: !visualReady,
+            optional: true,
+          } as StepDef,
+        ]
+      : []),
     {
       key: "compose",
       label: "Compose",
@@ -332,6 +344,17 @@ export default async function CampaignPage({
         visualReady={visualReady}
       />
 
+      {visualReady && !showRetouch && (
+        <div className="flex justify-end">
+          <Link
+            href={runHint ? `?run=${runHint}&retouch=1` : `?retouch=1`}
+            className="text-xs text-muted-foreground underline hover:text-foreground"
+          >
+            🎨 리터치(미세 보정) 단계 추가 (선택)
+          </Link>
+        </div>
+      )}
+
       <CampaignStepper
         key={run?.id ?? "no-run"}
         steps={steps}
@@ -364,16 +387,18 @@ export default async function CampaignPage({
           automationLevel={campaign.automation_level}
         />
 
-        <RetouchStudio
-          campaignId={campaignId}
-          runId={run?.id ?? null}
-          visualReady={visualReady}
-          baseImageUrl={baseImageUrl}
-          visualSuggestions={visualSuggestions}
-          aspectRatio={channel?.aspectRatio ?? "1:1"}
-          initialStage={retouchStage}
-          initialVariants={retouchVariants}
-        />
+        {showRetouch && (
+          <RetouchStudio
+            campaignId={campaignId}
+            runId={run?.id ?? null}
+            visualReady={visualReady}
+            baseImageUrl={baseImageUrl}
+            visualSuggestions={visualSuggestions}
+            aspectRatio={channel?.aspectRatio ?? "1:1"}
+            initialStage={retouchStage}
+            initialVariants={retouchVariants}
+          />
+        )}
 
         <ComposeStage
           campaignId={campaignId}
