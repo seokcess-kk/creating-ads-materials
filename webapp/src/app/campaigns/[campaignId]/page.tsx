@@ -316,33 +316,51 @@ export default async function CampaignPage({
         hasBranchableSource={hasBranchableSource}
       />
 
-      {memoryForDefaults && (
-        <BrandContextPanel
-          brandId={campaign.brand_id}
-          identity={memoryForDefaults.identity}
-          offer={
-            memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
-          }
-          audience={
-            memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
-            null
-          }
-        />
-      )}
+      <details className="group rounded-lg border bg-muted/20">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span className="flex flex-wrap items-center gap-2">
+            ⚙ 캠페인 설정
+            <span className="text-xs font-normal text-muted-foreground">
+              브랜드 컨텍스트 · 실사 자산 · 폰트
+            </span>
+          </span>
+          <span
+            className="text-muted-foreground transition-transform group-open:rotate-180"
+            aria-hidden
+          >
+            ▾
+          </span>
+        </summary>
+        <div className="space-y-6 border-t p-4">
+          {memoryForDefaults && (
+            <BrandContextPanel
+              brandId={campaign.brand_id}
+              identity={memoryForDefaults.identity}
+              offer={
+                memoryForDefaults.offers.find((o) => o.id === campaign.offer_id) ?? null
+              }
+              audience={
+                memoryForDefaults.audiences.find((a) => a.id === campaign.audience_id) ??
+                null
+              }
+            />
+          )}
 
-      <CampaignKeyVisualEditor
-        campaignId={campaignId}
-        intent={campaign.key_visual_intent}
-        selectedIds={campaign.selected_key_visual_ids}
-        keyVisuals={memoryForDefaults?.keyVisuals ?? []}
-      />
+          <CampaignKeyVisualEditor
+            campaignId={campaignId}
+            intent={campaign.key_visual_intent}
+            selectedIds={campaign.selected_key_visual_ids}
+            keyVisuals={memoryForDefaults?.keyVisuals ?? []}
+          />
 
-      <CampaignFontPanel
-        campaignId={campaignId}
-        initialPresetId={overridePresetId}
-        initialPresetLabel={overridePresetLabel}
-        visualReady={visualReady}
-      />
+          <CampaignFontPanel
+            campaignId={campaignId}
+            initialPresetId={overridePresetId}
+            initialPresetLabel={overridePresetLabel}
+            visualReady={visualReady}
+          />
+        </div>
+      </details>
 
       {visualReady && !showRetouch && (
         <div className="flex justify-end">
