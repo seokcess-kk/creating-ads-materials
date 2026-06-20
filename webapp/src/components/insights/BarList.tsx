@@ -10,7 +10,7 @@ interface BarListProps {
 
 export function BarList({ title, subtitle, items, emptyLabel, color = "primary" }: BarListProps) {
   const max = Math.max(...items.map((i) => i.count), 1);
-  const barColor = color === "accent" ? "bg-amber-500/70" : "bg-primary";
+  const barColor = color === "accent" ? "bg-muted-foreground/60" : "bg-primary";
 
   return (
     <div>

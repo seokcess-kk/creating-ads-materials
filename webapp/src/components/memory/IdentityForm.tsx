@@ -109,11 +109,10 @@ function OptionChips({
             type="button"
             onClick={() => onToggle(o)}
             disabled={disabled}
-            className={`text-[11px] rounded-full border px-2 py-0.5 transition-colors ${
-              on ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+            className={`text-[11px] rounded-md border px-2 py-0.5 transition-colors ${
+              on ? "border-foreground/30 text-foreground font-medium" : "hover:bg-muted"
             }`}
           >
-            {on ? "✓ " : "+ "}
             {o}
           </button>
         );
@@ -245,7 +244,7 @@ export function IdentityForm({
 
   return (
     <div className="space-y-6 pb-24">
-      <Card className="bg-muted/30 border-dashed">
+      <Card>
         <CardHeader>
           <CardTitle className="text-base">홈페이지 자동 분석</CardTitle>
         </CardHeader>
@@ -435,7 +434,7 @@ export function IdentityForm({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            자유롭게 업로드하세요. ⭐ 기본 로고는 Compose 단계에서 자동 선택되며,
+            자유롭게 업로드하세요. 기본 로고는 Compose 단계에서 자동 선택되며,
             다른 로고를 원하면 Compose에서 썸네일 클릭으로 교체할 수 있습니다.
           </p>
           <LogoGallery
@@ -450,11 +449,11 @@ export function IdentityForm({
       <div
         role="region"
         aria-label="저장 막대"
-        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur supports-backdrop-filter:bg-background/80"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur supports-backdrop-filter:bg-background/80"
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <span
-            className={`text-xs ${dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+            className={`text-xs ${dirty ? "text-foreground" : "text-muted-foreground"}`}
           >
             {dirty ? "● 저장되지 않은 변경 사항이 있습니다" : "최신 상태로 저장됨"}
           </span>
@@ -620,7 +619,7 @@ function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={disabled || uploadProgress !== null}
-          className="aspect-square rounded-md border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors disabled:opacity-40"
+          className="aspect-square rounded-md border border-muted-foreground/30 flex flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors disabled:opacity-40"
         >
           <span className="text-2xl">+</span>
           <span>
@@ -640,7 +639,7 @@ function LogoGallery({ brandId, logos, onChange, disabled }: LogoGalleryProps) {
       />
       <p className="text-[11px] text-muted-foreground">
         PNG 투명 배경 권장 · 최대 10MB · 여러 파일 동시 선택 가능 ·
-        ⭐ 기본 로고 1개 지정 (Compose에서 자동 선택)
+        기본 로고 1개 지정 (Compose에서 자동 선택)
       </p>
     </div>
   );
@@ -662,10 +661,10 @@ function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove 
     <div
       className={
         "border rounded-md p-2 space-y-2 " +
-        (logo.is_primary ? "border-primary bg-primary/5" : "")
+        (logo.is_primary ? "border-primary" : "")
       }
     >
-      <div className="aspect-square rounded bg-muted/40 border flex items-center justify-center overflow-hidden relative">
+      <div className="aspect-square rounded border flex items-center justify-center overflow-hidden relative">
         { }
         <img
           src={logo.url}
@@ -673,7 +672,7 @@ function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove 
           className="max-w-full max-h-full object-contain p-2"
         />
         {logo.is_primary && (
-          <Badge className="absolute top-1 left-1 text-[9px]">⭐ 기본</Badge>
+          <Badge className="absolute top-1 left-1 text-[9px]">기본</Badge>
         )}
       </div>
       <Input
@@ -696,7 +695,7 @@ function LogoCard({ logo, busy, disabled, onSetPrimary, onLabelChange, onRemove 
           disabled={disabled || busy || logo.is_primary}
           className="flex-1 text-xs"
         >
-          {logo.is_primary ? "⭐ 기본" : "기본으로"}
+          {logo.is_primary ? "기본" : "기본으로"}
         </Button>
         <Button
           type="button"

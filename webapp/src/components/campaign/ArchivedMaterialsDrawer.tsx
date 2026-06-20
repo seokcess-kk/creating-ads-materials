@@ -97,7 +97,7 @@ export function ArchivedMaterialsDrawer({ campaignId, archivedRuns }: Props) {
             return (
               <div
                 key={run.id}
-                className="rounded-md border bg-muted/20 p-3 space-y-2"
+                className="rounded-md border p-3 space-y-2"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1 space-y-1">
@@ -110,7 +110,7 @@ export function ArchivedMaterialsDrawer({ campaignId, archivedRuns }: Props) {
                       </Badge>
                       {run.rating != null && (
                         <span
-                          className="text-[10px] text-amber-500"
+                          className="text-[10px] text-muted-foreground"
                           aria-label={`평점 ${run.rating}`}
                         >
                           {"★".repeat(run.rating)}

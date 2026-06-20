@@ -105,7 +105,7 @@ export function IntentForm({
 
   return (
     <div className="space-y-8 pb-24">
-      <Card className="bg-muted/30">
+      <Card>
         <CardContent className="pt-6 space-y-2 text-sm">
           <p>
             <span className="text-muted-foreground">브랜드:</span>{" "}
@@ -119,10 +119,10 @@ export function IntentForm({
         </CardContent>
       </Card>
 
-      <Card className="border-dashed bg-muted/20">
+      <Card>
         <CardContent className="py-3 flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            📋 안내문·공지를 소재로 만들려면 카드뉴스가 더 빠릅니다
+            안내문·공지를 소재로 만들려면 카드뉴스가 더 빠릅니다
           </p>
           <Link href={`/brands/${brandId}/cardnews`}>
             <Button variant="outline" size="sm">
@@ -166,7 +166,7 @@ export function IntentForm({
               </p>
             </div>
             <div
-              className={`shrink-0 border rounded-md bg-muted/40 ${
+              className={`shrink-0 border rounded-md ${
                 selectedChannel.aspectRatio === "9:16"
                   ? "w-10 h-[71px]"
                   : selectedChannel.aspectRatio === "4:5"
@@ -229,7 +229,7 @@ export function IntentForm({
                 <label
                   key={o.id}
                   className={`block border rounded-md p-3 cursor-pointer transition-colors ${
-                    offerId === o.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                    offerId === o.id ? "border-foreground" : "hover:bg-muted/50"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -249,7 +249,7 @@ export function IntentForm({
                       {o.usp && <p className="text-xs text-muted-foreground">{o.usp}</p>}
                       <div className="flex flex-wrap gap-1 text-xs">
                         {o.price && <Badge variant="outline">{o.price}</Badge>}
-                        {o.urgency && <Badge variant="outline">⏰ {o.urgency}</Badge>}
+                        {o.urgency && <Badge variant="outline">{o.urgency}</Badge>}
                       </div>
                     </div>
                   </div>
@@ -280,7 +280,7 @@ export function IntentForm({
                 <label
                   key={a.id}
                   className={`block border rounded-md p-3 cursor-pointer transition-colors ${
-                    audienceId === a.id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                    audienceId === a.id ? "border-foreground" : "hover:bg-muted/50"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -335,19 +335,16 @@ export function IntentForm({
               [
                 {
                   id: "manual" as const,
-                  icon: "🧑‍💻",
                   title: "Manual",
                   desc: "모든 선택 수동. 대안을 직접 비교하며 결정.",
                 },
                 {
                   id: "assist" as const,
-                  icon: "✨",
                   title: "Assist",
                   desc: "생성 후 최고점 자동 pre-select. 다른 것 클릭도 가능.",
                 },
                 {
                   id: "auto" as const,
-                  icon: "🚀",
                   title: "Auto (beta)",
                   desc: "Assist + 다음 단계 자동 진행. Compose에서 정지.",
                 },
@@ -357,7 +354,7 @@ export function IntentForm({
                 key={m.id}
                 className={`border rounded-md p-3 cursor-pointer transition-colors ${
                   automationLevel === m.id
-                    ? "border-primary bg-primary/5"
+                    ? "border-foreground"
                     : "hover:bg-muted/50"
                 }`}
               >
@@ -371,9 +368,7 @@ export function IntentForm({
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <div className="text-sm font-medium">
-                      {m.icon} {m.title}
-                    </div>
+                    <div className="text-sm font-medium">{m.title}</div>
                     <p className="text-xs text-muted-foreground mt-0.5">{m.desc}</p>
                   </div>
                 </div>
@@ -429,7 +424,7 @@ export function IntentForm({
                         key={kv.id}
                         className={`relative block border rounded-md overflow-hidden transition-colors cursor-pointer ${
                           selected
-                            ? "border-primary bg-primary/5"
+                            ? "border-foreground"
                             : "hover:bg-muted/50"
                         }`}
                       >
@@ -493,11 +488,11 @@ export function IntentForm({
       <div
         role="region"
         aria-label="캠페인 시작 막대"
-        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 shadow-[0_-4px_12px_rgba(0,0,0,0.06)] backdrop-blur supports-backdrop-filter:bg-background/80"
+        className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 px-4 py-3 backdrop-blur supports-backdrop-filter:bg-background/80"
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           <span
-            className={`text-xs ${canSubmit ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400"}`}
+            className="text-xs text-muted-foreground"
           >
             {canSubmit
               ? "준비됨 — 시작 시 Strategy 단계로 이동합니다"

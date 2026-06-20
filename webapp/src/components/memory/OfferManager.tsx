@@ -45,7 +45,7 @@ function CharCounter({ state }: { state: CharCounterState }) {
     state.level === "over"
       ? "text-destructive"
       : state.level === "warn"
-        ? "text-amber-600 dark:text-amber-400"
+        ? "text-foreground"
         : "text-muted-foreground";
   return (
     <span className={`text-[10px] tabular-nums ${color}`}>
@@ -241,8 +241,8 @@ export function OfferManager({
             </CardHeader>
             <CardContent className="space-y-4">
               {tabooHits.length > 0 && (
-                <div className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
-                  ⚠ 금기 표현 감지: {tabooHits.map((h) => `"${h.term}"`).join(", ")}
+                <div className="rounded-md border border-l-2 border-l-destructive p-2 text-xs text-destructive">
+                  금기 표현 감지: {tabooHits.map((h) => `"${h.term}"`).join(", ")}
                 </div>
               )}
 
@@ -338,7 +338,7 @@ export function OfferManager({
                       type="button"
                       onClick={() => setDraft({ ...draft, urgency: t })}
                       disabled={saving}
-                      className="text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted transition-colors"
+                      className="text-[11px] rounded-md border px-2 py-0.5 hover:bg-muted transition-colors"
                     >
                       + {t}
                     </button>
@@ -437,10 +437,10 @@ export function OfferManager({
                 {o.price && <Badge variant="outline">{o.price}</Badge>}
                 {o.benefits.map((b, i) => (
                   <Badge key={`b-${i}`} variant="outline">
-                    ✓ {b}
+                    {b}
                   </Badge>
                 ))}
-                {o.urgency && <Badge variant="outline">⏰ {o.urgency}</Badge>}
+                {o.urgency && <Badge variant="outline">{o.urgency}</Badge>}
               </div>
               {o.evidence.length > 0 && (
                 <p className="text-xs text-muted-foreground">증거: {o.evidence.join(" · ")}</p>
@@ -451,14 +451,14 @@ export function OfferManager({
         {list.length === 0 && editingId === null && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              아직 오퍼가 없습니다. 위 ✨ AI 시작하기로 4개를 한 번에 만들어보세요.
+              아직 오퍼가 없습니다. 위 AI 시작하기로 4개를 한 번에 만들어보세요.
             </CardContent>
           </Card>
         )}
       </div>
 
       {list.length > 0 && editingId === null && (
-        <div className="rounded-md border bg-muted/30 p-3 text-xs flex items-center justify-between">
+        <div className="rounded-md border p-3 text-xs flex items-center justify-between">
           <span className="text-muted-foreground">
             오퍼가 준비됐다면 다음 단계로 진행하세요
           </span>
@@ -482,13 +482,13 @@ function OfferLivePreview({
 }) {
   return (
     <div className="space-y-2 sticky top-4">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+      <p className="text-[10px] text-muted-foreground">
         광고 미리보기 (4:5)
       </p>
-      <div className="aspect-[4/5] rounded-lg border-2 border-dashed bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4 flex flex-col">
+      <div className="aspect-[4/5] rounded-lg border bg-card p-4 flex flex-col">
         <div className="text-[9px] text-muted-foreground">{brandName}</div>
         <div className="flex-1 flex flex-col justify-center space-y-2">
-          <div className="text-base font-bold leading-tight line-clamp-3 text-foreground">
+          <div className="text-base font-semibold leading-tight line-clamp-3 text-foreground">
             {draft.title || "타이틀 미입력"}
           </div>
           {draft.usp && (
@@ -497,7 +497,7 @@ function OfferLivePreview({
           {draft.benefits.length > 0 && (
             <ul className="text-[10px] space-y-0.5 text-muted-foreground">
               {draft.benefits.slice(0, 4).map((b, i) => (
-                <li key={i}>✓ {b}</li>
+                <li key={i}>{b}</li>
               ))}
             </ul>
           )}
@@ -507,8 +507,8 @@ function OfferLivePreview({
         </div>
         <div className="space-y-1.5">
           {draft.urgency && (
-            <div className="text-[10px] text-amber-700 dark:text-amber-400">
-              ⏰ {draft.urgency}
+            <div className="text-[10px] text-muted-foreground">
+              {draft.urgency}
             </div>
           )}
           <div className="rounded-md bg-foreground text-background text-center py-1.5 text-[10px] font-semibold">

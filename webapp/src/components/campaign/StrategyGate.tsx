@@ -330,11 +330,11 @@ export function StrategyGate({
             const isSelected = v.selected;
             const roleLabel =
               c.role === "safe"
-                ? "🛡 Safe"
+                ? "Safe"
                 : c.role === "explore"
-                  ? "🧭 Explore"
+                  ? "Explore"
                   : c.role === "challenge"
-                    ? "⚡ Challenge"
+                    ? "Challenge"
                     : null;
             const cardDisabled = selecting !== null;
             return (
@@ -358,8 +358,8 @@ export function StrategyGate({
                 className={
                   "transition-all outline-none focus-visible:ring-2 focus-visible:ring-primary/50 " +
                   (isSelected
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/30 cursor-default"
-                    : "hover:border-primary/40 hover:shadow-sm cursor-pointer") +
+                    ? "border-primary cursor-default"
+                    : "hover:border-foreground/30 cursor-pointer") +
                   (cardDisabled ? " opacity-70 cursor-wait" : "")
                 }
               >
@@ -417,8 +417,8 @@ export function StrategyGate({
                     </div>
                   </details>
                   {c.sampleCopy && (
-                    <div className="mt-2 p-2 rounded-md border bg-muted/40 space-y-1">
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                    <div className="mt-2 p-2 rounded-md border space-y-1">
+                      <p className="text-[9px] text-muted-foreground">
                         샘플 카피
                       </p>
                       <p className="text-sm font-semibold leading-tight">

@@ -27,7 +27,7 @@ export function RecomputeButton({ brandId }: { brandId: string }) {
 
   return (
     <Button variant="outline" size="sm" onClick={run} disabled={running}>
-      {running ? "재계산 중..." : "↻ 학습 재계산"}
+      {running ? "재계산 중..." : "학습 재계산"}
     </Button>
   );
 }

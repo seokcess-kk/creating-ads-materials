@@ -120,7 +120,7 @@ export function ShipCard({
     <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center justify-between">
-          <span>⑥ Ship</span>
+          <span>Ship</span>
           {isShipped || isCompleted ? (
             <Badge variant="secondary">Shipped</Badge>
           ) : (
@@ -137,7 +137,7 @@ export function ShipCard({
                 <img
                   src={composeUrl}
                   alt="final"
-                  className={`w-full ${ac} rounded-md border object-contain bg-muted/20 ${maxHeightClass(aspectRatio)} mx-auto`}
+                  className={`w-full ${ac} rounded-md border object-contain ${maxHeightClass(aspectRatio)} mx-auto`}
                 />
               </a>
             ) : (
@@ -214,7 +214,7 @@ export function ShipCard({
               <p className="text-[11px] text-muted-foreground mb-2">
                 성과 데이터가 쌓이기 전까지 선호도 학습에 활용됩니다.
               </p>
-              <div className="flex gap-1" aria-label="별점">
+              <div className="flex gap-1 text-muted-foreground" aria-label="별점">
                 {[1, 2, 3, 4, 5].map((n) => {
                   const filled = rating != null && n <= rating;
                   return (
@@ -223,15 +223,15 @@ export function ShipCard({
                       type="button"
                       onClick={() => setRating(rating === n ? null : n)}
                       disabled={savingRating}
-                      className="p-0.5 transition-transform hover:scale-110"
+                      className="p-0.5"
                       aria-label={`${n}점`}
                     >
                       <svg
                         width="22"
                         height="22"
                         viewBox="0 0 24 24"
-                        fill={filled ? "#FACC15" : "none"}
-                        stroke={filled ? "#FACC15" : "currentColor"}
+                        fill={filled ? "currentColor" : "none"}
+                        stroke="currentColor"
                         strokeWidth="1.8"
                         strokeLinecap="round"
                         strokeLinejoin="round"

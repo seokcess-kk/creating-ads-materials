@@ -25,14 +25,14 @@ export function BrandContextPanel({
     | undefined;
 
   return (
-    <Card className="bg-muted/20">
+    <Card>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/30"
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50"
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <span className="text-sm font-medium">📋 브랜드 컨텍스트</span>
+          <span className="text-sm font-medium">브랜드 컨텍스트</span>
           {offer && (
             <Badge variant="outline" className="max-w-full truncate text-xs">
               {offer.title}
@@ -101,7 +101,7 @@ export function BrandContextPanel({
                     )}
                     {offer.urgency && (
                       <Badge variant="outline" className="text-[10px]">
-                        ⏰ {offer.urgency}
+                        {offer.urgency}
                       </Badge>
                     )}
                   </div>
@@ -141,7 +141,7 @@ export function BrandContextPanel({
           </div>
 
           <p className="text-[11px] text-muted-foreground border-t pt-2">
-            💡 여기 값 변경 후 재생성하면 새 컨텍스트 반영. 기존 결과는 자동으로
+            여기 값 변경 후 재생성하면 새 컨텍스트 반영. 기존 결과는 자동으로
             stale로 마킹됩니다.
           </p>
         </CardContent>

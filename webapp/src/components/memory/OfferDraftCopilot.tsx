@@ -123,10 +123,10 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
   }
 
   return (
-    <Card className="border-primary/40 bg-primary/[0.02]">
+    <Card>
       <CardHeader>
         <CardTitle className="text-base flex items-center gap-2">
-          <span aria-hidden>✨</span> AI로 시작하기
+          AI로 시작하기
           <Badge variant="secondary" className="ml-2 text-[10px]">
             추천
           </Badge>
@@ -156,7 +156,7 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
                 type="button"
                 onClick={() => setIntent(p)}
                 disabled={loading || saving}
-                className="text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted transition-colors"
+                className="text-[11px] rounded-md border px-2 py-0.5 hover:bg-muted transition-colors"
               >
                 + {p}
               </button>
@@ -206,7 +206,7 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
         </div>
 
         <Button onClick={generate} disabled={loading || saving} className="w-full">
-          {loading ? "AI가 초안을 만들고 있습니다…" : "✨ 초안 생성"}
+          {loading ? "AI가 초안을 만들고 있습니다…" : "초안 생성"}
         </Button>
 
         {drafts && drafts.length > 0 && (
@@ -232,7 +232,7 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
                     type="button"
                     onClick={() => toggle(i)}
                     className={`w-full text-left rounded-md border p-3 transition-colors ${
-                      on ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                      on ? "border-primary" : "border-border hover:bg-muted"
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -258,13 +258,13 @@ export function OfferDraftCopilot({ brandId, audiences, onAccept }: Props) {
                         <p className="text-xs text-muted-foreground">{d.usp}</p>
                         {d.benefits.length > 0 && (
                           <p className="text-[11px] text-muted-foreground">
-                            ✓ {d.benefits.slice(0, 3).join(" · ")}
+                            {d.benefits.slice(0, 3).join(" · ")}
                             {d.benefits.length > 3 ? ` +${d.benefits.length - 3}` : ""}
                           </p>
                         )}
                         {d.urgency && (
-                          <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                            ⏰ {d.urgency}
+                          <p className="text-[11px] text-muted-foreground">
+                            {d.urgency}
                           </p>
                         )}
                         <p className="text-[11px] text-muted-foreground italic pt-1">

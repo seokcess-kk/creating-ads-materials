@@ -167,10 +167,10 @@ export function KeyVisualManager({ brandId, initial }: KeyVisualManagerProps) {
             </div>
           </div>
           <label
-            className={`block border-2 border-dashed rounded-md p-6 text-center transition-colors ${
+            className={`block border rounded-md p-6 text-center transition-colors ${
               uploading || !label.trim()
                 ? "opacity-50 cursor-not-allowed"
-                : "cursor-pointer hover:border-primary/50"
+                : "cursor-pointer hover:border-foreground/30"
             }`}
           >
             <input

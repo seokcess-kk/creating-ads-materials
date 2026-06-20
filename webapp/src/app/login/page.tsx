@@ -16,7 +16,7 @@ export default async function LoginPage({
   const error = params.error;
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 bg-muted/30">
+    <div className="min-h-screen w-full flex items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Ad Studio 로그인</CardTitle>

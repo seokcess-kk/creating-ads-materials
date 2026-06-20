@@ -52,47 +52,29 @@ export function RunningStatus({
     : -1;
 
   return (
-    <div className="relative overflow-hidden rounded-md border border-primary/40 p-4 space-y-3">
-      {/* pulsing ring */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute inset-0 rounded-md border-2 border-primary/30 animate-pulse" />
-      </div>
-
-      <div className="relative flex items-center justify-between gap-3">
+    <div className="rounded-md border p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm">
-          <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span className="inline-block w-2 h-2 rounded-full bg-foreground" />
           <span className="font-medium">
             {label}
             <AnimatedDots />
           </span>
         </div>
-        <span
-          className={
-            "font-mono text-xs shrink-0 " +
-            (overdue ? "text-amber-600" : "text-muted-foreground")
-          }
-        >
-          🕐 {formatElapsed(elapsed)} / ~{formatElapsed(estimatedSeconds)}
+        <span className="font-mono text-xs shrink-0 text-muted-foreground">
+          {formatElapsed(elapsed)} / ~{formatElapsed(estimatedSeconds)}
         </span>
       </div>
 
-      <div className="relative h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className="relative h-1.5 rounded-md bg-muted overflow-hidden">
         <div
-          className={
-            "h-full transition-all duration-500 " +
-            (overdue ? "bg-amber-500" : "bg-primary")
-          }
+          className="h-full bg-primary transition-all duration-500"
           style={{ width: `${pct}%` }}
-        />
-        {/* shimmer */}
-        <div
-          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[shimmer_2s_infinite]"
-          style={{ width: "50%" }}
         />
       </div>
 
       {steps && steps.length > 0 && (
-        <div className="relative space-y-1 pt-1">
+        <div className="space-y-1 pt-1">
           {steps.map((s, i) => {
             const done = i < currentStepIdx;
             const current = i === currentStepIdx;
@@ -119,21 +101,10 @@ export function RunningStatus({
       )}
 
       {overdue && (
-        <p className="relative text-xs text-amber-600">
+        <p className="text-xs text-muted-foreground">
           예상보다 오래 걸립니다. 이 탭을 열어두면 완료 시 자동으로 갱신됩니다.
         </p>
       )}
-
-      <style jsx>{`
-        @keyframes shimmer {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(300%);
-          }
-        }
-      `}</style>
     </div>
   );
 }

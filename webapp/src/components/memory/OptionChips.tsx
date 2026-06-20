@@ -25,11 +25,10 @@ export function OptionChips({
             type="button"
             onClick={() => onToggle(o)}
             disabled={disabled}
-            className={`text-[11px] rounded-full border px-2 py-0.5 transition-colors ${
-              on ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted"
+            className={`text-[11px] rounded-md border px-2 py-0.5 transition-colors ${
+              on ? "text-foreground font-medium border-foreground/30" : "hover:bg-muted"
             }`}
           >
-            {on ? "✓ " : "+ "}
             {o}
           </button>
         );

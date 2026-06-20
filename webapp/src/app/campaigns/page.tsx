@@ -65,7 +65,6 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
       {campaigns.length === 0 ? (
         currentStatus === "all" ? (
           <EmptyState
-            icon="📭"
             title="아직 생성된 캠페인이 없습니다"
             description="브랜드 페이지에서 Intent 입력으로 새 캠페인을 시작하세요."
             action={
@@ -87,23 +86,17 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
             const channel = getChannel(c.channel);
             const automationLabel =
               c.automation_level === "auto"
-                ? "🚀 Auto"
+                ? "Auto"
                 : c.automation_level === "assist"
-                  ? "✨ Assist"
-                  : "🧑‍💻 Manual";
-            const automationEmoji =
-              c.automation_level === "auto"
-                ? "🚀"
-                : c.automation_level === "assist"
-                  ? "✨"
-                  : "🧑‍💻";
+                  ? "Assist"
+                  : "Manual";
             return (
               <Link
                 key={c.id}
                 href={`/campaigns/${c.id}`}
                 className="group relative block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
               >
-                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
@@ -119,9 +112,9 @@ export default async function CampaignsListPage({ searchParams }: PageProps) {
                       <span
                         title={automationLabel}
                         aria-label={automationLabel}
-                        className="shrink-0 text-sm leading-none mt-0.5"
+                        className="shrink-0 text-[10px] text-muted-foreground leading-none mt-0.5"
                       >
-                        {automationEmoji}
+                        {automationLabel}
                       </span>
                     </div>
                   </CardHeader>

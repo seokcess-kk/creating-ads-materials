@@ -374,12 +374,12 @@ export function VisualStage({
                 key={v.id}
                 className={
                   isSelected
-                    ? "border-primary bg-primary/5"
-                    : "hover:border-primary/40 transition-colors"
+                    ? "border-primary"
+                    : "hover:border-foreground/30 transition-colors"
                 }
               >
                 <div
-                  className={`${ac} relative overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                  className={`${ac} relative overflow-hidden rounded-t-md border-b flex items-center justify-center`}
                 >
                   {/* 클릭 시 라이트박스로 확대 — 한국어 타이포 가독성 판단용 */}
                   <button
@@ -390,7 +390,7 @@ export function VisualStage({
                   >
                     <img src={c.url} alt={c.focusLabel} className="h-full w-full object-contain" />
                     <span className="pointer-events-none absolute right-1.5 bottom-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                      확대 ⤢
+                      확대
                     </span>
                   </button>
                 </div>
@@ -484,7 +484,7 @@ export function VisualStage({
                 rel="noreferrer"
                 className="block text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
               >
-                원본 열기 ↗
+                원본 열기
               </a>
             </div>
           )}

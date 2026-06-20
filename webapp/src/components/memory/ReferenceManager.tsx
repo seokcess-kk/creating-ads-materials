@@ -279,7 +279,7 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
             />
             <span className="text-sm">Negative 샘플 (이렇게 만들지 말 것)</span>
           </label>
-          <label className="block border-2 border-dashed rounded-md p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
+          <label className="block border rounded-md p-6 text-center cursor-pointer hover:border-foreground/30 transition-colors">
             <input
               ref={fileRef}
               type="file"
@@ -366,7 +366,7 @@ export function ReferenceManager({ brandId, initial }: ReferenceManagerProps) {
                               href={r.source_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-xs text-muted-foreground underline hover:text-primary"
+                              className="text-xs text-muted-foreground underline hover:text-foreground"
                             >
                               원본 광고 ↗
                             </a>

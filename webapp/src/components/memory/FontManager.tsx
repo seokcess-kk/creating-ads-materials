@@ -197,12 +197,9 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-muted/20">
+      <Card>
         <CardContent className="py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3">
-            <div className="text-2xl" aria-hidden>
-              ✨
-            </div>
             <div className="space-y-0.5">
               <p className="text-sm font-medium">자동 추천</p>
               <p className="text-xs text-muted-foreground">
@@ -280,7 +277,7 @@ export function FontManager({ brandId, initialPairs }: FontManagerProps) {
       </div>
 
       {editingRole && (
-        <Card className="border-primary/40">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">{editingRole} 폰트 선택</CardTitle>
           </CardHeader>

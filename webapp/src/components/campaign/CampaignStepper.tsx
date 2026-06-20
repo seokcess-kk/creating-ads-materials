@@ -138,7 +138,7 @@ export function CampaignStepper({
                   className={cn(
                     "group flex items-center gap-2 px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    isActive && "bg-primary/10 text-foreground font-medium",
+                    isActive && "text-foreground font-medium",
                     !isActive &&
                       !step.locked &&
                       "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -163,7 +163,7 @@ export function CampaignStepper({
                     )}
                     {step.status === "stale" && (
                       <span
-                        className="text-amber-600 text-[11px]"
+                        className="text-muted-foreground text-[11px]"
                         aria-label="stale"
                       >
                         ⚠
@@ -176,7 +176,7 @@ export function CampaignStepper({
                     aria-hidden
                     className={cn(
                       "mx-0.5 h-px w-4 shrink-0 transition-colors",
-                      step.status === "ready" ? "bg-primary/50" : "bg-border",
+                      step.status === "ready" ? "bg-foreground/30" : "bg-border",
                     )}
                   />
                 )}
@@ -244,8 +244,8 @@ function statusCircleClass(
 ): string {
   if (status === "ready") return "bg-primary text-primary-foreground";
   if (status === "running")
-    return "bg-primary/60 text-primary-foreground animate-pulse";
-  if (status === "stale") return "bg-amber-500 text-white";
+    return "bg-primary/60 text-primary-foreground";
+  if (status === "stale") return "border border-foreground/30 text-foreground";
   if (status === "failed") return "bg-destructive text-destructive-foreground";
   if (isActive) return "bg-foreground text-background";
   return "bg-muted text-muted-foreground";

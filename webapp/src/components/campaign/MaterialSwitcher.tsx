@@ -133,7 +133,7 @@ export function MaterialSwitcher({
 
   if (runs.length === 0) {
     return (
-      <div className="rounded-md border bg-muted/30 p-3 flex items-center justify-between gap-3">
+      <div className="rounded-md border p-3 flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
           아직 소재가 없습니다. Strategy 단계를 시작하거나 새 소재를 만드세요.
         </p>
@@ -162,15 +162,15 @@ export function MaterialSwitcher({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        <p className="text-[11px] text-muted-foreground">
           소재 {runs.length}개
           {shippedCount > 0 && (
-            <span className="ml-2 normal-case tracking-normal">
+            <span className="ml-2">
               · 완료 {shippedCount}
             </span>
           )}
           {runningCount > 0 && (
-            <span className="ml-2 normal-case tracking-normal">
+            <span className="ml-2">
               · 진행 {runningCount}
             </span>
           )}
@@ -210,7 +210,7 @@ export function MaterialSwitcher({
                 "group flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
                 isVertical && "w-full",
                 isActive
-                  ? "border-primary bg-primary/5"
+                  ? "border-foreground"
                   : "border-input bg-background hover:bg-muted",
                 isPending && "opacity-50",
               )}
@@ -281,7 +281,7 @@ export function MaterialSwitcher({
                     {status.text}
                   </Badge>
                   {run.rating != null && (
-                    <span className="text-[10px] text-amber-500" aria-label={`평점 ${run.rating}`}>
+                    <span className="text-[10px] text-muted-foreground" aria-label={`평점 ${run.rating}`}>
                       {"★".repeat(run.rating)}
                     </span>
                   )}

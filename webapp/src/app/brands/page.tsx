@@ -71,7 +71,7 @@ export default async function BrandsPage({
         description={`등록된 브랜드 ${all.length}개`}
         actions={
           <Link href="/brands/new">
-            <Button>+ 새 브랜드</Button>
+            <Button>새 브랜드</Button>
           </Link>
         }
       />
@@ -109,7 +109,6 @@ export default async function BrandsPage({
 
       {all.length === 0 ? (
         <EmptyState
-          icon="🏷️"
           title="아직 등록된 브랜드가 없습니다"
           description="브랜드를 등록하면 Identity·Offer·Audience 메모리를 축적할 수 있습니다."
           action={
@@ -138,7 +137,7 @@ export default async function BrandsPage({
               href={`/brands/${brand.id}`}
               className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
             >
-              <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
+              <Card className="hover:border-foreground/30 transition-colors cursor-pointer h-full">
                 <CardHeader>
                   <CardTitle className="text-lg">{brand.name}</CardTitle>
                   {brand.website_url && (

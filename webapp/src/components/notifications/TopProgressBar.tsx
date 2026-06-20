@@ -21,7 +21,7 @@ export function TopProgressBar() {
   if (ops.length === 0) return null;
 
   return (
-    <div className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur-sm">
+    <div className="sticky top-0 z-40 border-b bg-background">
       <div className="max-w-6xl mx-auto px-6 py-2 space-y-1.5">
         {ops.map((op) => {
           const elapsed = Math.max(0, Math.floor((now - op.startedAt) / 1000));
@@ -37,7 +37,7 @@ export function TopProgressBar() {
               className="flex items-center gap-3 text-xs"
               aria-live="polite"
             >
-              <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+              <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium truncate">
@@ -51,7 +51,7 @@ export function TopProgressBar() {
                   <span
                     className={
                       "font-mono shrink-0 " +
-                      (overdue ? "text-amber-600" : "text-muted-foreground")
+                      (overdue ? "text-foreground" : "text-muted-foreground")
                     }
                   >
                     {formatElapsed(elapsed)} / ~{formatElapsed(op.estimatedSeconds)}
@@ -59,10 +59,7 @@ export function TopProgressBar() {
                 </div>
                 <div className="h-1 rounded-full bg-muted overflow-hidden mt-1">
                   <div
-                    className={
-                      "h-full transition-all duration-500 " +
-                      (overdue ? "bg-amber-500" : "bg-primary")
-                    }
+                    className="h-full bg-primary transition-all duration-500"
                     style={{ width: `${pct}%` }}
                   />
                 </div>

@@ -127,7 +127,7 @@ export function VisionAnalysisCard({ analysis }: VisionAnalysisCardProps) {
           {a.channelFit &&
             Object.entries(a.channelFit).map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
-                <span className="w-12 text-xs uppercase">{k}</span>
+                <span className="w-12 text-xs">{k}</span>
                 <Bar value={v} />
                 <span className="w-8 text-xs text-right">{(v * 100).toFixed(0)}%</span>
               </div>

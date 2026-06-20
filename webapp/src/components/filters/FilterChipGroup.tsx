@@ -20,9 +20,9 @@ const SIZE_CLASS: Record<"sm" | "md", string> = {
 };
 
 const BASE_CLASS =
-  "rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const ACTIVE_CLASS = "bg-primary text-primary-foreground border-primary";
-const INACTIVE_CLASS = "hover:bg-muted";
+  "rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const ACTIVE_CLASS = "border-foreground/30 text-foreground font-medium";
+const INACTIVE_CLASS = "text-muted-foreground hover:bg-muted";
 
 export function FilterChipGroup({
   label,

@@ -42,7 +42,6 @@ export default async function CampaignsListPage({
 
       {campaigns.length === 0 ? (
         <EmptyState
-          icon="🚀"
           title="등록된 캠페인이 없습니다"
           description="Intent 입력 → Strategy·Copy·Visual 파이프라인으로 첫 캠페인을 시작하세요."
           action={
@@ -59,7 +58,7 @@ export default async function CampaignsListPage({
                 href={`/campaigns/${c.id}`}
                 className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                <Card className="hover:border-foreground/30 transition-colors cursor-pointer">
                   <CardHeader>
                     <div className="flex items-center gap-2 pr-10">
                       <CardTitle className="text-base">{c.name}</CardTitle>

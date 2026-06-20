@@ -154,7 +154,7 @@ export function NewMaterialDialog({
               className={cn(
                 "block cursor-pointer rounded-md border p-3 transition-colors",
                 mode === "fresh"
-                  ? "border-primary bg-primary/5"
+                  ? "border-foreground"
                   : "hover:bg-muted/50",
               )}
             >
@@ -181,7 +181,7 @@ export function NewMaterialDialog({
                 !hasStrategyBranchable && "cursor-not-allowed opacity-50",
                 hasStrategyBranchable && "cursor-pointer",
                 mode === "branch-from-strategy" && hasStrategyBranchable
-                  ? "border-primary bg-primary/5"
+                  ? "border-foreground"
                   : hasStrategyBranchable && "hover:bg-muted/50",
               )}
             >
@@ -216,7 +216,7 @@ export function NewMaterialDialog({
                 !hasBranchableSource && "cursor-not-allowed opacity-50",
                 hasBranchableSource && "cursor-pointer",
                 mode === "branch-from-copy" && hasBranchableSource
-                  ? "border-primary bg-primary/5"
+                  ? "border-foreground"
                   : hasBranchableSource && "hover:bg-muted/50",
               )}
             >

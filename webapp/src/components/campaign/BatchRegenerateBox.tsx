@@ -24,19 +24,16 @@ interface BatchRegenerateBoxProps {
   }) => Promise<void> | void;
 }
 
-const MODE_META: Record<RegenMode, { icon: string; title: string; desc: string }> = {
+const MODE_META: Record<RegenMode, { title: string; desc: string }> = {
   replace: {
-    icon: "🔄",
     title: "교체",
     desc: "현재 대안을 새것으로 교체 (이전은 히스토리로 이동)",
   },
   add: {
-    icon: "➕",
     title: "추가",
     desc: "기존 대안에 더하기 — 다른 각도로 누적",
   },
   remix: {
-    icon: "🧬",
     title: "리믹스",
     desc: "선택된 대안을 기반으로 변형",
   },
@@ -79,7 +76,7 @@ export function BatchRegenerateBox({
     : ["replace"];
 
   return (
-    <div className="border rounded-md p-3 space-y-3 bg-muted/20">
+    <div className="border rounded-md p-3 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium">{label}</p>
         {hasVariants && (
@@ -105,7 +102,6 @@ export function BatchRegenerateBox({
               }
               title={MODE_META[m].desc}
             >
-              <span className="mr-1">{MODE_META[m].icon}</span>
               {MODE_META[m].title}
             </button>
           ))}
@@ -133,7 +129,7 @@ export function BatchRegenerateBox({
               type="button"
               onClick={() => setInstruction(s)}
               disabled={running}
-              className="text-[11px] rounded-full border px-2 py-0.5 hover:bg-muted transition-colors"
+              className="text-[11px] rounded-md border px-2 py-0.5 hover:bg-muted transition-colors"
             >
               {s}
             </button>
@@ -151,7 +147,7 @@ export function BatchRegenerateBox({
               : "먼저 대안을 선택해주세요")}
         </p>
         <Button size="sm" onClick={submit} disabled={disabledSubmit}>
-          {running ? "생성 중..." : `${MODE_META[mode].icon} ${MODE_META[mode].title}`}
+          {running ? "생성 중..." : MODE_META[mode].title}
         </Button>
       </div>
     </div>

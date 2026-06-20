@@ -87,7 +87,7 @@ export function CampaignNameHeader({ campaignId, name }: Props) {
               cancel();
             }
           }}
-          className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-2xl font-bold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-0 flex-1 rounded-md border border-input bg-background px-2 py-1 text-2xl font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         <button
           type="button"
@@ -122,7 +122,7 @@ export function CampaignNameHeader({ campaignId, name }: Props) {
       title="클릭해서 캠페인명 수정"
       className="group -mx-2 inline-flex max-w-full items-center gap-2 rounded-md px-2 py-1 text-left transition-colors hover:bg-muted/50"
     >
-      <h1 className="truncate text-2xl font-bold tracking-tight">{name}</h1>
+      <h1 className="truncate text-2xl font-semibold tracking-tight">{name}</h1>
       <PencilIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
   );

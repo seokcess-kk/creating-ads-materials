@@ -238,7 +238,7 @@ export default async function InsightsPage({
 
       {!learnings ||
         (completed === 0 && hookItems.length === 0 && (
-          <Card className="bg-muted/30">
+          <Card>
             <CardContent className="py-6 text-center text-sm text-muted-foreground">
               첫 캠페인을 완료하면 이곳에 선호도 패턴이 누적됩니다.{" "}
               <Link href={`/brands/${brandId}/campaigns/new`} className="underline">
@@ -254,9 +254,9 @@ export default async function InsightsPage({
         </p>
       )}
 
-      <Card className="bg-muted/30">
+      <Card>
         <CardContent className="py-4 text-xs text-muted-foreground space-y-1">
-          <p className="font-medium">📊 안내</p>
+          <p className="font-medium">안내</p>
           <p>
             향후 성과 데이터(CTR·CVR·CPC)를 입력하면 위 선호도 가중치가 실제 성과로 캘리브레이션됩니다.
           </p>

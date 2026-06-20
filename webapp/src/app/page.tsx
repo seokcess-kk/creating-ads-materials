@@ -28,7 +28,6 @@ export default async function DashboardPage() {
           description="Creative System — Brand Memory 중심"
         />
         <EmptyState
-          icon="✨"
           title="Ad Studio에 오신 걸 환영합니다"
           description="브랜드를 등록해 Identity·Offer·Audience 메모리를 축적하면, 그 자산을 재활용해 일관된 광고 소재를 반복 생성할 수 있습니다."
           action={
@@ -50,14 +49,9 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Link href="/brands" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer">
+          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardDescription>Brands</CardDescription>
-                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  →
-                </span>
-              </div>
+              <CardDescription>Brands</CardDescription>
               <CardTitle className="text-3xl">{brands.length}</CardTitle>
             </CardHeader>
             <CardContent>
@@ -69,14 +63,9 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="/campaigns" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer">
+          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardDescription>Campaigns</CardDescription>
-                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  →
-                </span>
-              </div>
+              <CardDescription>Campaigns</CardDescription>
               <CardTitle className="text-3xl">{stats.campaigns}</CardTitle>
             </CardHeader>
             <CardContent>
@@ -88,14 +77,9 @@ export default async function DashboardPage() {
         </Link>
 
         <Link href="#shipped" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-primary/50 hover:shadow-sm transition-all cursor-pointer">
+          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
             <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardDescription>완료된 소재</CardDescription>
-                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  ↓
-                </span>
-              </div>
+              <CardDescription>완료된 소재</CardDescription>
               <CardTitle className="text-3xl">{stats.shippedMaterials}</CardTitle>
             </CardHeader>
             <CardContent>
@@ -132,7 +116,7 @@ export default async function DashboardPage() {
                   href={`/brands/${gap.id}`}
                   className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Card className="transition-colors hover:border-primary/50 cursor-pointer">
+                  <Card className="transition-colors hover:border-foreground/30 cursor-pointer">
                     <CardContent className="flex items-center justify-between gap-2 py-3">
                       <span className="truncate text-sm font-medium">
                         {gap.name}
@@ -173,7 +157,7 @@ export default async function DashboardPage() {
             </p>
           </div>
           {shippedRuns.length === 0 ? (
-            <Card className="bg-muted/20">
+            <Card>
               <CardContent className="py-6 text-center text-xs text-muted-foreground">
                 아직 ship된 소재가 없습니다
               </CardContent>
@@ -192,7 +176,7 @@ export default async function DashboardPage() {
                   href={`/campaigns/${m.campaignId}?run=${m.runId}`}
                   className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Card className="h-full transition-colors hover:border-primary/50 cursor-pointer">
+                  <Card className="h-full transition-colors hover:border-foreground/30 cursor-pointer">
                     <CardContent className="space-y-1 py-3">
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium">
@@ -200,7 +184,7 @@ export default async function DashboardPage() {
                         </span>
                         {m.rating != null && (
                           <span
-                            className="shrink-0 text-[10px] text-amber-500"
+                            className="shrink-0 text-[10px] text-muted-foreground"
                             aria-label={`평점 ${m.rating}`}
                           >
                             {"★".repeat(m.rating)}
@@ -237,7 +221,7 @@ export default async function DashboardPage() {
                 href={`/brands/${b.id}`}
                 className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                <Card className="hover:border-foreground/30 transition-colors cursor-pointer">
                   <CardHeader>
                     <CardTitle className="text-base">{b.name}</CardTitle>
                     {b.category && (

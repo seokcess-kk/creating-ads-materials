@@ -14,25 +14,21 @@ interface Props {
 const OPTIONS: Array<{
   id: AutomationLevel;
   label: string;
-  icon: string;
   desc: string;
 }> = [
   {
     id: "manual",
     label: "Manual",
-    icon: "🧑‍💻",
     desc: "모든 선택·생성을 직접",
   },
   {
     id: "assist",
     label: "Assist",
-    icon: "✨",
     desc: "각 단계 최고점을 자동 선택 (생성은 직접)",
   },
   {
     id: "auto",
     label: "Auto",
-    icon: "🚀",
     desc: "선택·생성·합성을 Ship 직전까지 자동 진행",
   },
 ];
@@ -91,9 +87,9 @@ export function CampaignAutomationToggle({ campaignId, level }: Props) {
 
   const variantClass =
     level === "auto"
-      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      ? "border-input bg-background text-foreground font-medium"
       : level === "assist"
-        ? "border-secondary bg-secondary text-secondary-foreground"
+        ? "border-input bg-background text-foreground font-medium"
         : "border-input bg-background text-foreground";
 
   return (
@@ -108,9 +104,7 @@ export function CampaignAutomationToggle({ campaignId, level }: Props) {
           variantClass,
         )}
       >
-        <span>
-          {current.icon} {current.label}
-        </span>
+        <span>{current.label}</span>
         <span className="opacity-60">▾</span>
       </button>
       {open && (
@@ -129,7 +123,6 @@ export function CampaignAutomationToggle({ campaignId, level }: Props) {
                 opt.id === level && "bg-muted",
               )}
             >
-              <span>{opt.icon}</span>
               <div className="flex-1">
                 <div className="font-medium">{opt.label}</div>
                 <div className="text-[11px] text-muted-foreground">

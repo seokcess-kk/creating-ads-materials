@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { XIcon } from "lucide-react";
 import { useNotifications } from "./NotificationContext";
 
 export function CompletionBanner() {
@@ -15,20 +16,15 @@ export function CompletionBanner() {
     <div className="sticky top-0 z-30 space-y-1 px-6 pt-2">
       {visible.slice(0, 3).map((op) => {
         const isFailed = op.status === "failed";
-        const icon = isFailed ? "❌" : "✅";
-        const bg = isFailed
-          ? "bg-destructive/10 border-destructive/40"
-          : "bg-emerald-50 border-emerald-300 dark:bg-emerald-950/30 dark:border-emerald-800";
 
         return (
           <div
             key={op.id}
-            className={`max-w-6xl mx-auto border rounded-md px-4 py-2.5 flex items-center gap-3 shadow-sm ${bg}`}
+            className={`max-w-6xl mx-auto border border-border border-l-2 ${
+              isFailed ? "border-l-destructive" : "border-l-foreground"
+            } rounded-md bg-background px-4 py-2.5 flex items-center gap-3`}
             role="status"
           >
-            <span className="text-base shrink-0" aria-hidden>
-              {icon}
-            </span>
             <div className="flex-1 min-w-0 text-sm">
               <p className="font-medium">
                 {op.title} {isFailed ? "실패" : "완료"}
@@ -56,7 +52,7 @@ export function CompletionBanner() {
               className="text-muted-foreground hover:text-foreground shrink-0"
               aria-label="닫기"
             >
-              ✕
+              <XIcon className="size-3.5" />
             </button>
           </div>
         );

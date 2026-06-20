@@ -37,7 +37,7 @@ export function EmptyState({
 
   if (variant === "inline") return content;
   return (
-    <Card className="bg-muted/20 border-dashed">
+    <Card>
       <CardContent className="py-4">{content}</CardContent>
     </Card>
   );

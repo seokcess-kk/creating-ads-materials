@@ -155,7 +155,7 @@ export default function NewBrandPage() {
                     className="mt-0.5"
                   />
                   <span>
-                    <strong className="text-foreground">✨ 자동 분석:</strong> 홈페이지를
+                    <strong className="text-foreground">자동 분석:</strong> 홈페이지를
                     분석해 카테고리·설명 + Identity(voice/taboos/colors) +
                     Offer(가격/혜택) + Audience(페르소나) 초안을 자동 작성합니다.
                     생성 완료까지 최대 60초 대기.
@@ -192,7 +192,7 @@ export default function NewBrandPage() {
                 취소
               </Button>
               <Button type="submit" className="flex-1" disabled={loading}>
-                {loading ? "생성 중..." : "등록하고 메모리 설정 →"}
+                {loading ? "생성 중..." : "등록하고 메모리 설정"}
               </Button>
             </div>
           </form>

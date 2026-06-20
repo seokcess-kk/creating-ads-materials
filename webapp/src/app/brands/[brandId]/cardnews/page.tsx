@@ -20,7 +20,7 @@ export default async function CardNewsPage({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs text-muted-foreground">{brand.name}</p>
-          <h1 className="text-2xl font-bold tracking-tight">카드뉴스 생성</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">카드뉴스 생성</h1>
           <p className="text-muted-foreground">
             원문을 붙여넣으면 카드뉴스(캐러셀) 초안이 자동 생성됩니다
           </p>

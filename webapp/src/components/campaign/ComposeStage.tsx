@@ -452,9 +452,9 @@ export function ComposeStage({
                           }}
                           disabled={running}
                           className={
-                            "shrink-0 w-14 h-14 rounded border-2 flex items-center justify-center bg-muted/40 overflow-hidden transition-all " +
+                            "shrink-0 w-14 h-14 rounded border-2 flex items-center justify-center overflow-hidden transition-all " +
                             (isSelected
-                              ? "border-primary ring-2 ring-primary/30"
+                              ? "border-primary"
                               : "border-transparent hover:border-muted-foreground/40")
                           }
                           title={logo.label ?? (logo.is_primary ? "기본" : "")}
@@ -492,7 +492,7 @@ export function ComposeStage({
                 })()}
                 className={`relative w-full ${
                   baseAspectRatio ? "" : `${previewAspectClass}`
-                } mx-auto rounded-md border bg-muted/30 overflow-hidden select-none`}
+                } mx-auto rounded-md border overflow-hidden select-none`}
               >
                 { }
                 <img
@@ -691,12 +691,12 @@ export function ComposeStage({
                   key={v.id}
                   className={
                     isSelected
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/40 transition-colors"
+                      ? "border-primary"
+                      : "hover:border-foreground/30 transition-colors"
                   }
                 >
                   <div
-                    className={`${previewAspectClass} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                    className={`${previewAspectClass} overflow-hidden rounded-t-md border-b flex items-center justify-center`}
                   >
                     <a href={c.url} target="_blank" rel="noreferrer">
                       { }

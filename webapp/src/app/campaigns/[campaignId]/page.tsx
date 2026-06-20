@@ -285,7 +285,7 @@ export default async function CampaignPage({
                   : ""
               }`}
             >
-              💰 ${campaignCost.totalCost.toFixed(4)}
+              ${campaignCost.totalCost.toFixed(4)}
               {run && campaignCost.byRun[run.id] != null && (
                 <span className="ml-1 opacity-60">
                   (소재 ${campaignCost.byRun[run.id].toFixed(4)})
@@ -316,10 +316,10 @@ export default async function CampaignPage({
         hasBranchableSource={hasBranchableSource}
       />
 
-      <details className="group rounded-lg border bg-muted/20">
+      <details className="group rounded-lg border">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
           <span className="flex flex-wrap items-center gap-2">
-            ⚙ 캠페인 설정
+            캠페인 설정
             <span className="text-xs font-normal text-muted-foreground">
               브랜드 컨텍스트 · 실사 자산 · 폰트
             </span>
@@ -368,7 +368,7 @@ export default async function CampaignPage({
             href={runHint ? `?run=${runHint}&retouch=1` : `?retouch=1`}
             className="text-xs text-muted-foreground underline hover:text-foreground"
           >
-            🎨 리터치(미세 보정) 단계 추가 (선택)
+            리터치(미세 보정) 단계 추가 (선택)
           </Link>
         </div>
       )}

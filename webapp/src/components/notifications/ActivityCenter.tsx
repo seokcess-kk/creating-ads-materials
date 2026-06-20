@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { XIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -59,12 +60,9 @@ export function ActivityCenter() {
           <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
         </svg>
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-medium flex items-center justify-center">
             {total > 9 ? "9+" : total}
           </span>
-        )}
-        {ops.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary animate-ping opacity-60" />
         )}
       </DialogTrigger>
       <DialogContent
@@ -80,7 +78,7 @@ export function ActivityCenter() {
             className="text-muted-foreground hover:text-foreground"
             aria-label="닫기"
           >
-            ✕
+            <XIcon className="size-3.5" />
           </button>
         </div>
 
@@ -93,13 +91,13 @@ export function ActivityCenter() {
 
           {ops.length > 0 && (
             <div className="border-b">
-              <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <p className="px-3 pt-2 pb-1 text-[11px] text-muted-foreground">
                 진행 중 ({ops.length})
               </p>
               {ops.map((op) => (
                 <div key={op.id} className="px-3 py-2 hover:bg-muted/50">
                   <div className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
                     <span className="text-xs font-medium truncate">{op.title}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground ml-3.5 mt-0.5">
@@ -113,7 +111,7 @@ export function ActivityCenter() {
           {completed.length > 0 && (
             <div>
               <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-[11px] text-muted-foreground">
                   최근 완료
                 </span>
                 <button
@@ -131,9 +129,12 @@ export function ActivityCenter() {
                     key={op.id}
                     className="px-3 py-2 hover:bg-muted/50 flex items-center gap-2"
                   >
-                    <span className="shrink-0 text-xs">
-                      {failed ? "❌" : "✅"}
-                    </span>
+                    <span
+                      className={`shrink-0 w-1.5 h-1.5 rounded-full ${
+                        failed ? "bg-destructive" : "bg-muted-foreground"
+                      }`}
+                      aria-hidden
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate">
                         {op.title}
@@ -161,16 +162,16 @@ export function ActivityCenter() {
 
         <div className="border-t p-3 space-y-2">
           {notificationsEnabled ? (
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-              <span>🔔</span> 브라우저 알림 활성화됨
+            <p className="text-[10px] text-muted-foreground">
+              브라우저 알림 활성화됨
             </p>
           ) : (
             <button
               type="button"
               onClick={requestBrowserPermission}
-              className="w-full text-xs text-primary hover:bg-primary/5 rounded px-2 py-1.5 border border-primary/40"
+              className="w-full text-xs text-foreground hover:bg-muted rounded px-2 py-1.5 border border-border"
             >
-              🔔 브라우저 푸시 알림 켜기
+              브라우저 푸시 알림 켜기
             </button>
           )}
         </div>

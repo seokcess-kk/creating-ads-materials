@@ -48,7 +48,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             className={cn(
               "flex h-7 w-7 items-center justify-center rounded-sm transition-colors",
               isActive
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-background text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >

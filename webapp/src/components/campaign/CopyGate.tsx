@@ -345,8 +345,8 @@ export function CopyGate({
                 key={v.id}
                 className={
                   isSelected
-                    ? "border-primary bg-primary/5"
-                    : "hover:border-primary/40 transition-colors"
+                    ? "border-primary"
+                    : "hover:border-foreground/30 transition-colors"
                 }
               >
                 <CardHeader className="pb-2">

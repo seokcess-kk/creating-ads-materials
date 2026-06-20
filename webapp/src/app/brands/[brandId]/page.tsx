@@ -163,7 +163,7 @@ export default async function BrandDetailPage({
         actions={
           <>
             <Link href={`/brands/${brandId}/cardnews`}>
-              <Button size="sm">📋 카드뉴스</Button>
+              <Button size="sm">카드뉴스</Button>
             </Link>
             <Link href={`/brands/${brandId}/insights`}>
               <Button variant="outline" size="sm">
@@ -225,7 +225,7 @@ export default async function BrandDetailPage({
                       href={s.href}
                       className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 h-full"
                     >
-                      <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                      <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-base">{s.title}</CardTitle>
@@ -264,7 +264,7 @@ export default async function BrandDetailPage({
             )}
             <Link href={`/brands/${brandId}/cardnews`}>
               <Button variant="outline" size="sm">
-                📋 카드뉴스
+                카드뉴스
               </Button>
             </Link>
             <Link href={`/brands/${brandId}/campaigns/new`}>
@@ -275,7 +275,7 @@ export default async function BrandDetailPage({
           </div>
 
           {!memoryReady && (
-            <Card className="bg-muted/30">
+            <Card>
               <CardContent className="py-4 text-sm text-muted-foreground space-y-2">
                 <p>캠페인 시작 전에 Identity · Offer · Audience 최소 1개씩 설정해주세요.</p>
                 <Link
@@ -290,7 +290,6 @@ export default async function BrandDetailPage({
 
           {memoryReady && campaigns.length === 0 && (
             <EmptyState
-              icon="🚀"
               title="아직 캠페인이 없습니다"
               description="Intent 입력으로 Strategy → Copy → Visual 파이프라인을 시작하세요."
               action={
@@ -309,7 +308,7 @@ export default async function BrandDetailPage({
                   href={`/campaigns/${c.id}`}
                   className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  <Card className="hover:border-primary/50 transition-colors cursor-pointer">
+                  <Card className="hover:border-foreground/30 transition-colors cursor-pointer">
                     <CardContent className="py-3 flex items-center gap-2">
                       <span className="text-sm font-medium flex-1">{c.name}</span>
                       <Badge variant="outline">{c.goal}</Badge>

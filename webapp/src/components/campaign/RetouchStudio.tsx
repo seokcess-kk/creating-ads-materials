@@ -239,10 +239,7 @@ export function RetouchStudio({
       </CardHeader>
       <CardContent className="space-y-4">
         {isFreshRestartNeeded ? (
-          <div className="border border-amber-500/60 bg-amber-500/5 rounded-md p-3 flex items-start gap-3">
-            <span className="text-lg" aria-hidden>
-              🔄
-            </span>
+          <div className="border rounded-md p-3 flex items-start gap-3">
             <div className="flex-1 text-sm">
               <p className="font-medium">Visual이 변경되었습니다</p>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -268,7 +265,7 @@ export function RetouchStudio({
               <img
                 src={currentBaseUrl}
                 alt="base"
-                className={`w-full ${ac} rounded-md border object-contain bg-muted/20 ${maxHeightClass(aspectRatio)} mx-auto`}
+                className={`w-full ${ac} rounded-md border object-contain ${maxHeightClass(aspectRatio)} mx-auto`}
               />
             ) : (
               <div className={`w-full ${ac} rounded-md border flex items-center justify-center text-xs text-muted-foreground ${maxHeightClass(aspectRatio)} mx-auto`}>
@@ -306,7 +303,7 @@ export function RetouchStudio({
                       type="button"
                       onClick={() => setInstruction(s)}
                       disabled={running}
-                      className="text-xs rounded-full border px-2 py-1 hover:bg-muted transition-colors text-left"
+                      className="text-xs rounded-md border px-2 py-1 hover:bg-muted transition-colors text-left"
                     >
                       {s}
                     </button>
@@ -327,7 +324,7 @@ export function RetouchStudio({
 
             <div className="flex gap-2">
               <Button onClick={run} disabled={running || !instruction.trim()} className="flex-1">
-                {running ? "편집 중..." : "➕ 턴 추가"}
+                {running ? "편집 중..." : "턴 추가"}
               </Button>
               {variants.length > 0 && (
                 <Button
@@ -336,7 +333,7 @@ export function RetouchStudio({
                   disabled={running || !instruction.trim()}
                   title="이전 턴을 히스토리로 보내고 새로 시작"
                 >
-                  🔄 새로 시작
+                  새로 시작
                 </Button>
               )}
             </div>
@@ -356,14 +353,14 @@ export function RetouchStudio({
                     key={v.id}
                     className={
                       isSelected
-                        ? "border-primary bg-primary/5"
+                        ? "border-foreground"
                         : isBase
-                          ? "border-primary/40"
-                          : "hover:border-primary/30 transition-colors"
+                          ? "border-foreground/40"
+                          : "hover:border-foreground/30 transition-colors"
                     }
                   >
                     <div
-                      className={`${ac} overflow-hidden rounded-t-md border-b bg-muted/20 flex items-center justify-center`}
+                      className={`${ac} overflow-hidden rounded-t-md border-b flex items-center justify-center`}
                     >
                       <a href={c.url} target="_blank" rel="noreferrer">
                         <img src={c.url} alt={`turn ${i + 1}`} className="w-full h-full object-contain" />

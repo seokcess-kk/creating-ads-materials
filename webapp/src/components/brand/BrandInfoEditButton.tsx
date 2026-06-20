@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { PencilIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -85,8 +84,7 @@ export function BrandInfoEditButton({ brand }: { brand: Brand }) {
       }}
     >
       <DialogTrigger>
-        <span className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent">
-          <PencilIcon className="h-3.5 w-3.5" />
+        <span className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent">
           정보 수정
         </span>
       </DialogTrigger>

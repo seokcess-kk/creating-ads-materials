@@ -114,12 +114,12 @@ export function CampaignFontPanel({
     .slice(0, 3);
 
   return (
-    <Card className="bg-muted/20">
+    <Card>
       <CardContent className="py-3 space-y-2">
         {/* 상단: 현재 상태 + 추천 Top-3 한 줄 */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium">🔤 폰트</span>
+            <span className="text-sm font-medium">폰트</span>
             {presetId ? (
               <Badge variant="secondary" className="gap-1">
                 {presetLabel}
@@ -175,20 +175,18 @@ export function CampaignFontPanel({
                 disabled={applying !== null || isApplied}
                 title={s.reasons.slice(0, 2).join(" · ")}
                 className={
-                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors disabled:opacity-60 " +
+                  "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] transition-colors disabled:opacity-60 " +
                   (isApplied
-                    ? "border-primary bg-primary/10 text-primary"
-                    : i === 0
-                      ? "border-primary/40 hover:bg-primary/5"
-                      : "hover:bg-muted/40")
+                    ? "border-foreground text-foreground font-medium"
+                    : "hover:bg-muted/50")
                 }
               >
-                {i === 0 && <span aria-hidden>★</span>}
+                {i === 0 && <span aria-hidden className="text-muted-foreground">★</span>}
                 <span>{s.presetLabel}</span>
                 <span className="text-muted-foreground">
                   {s.score.toFixed(1)}
                 </span>
-                {isBusy && <span className="text-primary">…</span>}
+                {isBusy && <span className="text-muted-foreground">…</span>}
               </button>
             );
           })}
@@ -210,8 +208,8 @@ export function CampaignFontPanel({
                   className={
                     "text-left border rounded-md p-2 transition-colors disabled:opacity-60 " +
                     (isCurrent
-                      ? "border-primary bg-primary/5"
-                      : "hover:border-primary/40 hover:bg-muted/40")
+                      ? "border-foreground"
+                      : "hover:border-foreground/30 hover:bg-muted/50")
                   }
                 >
                   <div className="flex items-center justify-between gap-1">
@@ -226,7 +224,7 @@ export function CampaignFontPanel({
                     {p.description}
                   </p>
                   {isBusy && (
-                    <p className="text-[10px] text-primary pt-0.5">적용 중...</p>
+                    <p className="text-[10px] text-muted-foreground pt-0.5">적용 중...</p>
                   )}
                 </button>
               );

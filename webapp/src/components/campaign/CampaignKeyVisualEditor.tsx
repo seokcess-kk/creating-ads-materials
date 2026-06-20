@@ -144,7 +144,7 @@ export function CampaignKeyVisualEditor({
                     사용할 자산 (복수 선택, 비워두면 AI 자유 생성)
                   </Label>
                   {keyVisuals.length === 0 ? (
-                    <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                    <p className="rounded-md border p-4 text-center text-xs text-muted-foreground">
                       등록된 실사 자산이 없습니다
                     </p>
                   ) : (
@@ -161,7 +161,7 @@ export function CampaignKeyVisualEditor({
                             className={cn(
                               "relative block cursor-pointer overflow-hidden rounded-md border transition-colors",
                               selected
-                                ? "border-primary bg-primary/5"
+                                ? "border-foreground"
                                 : "hover:bg-muted/50",
                             )}
                           >
@@ -221,20 +221,20 @@ export function CampaignKeyVisualEditor({
           <div className="space-y-2">
             {intent && (
               <p className="text-sm">
-                <span className="mr-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <span className="mr-2 text-[11px] text-muted-foreground">
                   주인공·포커스
                 </span>
                 {intent}
               </p>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 선택 자산 {selectedItems.length}개
               </span>
               {selectedItems.map((kv) => (
                 <div
                   key={kv.id}
-                  className="flex items-center gap-1.5 rounded-md border bg-muted/30 p-1"
+                  className="flex items-center gap-1.5 rounded-md border p-1"
                 >
                   <img
                     src={kv.storage_url}

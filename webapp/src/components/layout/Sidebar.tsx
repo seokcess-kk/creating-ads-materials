@@ -65,9 +65,9 @@ export function Sidebar({ recentBrands }: SidebarProps) {
   })();
 
   return (
-    <aside className="w-60 border-r bg-muted/30 flex flex-col h-screen sticky top-0">
-      <div className="p-4 border-b">
-        <h1 className="text-lg font-bold tracking-tight">Ad Studio</h1>
+    <aside className="w-60 border-r flex flex-col h-screen sticky top-0">
+      <div className="p-4">
+        <h1 className="text-base font-semibold tracking-tight">Ad Studio</h1>
         <p className="text-xs text-muted-foreground">Creative Materials</p>
       </div>
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
@@ -90,7 +90,7 @@ export function Sidebar({ recentBrands }: SidebarProps) {
 
         {currentBrandId && (
           <div className="pt-4">
-            <p className="px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <p className="px-3 mb-1 text-[11px] text-muted-foreground">
               현재 브랜드
             </p>
             <div className="space-y-0.5">
@@ -100,11 +100,10 @@ export function Sidebar({ recentBrands }: SidebarProps) {
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
                   pathname === `/brands/${currentBrandId}/cardnews`
-                    ? "bg-primary/10 text-foreground font-medium"
+                    ? "text-foreground font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <span aria-hidden>📋</span>
                 <span>카드뉴스</span>
               </Link>
               <Link
@@ -113,11 +112,10 @@ export function Sidebar({ recentBrands }: SidebarProps) {
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
                   pathname === `/brands/${currentBrandId}`
-                    ? "bg-primary/10 text-foreground font-medium"
+                    ? "text-foreground font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <span aria-hidden>🧠</span>
                 <span>브랜드 메모리</span>
               </Link>
             </div>
@@ -131,7 +129,7 @@ export function Sidebar({ recentBrands }: SidebarProps) {
               onClick={toggleRecent}
               aria-expanded={recentOpen}
               aria-controls="sidebar-recent-brands"
-              className="flex w-full items-center gap-1 px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              className="flex w-full items-center gap-1 px-3 mb-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronRightIcon
                 className={cn(
@@ -156,12 +154,11 @@ export function Sidebar({ recentBrands }: SidebarProps) {
                       className={cn(
                         "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
                         currentBrandId === b.id
-                          ? "bg-primary/10 text-foreground font-medium"
+                          ? "text-foreground font-medium"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                       title={b.category ?? undefined}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
                       <span className="truncate">{b.name}</span>
                     </Link>
                   ))}
@@ -178,12 +175,10 @@ export function Sidebar({ recentBrands }: SidebarProps) {
         )}
       </nav>
       <div className="px-3 py-2 border-t flex items-center justify-between">
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          테마
-        </span>
+        <span className="text-xs text-muted-foreground">테마</span>
         <ThemeToggle />
       </div>
-      <form action="/api/auth/logout" method="post" className="p-2 border-t">
+      <form action="/api/auth/logout" method="post" className="p-2">
         <button
           type="submit"
           className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

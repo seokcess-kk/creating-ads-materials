@@ -87,7 +87,7 @@ export function BatchHistoryDrawer({
       <DialogTrigger
         render={<Button variant="ghost" size="sm" className="text-xs" />}
       >
-        📚 히스토리 {archivedCount > 0 && `(${archivedCount})`}
+        히스토리 {archivedCount > 0 && `(${archivedCount})`}
       </DialogTrigger>
       <DialogContent
         showCloseButton={false}
@@ -120,7 +120,7 @@ export function BatchHistoryDrawer({
               key={b.batch_id}
               className={
                 "border rounded-md p-3 " +
-                (b.archived ? "bg-muted/20" : "bg-primary/5 border-primary/40")
+                (b.archived ? "" : "border-foreground")
               }
             >
               <div className="flex items-center justify-between mb-1">
@@ -160,8 +160,8 @@ export function BatchHistoryDrawer({
                   {restoring === b.batch_id ? "복원 중..." : "이 배치 복원"}
                 </Button>
               ) : (
-                <p className="text-[11px] text-primary font-medium">
-                  ✓ 현재 활성 배치
+                <p className="text-[11px] text-foreground font-medium">
+                  현재 활성 배치
                 </p>
               )}
             </div>
