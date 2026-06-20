@@ -23,6 +23,9 @@ export type AutomationLevel = "manual" | "assist" | "auto";
 
 export type ContentMode = "persuasion" | "notice";
 
+/** 출력 형태: single=단일 이미지 / carousel=카드뉴스(N슬라이드) */
+export type CampaignFormat = "single" | "carousel";
+
 /** 안내문 정보 슬롯 — offer 스키마(설득 전제)와 분리된 정보 전달용 구조. */
 export interface NoticeMeta {
   /** 1~2문장 요약 */
@@ -58,6 +61,7 @@ export interface Campaign {
   raw_content: string | null;
   notice_meta: NoticeMeta | null;
   tone_override: string | null;
+  format: CampaignFormat;
   created_at: string;
   updated_at: string;
 }
@@ -136,4 +140,5 @@ export interface CampaignIntent {
   raw_content?: string | null;
   notice_meta?: NoticeMeta | null;
   tone_override?: string | null;
+  format?: CampaignFormat;
 }

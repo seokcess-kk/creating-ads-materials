@@ -193,6 +193,7 @@ export async function createCampaign(
       raw_content: intent.raw_content ?? null,
       notice_meta: intent.notice_meta ?? null,
       tone_override: intent.tone_override ?? null,
+      format: intent.format ?? "single",
     })
     .select()
     .single();
@@ -226,6 +227,7 @@ export async function updateCampaign(
   if (patch.raw_content !== undefined) updates.raw_content = patch.raw_content;
   if (patch.notice_meta !== undefined) updates.notice_meta = patch.notice_meta;
   if (patch.tone_override !== undefined) updates.tone_override = patch.tone_override;
+  if (patch.format !== undefined) updates.format = patch.format;
 
   const { data, error } = await supabase
     .from("campaigns")
