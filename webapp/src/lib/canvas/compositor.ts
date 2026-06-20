@@ -1,5 +1,6 @@
-import { createCanvas, GlobalFonts, loadImage, type CanvasRenderingContext2D } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, type CanvasRenderingContext2D } from "@napi-rs/canvas";
 import { createClient } from "@/lib/supabase/server";
+import { decodeImage } from "./decode-image";
 import { fitText } from "./text-fit";
 import path from "node:path";
 import fs from "node:fs";
@@ -215,7 +216,7 @@ export async function renderComposite(
   background: Buffer | Uint8Array,
   config: ComposeConfig,
 ): Promise<Buffer> {
-  const bgImage = await loadImage(Buffer.from(background));
+  const bgImage = await decodeImage(background);
 
   const w = bgImage.width;
   const h = bgImage.height;
@@ -239,7 +240,7 @@ export async function renderComposite(
       const logoRes = await fetch(config.logo.url);
       if (logoRes.ok) {
         const logoBuffer = Buffer.from(await logoRes.arrayBuffer());
-        const logoImg = await loadImage(logoBuffer);
+        const logoImg = await decodeImage(logoBuffer);
 
         const logoW = w * (config.logo.widthRatio ?? 0.14);
         const logoH = (logoImg.height / logoImg.width) * logoW;
