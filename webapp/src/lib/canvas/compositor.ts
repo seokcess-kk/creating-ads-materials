@@ -1,5 +1,6 @@
 import { createCanvas, GlobalFonts, loadImage, type CanvasRenderingContext2D } from "@napi-rs/canvas";
 import { createClient } from "@/lib/supabase/server";
+import { fitText } from "./text-fit";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
@@ -68,6 +69,10 @@ export interface ComposeConfig {
     yRatio?: number;
     lineSpacingRatio?: number;
     center?: boolean;
+    // autoFit: 폭에 맞춰 자동 줄바꿈 + maxLines 이내로 폰트 축소(가변 길이 대응).
+    autoFit?: boolean;
+    maxLines?: number;
+    maxWidthRatio?: number;
   };
   subCopy?: {
     text: string;
@@ -75,6 +80,9 @@ export interface ComposeConfig {
     sizeRatio?: number;
     yRatio?: number;
     center?: boolean;
+    autoFit?: boolean;
+    maxLines?: number;
+    maxWidthRatio?: number;
   };
   cta?: {
     text: string;
@@ -82,6 +90,8 @@ export interface ComposeConfig {
     textColor?: string;
     sizeRatio?: number;
     yRatio?: number;
+    autoFit?: boolean;
+    maxWidthRatio?: number;
   };
   slogan?: {
     text: string;
@@ -199,11 +209,13 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-export async function composeAd(config: ComposeConfig): Promise<string> {
-  const bgRes = await fetch(config.backgroundImageUrl);
-  if (!bgRes.ok) throw new Error(`배경 이미지 fetch 실패: ${bgRes.status}`);
-  const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
-  const bgImage = await loadImage(bgBuffer);
+// 배경 버퍼 위에 오버레이를 합성해 PNG 버퍼를 반환(업로드 없음).
+// composeAd가 Supabase 업로드로 감싸고, 로컬 테스트/E2E는 이 함수를 직접 사용한다.
+export async function renderComposite(
+  background: Buffer | Uint8Array,
+  config: ComposeConfig,
+): Promise<Buffer> {
+  const bgImage = await loadImage(Buffer.from(background));
 
   const w = bgImage.width;
   const h = bgImage.height;
@@ -266,16 +278,35 @@ export async function composeAd(config: ComposeConfig): Promise<string> {
   }
 
   if (config.mainCopy?.text) {
-    const fontSize = Math.round(h * (config.mainCopy.sizeRatio ?? 0.048));
-    ctx.font = `bold ${fontSize}px ${pickFamily(config.fontSet, "headline")}`;
-
-    const lines = config.mainCopy.text.split("\n");
+    const baseSize = Math.round(h * (config.mainCopy.sizeRatio ?? 0.048));
+    const family = pickFamily(config.fontSet, "headline");
+    const center = config.mainCopy.center !== false;
+    let fontSize = baseSize;
+    let lines: string[];
+    if (config.mainCopy.autoFit) {
+      const maxWidth = w * (config.mainCopy.maxWidthRatio ?? 0.86);
+      const fit = fitText(
+        config.mainCopy.text,
+        { baseSize, maxWidth, maxLines: config.mainCopy.maxLines ?? 3 },
+        (size, t) => {
+          ctx.font = `bold ${size}px ${family}`;
+          return ctx.measureText(t).width;
+        },
+      );
+      fontSize = fit.fontSize;
+      lines = fit.lines;
+    } else {
+      lines = config.mainCopy.text.split("\n");
+    }
+    ctx.font = `bold ${fontSize}px ${family}`;
     const yStart = h * (config.mainCopy.yRatio ?? 0.08);
-    const lineSpacing = h * (config.mainCopy.lineSpacingRatio ?? 0.075);
+    const lineSpacing = config.mainCopy.autoFit
+      ? fontSize * 1.3
+      : h * (config.mainCopy.lineSpacingRatio ?? 0.075);
 
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;
-      if (config.mainCopy.center !== false) {
+      if (center) {
         drawTextWithShadow(ctx, w / 2, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "center");
       } else {
         drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3);
@@ -284,19 +315,52 @@ export async function composeAd(config: ComposeConfig): Promise<string> {
   }
 
   if (config.subCopy?.text) {
-    const fontSize = Math.round(h * (config.subCopy.sizeRatio ?? 0.026));
-    ctx.font = `${fontSize}px ${pickFamily(config.fontSet, "sub")}`;
-    const y = h * (config.subCopy.yRatio ?? 0.8);
-    if (config.subCopy.center !== false) {
-      drawTextWithShadow(ctx, w / 2, y, config.subCopy.text, config.subCopy.color ?? "#D4AF37", 2, "center");
+    const baseSize = Math.round(h * (config.subCopy.sizeRatio ?? 0.026));
+    const family = pickFamily(config.fontSet, "sub");
+    const center = config.subCopy.center !== false;
+    let fontSize = baseSize;
+    let lines: string[];
+    if (config.subCopy.autoFit) {
+      const maxWidth = w * (config.subCopy.maxWidthRatio ?? 0.86);
+      const fit = fitText(
+        config.subCopy.text,
+        { baseSize, maxWidth, maxLines: config.subCopy.maxLines ?? 2 },
+        (size, t) => {
+          ctx.font = `${size}px ${family}`;
+          return ctx.measureText(t).width;
+        },
+      );
+      fontSize = fit.fontSize;
+      lines = fit.lines;
     } else {
-      drawTextWithShadow(ctx, w * 0.05, y, config.subCopy.text, config.subCopy.color ?? "#D4AF37", 2);
+      lines = [config.subCopy.text];
+    }
+    ctx.font = `${fontSize}px ${family}`;
+    const yStart = h * (config.subCopy.yRatio ?? 0.8);
+    const lineSpacing = fontSize * 1.3;
+    for (let i = 0; i < lines.length; i++) {
+      const y = yStart + i * lineSpacing;
+      if (center) {
+        drawTextWithShadow(ctx, w / 2, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "center");
+      } else {
+        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.subCopy.color ?? "#D4AF37", 2);
+      }
     }
   }
 
   if (config.cta?.text) {
-    const fontSize = Math.round(h * (config.cta.sizeRatio ?? 0.028));
-    ctx.font = `bold ${fontSize}px ${pickFamily(config.fontSet, "cta")}`;
+    const family = pickFamily(config.fontSet, "cta");
+    let fontSize = Math.round(h * (config.cta.sizeRatio ?? 0.028));
+    if (config.cta.autoFit) {
+      const maxInner = w * (config.cta.maxWidthRatio ?? 0.8);
+      for (const scale of [1, 0.9, 0.8, 0.7, 0.6]) {
+        const s = Math.max(12, Math.round(fontSize * scale));
+        ctx.font = `bold ${s}px ${family}`;
+        fontSize = s;
+        if (ctx.measureText(config.cta.text).width + w * 0.08 <= maxInner) break;
+      }
+    }
+    ctx.font = `bold ${fontSize}px ${family}`;
     const metrics = ctx.measureText(config.cta.text);
     const textW = metrics.width;
     const textH = fontSize;
@@ -328,7 +392,16 @@ export async function composeAd(config: ComposeConfig): Promise<string> {
     ctx.fillText(config.slogan.text, w / 2, h * (config.slogan.yRatio ?? 0.94));
   }
 
-  const buffer = canvas.toBuffer("image/png");
+  return canvas.toBuffer("image/png");
+}
+
+export async function composeAd(config: ComposeConfig): Promise<string> {
+  const bgRes = await fetch(config.backgroundImageUrl);
+  if (!bgRes.ok) throw new Error(`배경 이미지 fetch 실패: ${bgRes.status}`);
+  const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
+
+  const buffer = await renderComposite(bgBuffer, config);
+
   const supabase = await createClient();
   const { error } = await supabase.storage
     .from(config.output.bucket)

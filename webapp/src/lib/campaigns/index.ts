@@ -189,6 +189,10 @@ export async function createCampaign(
       automation_level: intent.automation_level ?? "assist",
       key_visual_intent: intent.key_visual_intent ?? null,
       selected_key_visual_ids: intent.selected_key_visual_ids ?? [],
+      content_mode: intent.content_mode ?? "persuasion",
+      raw_content: intent.raw_content ?? null,
+      notice_meta: intent.notice_meta ?? null,
+      tone_override: intent.tone_override ?? null,
     })
     .select()
     .single();
@@ -218,6 +222,10 @@ export async function updateCampaign(
   if (patch.selected_key_visual_ids !== undefined) {
     updates.selected_key_visual_ids = patch.selected_key_visual_ids;
   }
+  if (patch.content_mode !== undefined) updates.content_mode = patch.content_mode;
+  if (patch.raw_content !== undefined) updates.raw_content = patch.raw_content;
+  if (patch.notice_meta !== undefined) updates.notice_meta = patch.notice_meta;
+  if (patch.tone_override !== undefined) updates.tone_override = patch.tone_override;
 
   const { data, error } = await supabase
     .from("campaigns")
@@ -458,21 +466,21 @@ const STAGE_ORDER: CreativeStageName[] = [
   "ship",
 ];
 
-export async function markDownstreamStale(
+/**
+ * 명시한 stage 집합을 stale 처리하고 그 활성 variants를 archive.
+ * ready 상태만 stale로 전환 (pending/running/failed/stale은 그대로).
+ */
+export async function markStagesStale(
   runId: string,
-  fromStage: CreativeStageName,
+  stages: CreativeStageName[],
 ): Promise<void> {
-  const fromIndex = STAGE_ORDER.indexOf(fromStage);
-  if (fromIndex < 0) return;
-  const downstream = STAGE_ORDER.slice(fromIndex + 1);
-  if (downstream.length === 0) return;
+  if (stages.length === 0) return;
   const supabase = await createClient();
-  // ready 상태만 stale로 전환 (pending/running/failed는 그대로)
   const { data: staled, error } = await supabase
     .from("creative_stages")
     .update({ status: "stale" })
     .eq("run_id", runId)
-    .in("stage", downstream)
+    .in("stage", stages)
     .eq("status", "ready")
     .select("id");
   if (error) throw error;
@@ -482,6 +490,16 @@ export async function markDownstreamStale(
   for (const s of (staled ?? []) as Array<{ id: string }>) {
     await archiveActiveBatches(s.id);
   }
+}
+
+export async function markDownstreamStale(
+  runId: string,
+  fromStage: CreativeStageName,
+): Promise<void> {
+  const fromIndex = STAGE_ORDER.indexOf(fromStage);
+  if (fromIndex < 0) return;
+  const downstream = STAGE_ORDER.slice(fromIndex + 1);
+  await markStagesStale(runId, downstream);
 }
 
 export async function getStage(

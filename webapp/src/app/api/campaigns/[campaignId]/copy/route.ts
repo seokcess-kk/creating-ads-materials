@@ -6,6 +6,7 @@ import {
   getStage,
   listVariants,
   markDownstreamStale,
+  markStagesStale,
   resolveRun,
   setStageStatus,
   updateRunStatus,
@@ -19,7 +20,7 @@ import {
   retrieveRelevantBPs,
 } from "@/lib/vision/retrieve";
 import { getPlaybook } from "@/lib/playbook";
-import { getFunnelGuide } from "@/lib/funnel";
+import { resolveFunnelGuide } from "@/lib/funnel";
 import { getFramework } from "@/lib/frameworks";
 import type { FrameworkId } from "@/lib/frameworks/types";
 import {
@@ -107,49 +108,53 @@ export async function POST(
         : [];
 
     try {
+      const isNotice = campaign.content_mode === "notice";
       const strategyContent = selectedStrategy.content_json as unknown as StrategyAlternative;
       const playbook = getPlaybook(campaign.channel, campaign.goal);
-      const funnel = getFunnelGuide(campaign.goal);
+      const funnel = resolveFunnelGuide(campaign.goal, campaign.content_mode);
       const framework = getFramework(strategyContent.frameworkId as FrameworkId);
 
       const intentNote =
         (campaign.constraints_json as Record<string, string>)?.note ?? null;
 
+      // notice 모드는 offer 중심 BP 검색을 생략(offers[0] silent fallback 회피).
       let semanticBPDigest: string | null = null;
-      try {
-        const offer =
-          memory.offers.find((o) => o.id === campaign.offer_id) ?? memory.offers[0] ?? null;
-        const audience =
-          memory.audiences.find((a) => a.id === campaign.audience_id) ?? memory.audiences[0] ?? null;
-        const queryText = briefToText({
-          brandName: memory.brand.name,
-          brandCategory: memory.brand.category,
-          offer,
-          audience,
-          intentNote,
-          strategy: strategyContent,
-          channel: campaign.channel,
-          goal: campaign.goal,
-        });
-        const matches = await retrieveRelevantBPs(campaign.brand_id, queryText, {
-          limit: 5,
-          minSimilarity: 0.3,
-          usageContext: {
-            operation: "bp_retrieve_copy",
-            brandId: campaign.brand_id,
-            campaignId,
-            runId: run.id,
-          },
-        });
-        semanticBPDigest = formatRelevantBPsDigest(matches);
-      } catch (retErr) {
-        console.warn("Semantic BP 검색 실패:", (retErr as Error).message);
+      if (!isNotice) {
+        try {
+          const offer =
+            memory.offers.find((o) => o.id === campaign.offer_id) ?? memory.offers[0] ?? null;
+          const audience =
+            memory.audiences.find((a) => a.id === campaign.audience_id) ?? memory.audiences[0] ?? null;
+          const queryText = briefToText({
+            brandName: memory.brand.name,
+            brandCategory: memory.brand.category,
+            offer,
+            audience,
+            intentNote,
+            strategy: strategyContent,
+            channel: campaign.channel,
+            goal: campaign.goal,
+          });
+          const matches = await retrieveRelevantBPs(campaign.brand_id, queryText, {
+            limit: 5,
+            minSimilarity: 0.3,
+            usageContext: {
+              operation: "bp_retrieve_copy",
+              brandId: campaign.brand_id,
+              campaignId,
+              runId: run.id,
+            },
+          });
+          semanticBPDigest = formatRelevantBPsDigest(matches);
+        } catch (retErr) {
+          console.warn("Semantic BP 검색 실패:", (retErr as Error).message);
+        }
       }
 
       const response = await callClaude({
         model: "opus",
         maxTokens: 8000,
-        system: buildCopySystem(),
+        system: buildCopySystem(isNotice),
         usageContext: {
           operation: "copy",
           brandId: campaign.brand_id,
@@ -171,6 +176,10 @@ export async function POST(
           selectedKeyVisualIds: campaign.selected_key_visual_ids,
           regenInstruction: body.instruction,
           previousHeadlines,
+          isNotice,
+          rawContent: campaign.raw_content,
+          noticeMeta: campaign.notice_meta,
+          toneOverride: campaign.tone_override,
         }),
         tools: [copyTool],
         toolChoice: { type: "tool", name: COPY_TOOL_NAME },
@@ -223,7 +232,14 @@ export async function POST(
       await setStageStatus(stage.id, "ready");
       await updateRunStatus(run.id, "copy", "copy");
       if (mode === "replace") {
-        await markDownstreamStale(run.id, "copy");
+        // notice 모드: 배경(visual)은 카피와 무관(textless)하므로 보존하고,
+        // 텍스트가 얹히는 compose/ship만 stale 처리 → "배경 유지, 텍스트만 갱신" 루프 성립.
+        // persuasion 모드: 기존대로 카피→이미지 텍스트 종속이라 visual부터 하위 전체 stale.
+        if (isNotice) {
+          await markStagesStale(run.id, ["compose", "ship"]);
+        } else {
+          await markDownstreamStale(run.id, "copy");
+        }
       }
 
       let autoSelected = null;

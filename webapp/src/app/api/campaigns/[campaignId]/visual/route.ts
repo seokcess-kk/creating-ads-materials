@@ -77,6 +77,7 @@ export async function POST(
     const { campaignId } = await params;
     const campaign = await getCampaign(campaignId);
     if (!campaign) throw new ApiError(404, "캠페인을 찾을 수 없습니다");
+    const isNotice = campaign.content_mode === "notice";
 
     let body: {
       instruction?: string;
@@ -147,6 +148,8 @@ export async function POST(
         goal: campaign.goal,
         typographyHint,
         regenInstruction: body.instruction,
+        isNotice,
+        toneOverride: campaign.tone_override,
       };
 
       // Key Visual 에셋 기반 생성 분기.
@@ -168,7 +171,8 @@ export async function POST(
 
       const results = await Promise.allSettled(
         VISUAL_VARIANT_SPECS.map(async (spec: VisualVariantSpec, i: number) => {
-          const asset = pickAsset(i);
+          // notice 모드는 텍스트·인물 베이킹을 피해 항상 textless 배경 생성 경로 사용.
+          const asset = isNotice ? null : pickAsset(i);
           let prompt: string | null = null;
           let track: Track = "gemini_gen";
           let promptVersion = VISUAL_PROMPT_VERSION;

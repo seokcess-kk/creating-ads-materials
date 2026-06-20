@@ -6,6 +6,8 @@ import type { Framework } from "@/lib/frameworks/types";
 import type { FunnelGuide } from "@/lib/funnel/types";
 import { buildVisionDigest, buildStrategyRoleHints, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
+import type { NoticeMeta } from "@/lib/campaigns/types";
+import { formatNoticeMeta } from "@/lib/notice/extract";
 
 export const STRATEGY_PROMPT_VERSION = "strategy@2.2.0";
 export const STRATEGY_TOOL_NAME = "record_strategy_alternatives";
@@ -168,13 +170,19 @@ export interface StrategyContext {
     hookType: string;
     frameworkId: string;
   }>;
+  // 안내문(notice) 모드: offer/audience 대신 원문+정보슬롯을 1급 소스로.
+  isNotice?: boolean;
+  rawContent?: string | null;
+  noticeMeta?: NoticeMeta | null;
+  toneOverride?: string | null;
 }
 
 function digestOpts(ctx: StrategyContext): DigestOpts {
   return { goal: ctx.funnel.stage, channel: ctx.channel };
 }
 
-export function buildStrategySystem(): string {
+export function buildStrategySystem(isNotice = false): string {
+  if (isNotice) return buildNoticeStrategySystem();
   return `당신은 퍼포먼스 광고 크리에이티브 디렉터입니다. BOFU 광고 전략 대안 3개를 role별로 설계합니다.
 
 ## 역할 분화 (필수)
@@ -208,6 +216,37 @@ export function buildStrategySystem(): string {
 - 피사체 재생성·재배치·보정 지시 절대 금지 (원본 픽셀 보존)
 - 사진 mood·여백을 반영해 카피 위치·하이라이트 영역 제안
 - 실사 미선택이면 이미지 모델 자유 생성 전제
+
+한국어 출력. 도구 ${STRATEGY_TOOL_NAME}로만 기록.`;
+}
+
+function buildNoticeStrategySystem(): string {
+  return `당신은 안내문/공지를 SNS 소재로 옮기는 크리에이티브 디렉터입니다. 안내문 소재 전략 대안 3개를 role별로 설계합니다.
+
+## 안내문 모드 핵심 (설득형과 다름)
+- 목적은 "설득·전환"이 아니라 **핵심 정보의 명확한 전달 + 신청/확인 행동 유도**.
+- 원문에 있는 사실(정원·일정·대상·신청 경로·기입 요청)만 사용. 없는 혜택·수치 창작 금지.
+- 과장·결과 확약·프리미엄 과시·감성 수사·불필요한 긴급성 연출 금지. 실제 마감(선착순 등)만 사실대로.
+- tone_override 가 있으면 브랜드 Identity voice 보다 우선. 기본 톤은 사무적·정확·신뢰.
+
+## 역할 분화 (필수)
+- alt_1 safe: 가장 정공법. 핵심 정보(무엇을·누가·어떻게 신청)를 곧장 명확히
+- alt_2 explore: 정보 위계를 달리한 각도(예: 정원/선착순을 앞세움 vs 대상 적합성을 앞세움)
+- alt_3 challenge: 한 가지 핵심만 크게 거는 미니멀 정보 카드 각도
+- 3대안 hookType·frameworkId 모두 서로 다름
+
+## 스키마 사용 가이드 (정보 전달용으로 해석)
+- hookType: 정보 성격에 맞게 number(정원·기간)·benefit(대상 적합성)·curiosity(요약 후 자세히) 중 선택
+- frameworkId: 4U(특히 Useful·Urgent)를 기본 권장. 정보 명료성이 최우선
+- angleName: 정보 전달 각도 이름
+- keyMessage: 소재에 실릴 핵심 정보 한 줄
+- visualDirection: **글자 없는 깔끔한 배경/정보 카드**를 전제로 한 톤·여백·구도만 서술 (텍스트는 합성 단계에서 오버레이됨)
+- whyItWorks: 이 정보 위계가 왜 대상에게 명확/유용한지
+
+## 샘플 카피 (각 대안 1개 필수, 사무적·명확)
+- headline ≤40자: 핵심 정보를 곧장. 과장·감탄·물결표 금지
+- subCopy ≤80자: 대상/정원/마감 등 보조 정보 또는 신청 안내
+- cta ≤15자: "지금 신청", "신청서 작성", "자세히 보기" 등 행동 경로
 
 한국어 출력. 도구 ${STRATEGY_TOOL_NAME}로만 기록.`;
 }
@@ -256,9 +295,16 @@ function formatAudience(ctx: StrategyContext): string {
   return lines.join("\n");
 }
 
-function formatPlaybook(p: Playbook): string {
+function formatPlaybook(p: Playbook, isNotice = false): string {
   // Strategy 단계에선 hookTypes·recommended는 Funnel Guide가 담당.
   // 여기는 playbook 고유 정보만 최소 전달.
+  if (isNotice) {
+    // notice 모드: 설득형 톤·금기·비주얼 focus 주입 금지, 길이 구조만.
+    return [
+      "(안내문 모드 — 길이 구조만 적용. 설득형 톤·금기·비주얼 focus 미적용)",
+      `headline: ≤${p.structure.headline.maxLen}자 (선호 ${p.structure.headline.preferredLen}자)`,
+    ].join("\n");
+  }
   return [
     `tone: ${p.tone.style} · do: ${p.tone.do.join(" · ")} · dont: ${p.tone.dont.join(" · ")}`,
     `taboos: ${p.taboos.join(", ")}`,
@@ -320,7 +366,7 @@ ${buildStrategyRoleHints(ctx.memory, digestOpts(ctx))}
 ${buildPreferenceDigest(ctx.memory)}
 
 # Playbook (${ctx.playbook.channel} / ${ctx.playbook.funnelStage})
-${formatPlaybook(ctx.playbook)}
+${formatPlaybook(ctx.playbook, ctx.isNotice)}
 
 # Funnel Guide
 ${formatFunnel(ctx.funnel)}
@@ -339,7 +385,25 @@ ${formatFrameworks(ctx.frameworks)}`;
     ? `\n\n# Re-generation direction\n${ctx.regenInstruction}\n(3대안 모두 반영, 역할 분화 유지)`
     : "";
 
-  const campaignBlock = `# Offer
+  const campaignBlock = ctx.isNotice
+    ? `# 안내문 원문 (1급 소스 — 이 사실만 사용, 창작 금지)
+${ctx.rawContent?.trim() || "(원문 없음)"}
+
+# 정보 슬롯 (추출·검수됨)
+${formatNoticeMeta(ctx.noticeMeta)}
+
+# 톤 오버라이드
+${ctx.toneOverride?.trim() || "(없음 — 사무적·명확 기본. Identity 프리미엄 voice 과용 금지)"}
+
+# Intent Note
+${ctx.intentNote ?? "(없음)"}
+
+# Selected Key Visuals
+${formatKeyVisuals(ctx)}${prev}${regen}
+
+# TASK
+안내문 소재 전략 3대안(safe/explore/challenge) 설계. 정보 명료성 최우선, 과장 금지. hookType·frameworkId 중복 금지. ${STRATEGY_TOOL_NAME}로 기록.`
+    : `# Offer
 ${formatOffer(ctx)}
 
 # Audience

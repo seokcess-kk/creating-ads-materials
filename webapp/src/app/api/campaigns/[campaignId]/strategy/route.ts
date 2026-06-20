@@ -21,7 +21,7 @@ import {
   retrieveRelevantBPs,
 } from "@/lib/vision/retrieve";
 import { getPlaybook } from "@/lib/playbook";
-import { getFunnelGuide } from "@/lib/funnel";
+import { resolveFunnelGuide } from "@/lib/funnel";
 import { getFramework, recommendFrameworksFor } from "@/lib/frameworks";
 import {
   STRATEGY_PROMPT_VERSION,
@@ -84,10 +84,15 @@ export async function POST(
       throw new ApiError(400, "remix 모드는 baseVariantId 필요");
     }
 
+    const isNotice = campaign.content_mode === "notice";
     const memory = await loadBrandMemory(campaign.brand_id);
     if (!memory) throw new ApiError(404, "브랜드를 찾을 수 없습니다");
-    if (memory.offers.length === 0 || memory.audiences.length === 0 || !memory.identity) {
+    // notice 모드는 사전 저장 offer/audience/identity 없이 raw_content로 진행.
+    if (!isNotice && (memory.offers.length === 0 || memory.audiences.length === 0 || !memory.identity)) {
       throw new ApiError(400, "Memory(Identity·Offer·Audience) 미설정");
+    }
+    if (isNotice && !campaign.raw_content?.trim()) {
+      throw new ApiError(400, "안내문 원문(raw_content)이 없습니다");
     }
 
     const runIdHint = new URL(request.url).searchParams.get("runId");
@@ -143,47 +148,50 @@ export async function POST(
 
     try {
       const playbook = getPlaybook(campaign.channel, campaign.goal);
-      const funnel = getFunnelGuide(campaign.goal);
+      const funnel = resolveFunnelGuide(campaign.goal, campaign.content_mode);
       const frameworkIds = recommendFrameworksFor(campaign.goal);
       const frameworks = frameworkIds.map(getFramework);
 
       const intentNote =
         (campaign.constraints_json as Record<string, string>)?.note ?? null;
 
-      // Semantic BP 검색: 브리프(offer+audience+intent)로 Top-5
+      // Semantic BP 검색: 브리프(offer+audience+intent)로 Top-5.
+      // notice 모드는 offer 중심 검색이 부적합하므로 생략(offers[0] silent fallback 회피).
       let semanticBPDigest: string | null = null;
-      try {
-        const offer = memory.offers.find((o) => o.id === campaign.offer_id) ?? memory.offers[0] ?? null;
-        const audience =
-          memory.audiences.find((a) => a.id === campaign.audience_id) ?? memory.audiences[0] ?? null;
-        const queryText = briefToText({
-          brandName: memory.brand.name,
-          brandCategory: memory.brand.category,
-          offer,
-          audience,
-          intentNote,
-          channel: campaign.channel,
-          goal: campaign.goal,
-        });
-        const matches = await retrieveRelevantBPs(campaign.brand_id, queryText, {
-          limit: 5,
-          minSimilarity: 0.3,
-          usageContext: {
-            operation: "bp_retrieve_strategy",
-            brandId: campaign.brand_id,
-            campaignId,
-            runId: run.id,
-          },
-        });
-        semanticBPDigest = formatRelevantBPsDigest(matches);
-      } catch (retErr) {
-        console.warn("Semantic BP 검색 실패:", (retErr as Error).message);
+      if (!isNotice) {
+        try {
+          const offer = memory.offers.find((o) => o.id === campaign.offer_id) ?? memory.offers[0] ?? null;
+          const audience =
+            memory.audiences.find((a) => a.id === campaign.audience_id) ?? memory.audiences[0] ?? null;
+          const queryText = briefToText({
+            brandName: memory.brand.name,
+            brandCategory: memory.brand.category,
+            offer,
+            audience,
+            intentNote,
+            channel: campaign.channel,
+            goal: campaign.goal,
+          });
+          const matches = await retrieveRelevantBPs(campaign.brand_id, queryText, {
+            limit: 5,
+            minSimilarity: 0.3,
+            usageContext: {
+              operation: "bp_retrieve_strategy",
+              brandId: campaign.brand_id,
+              campaignId,
+              runId: run.id,
+            },
+          });
+          semanticBPDigest = formatRelevantBPsDigest(matches);
+        } catch (retErr) {
+          console.warn("Semantic BP 검색 실패:", (retErr as Error).message);
+        }
       }
 
       const response = await callClaude({
         model: "opus",
         maxTokens: 8000,
-        system: buildStrategySystem(),
+        system: buildStrategySystem(isNotice),
         usageContext: {
           operation: "strategy",
           brandId: campaign.brand_id,
@@ -204,6 +212,10 @@ export async function POST(
           selectedKeyVisualIds: campaign.selected_key_visual_ids,
           regenInstruction: body.instruction,
           previousAngles,
+          isNotice,
+          rawContent: campaign.raw_content,
+          noticeMeta: campaign.notice_meta,
+          toneOverride: campaign.tone_override,
         }),
         tools: [strategyTool],
         toolChoice: { type: "tool", name: STRATEGY_TOOL_NAME },

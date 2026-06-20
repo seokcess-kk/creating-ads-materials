@@ -19,6 +19,7 @@ import { getChannel } from "@/lib/channels";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
 import { RETOUCH_PROMPT_VERSION, buildRetouchPrompt } from "@/lib/prompts/retouch";
+import type { CopyVariant } from "@/lib/prompts/copy";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
 
 export const maxDuration = 180;
@@ -70,6 +71,8 @@ export async function POST(
 
     const selectedVisual = await getSelectedVariant(run.id, "visual");
     if (!selectedVisual) throw new ApiError(400, "선택된 Visual이 없습니다");
+    const selectedCopy = await getSelectedVariant(run.id, "copy");
+    const isNotice = campaign.content_mode === "notice";
 
     const memory = await loadBrandMemory(campaign.brand_id);
     if (!memory) throw new ApiError(404, "브랜드를 찾을 수 없습니다");
@@ -107,6 +110,8 @@ export async function POST(
           memory,
           instruction: input.instruction,
           keepCompositionStrict: input.keepCompositionStrict,
+          selectedCopy: (selectedCopy?.content_json as unknown as CopyVariant) ?? null,
+          isNotice,
         }),
         baseImage: base,
         aspectRatio,

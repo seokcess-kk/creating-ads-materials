@@ -84,12 +84,71 @@ export interface VisualPromptContext {
   // null이면 기본 "Pretendard-style" fallback 사용.
   typographyHint?: string | null;
   regenInstruction?: string;
+  // 안내문(notice) 모드: 텍스트를 굽지 않고 깔끔한 "글자 없는 배경"만 생성.
+  // 카피는 compose 단계에서 컴포지터 오버레이로 얹는다(이중 텍스트 방지).
+  isNotice?: boolean;
+  toneOverride?: string | null;
+}
+
+// 안내문(notice) 배경 변형 — 3개 spec을 배경 무드 변주로 매핑(텍스트·인물·로고 없음).
+function noticeBackgroundVariation(spec: VisualVariantSpec): string {
+  switch (spec.focus) {
+    case "product_focus":
+      return "Clean solid or very subtle two-tone background with a calm flat color field. Minimal, generous empty space.";
+    case "number_focus":
+      return "Soft minimal geometric background (thin lines / gentle grid / subtle shapes) suggesting structure and order. Very low contrast, plenty of empty space.";
+    case "persona_focus":
+      return "Gentle smooth gradient background, warm but restrained, conveying trust and calm. No people, no objects, large empty area.";
+  }
+}
+
+export function buildNoticeBackgroundPrompt(
+  ctx: VisualPromptContext,
+  spec: VisualVariantSpec,
+): string {
+  const category = ctx.memory.brand.category ?? "business";
+  const composition = compositionGuide(ctx.channel);
+  const tone = ctx.toneOverride?.trim();
+  return `Design a CLEAN, TEXTLESS BACKGROUND for a Korean ${category} informational notice card (${ctx.channel.aspectRatio}, ${ctx.channel.width}x${ctx.channel.height}). All text and the logo are overlaid later in a separate step — your output must contain NO letters, NO numbers, NO logo.
+
+# CRITICAL — ABSOLUTELY NO TEXT, NO LOGO
+- Do NOT render any text, letters, numbers, words, captions, labels, or typography anywhere.
+- Do NOT draw any logo, wordmark, icon, watermark, badge, or emblem.
+- The image is a pure background/canvas onto which Korean text will be composited afterward.
+
+# Background concept
+- ${noticeBackgroundVariation(spec)}
+- Intent (tone/space only, no text): ${ctx.strategy.visualDirection}
+- Thematic mood — evoke the SUBJECT of this notice WITHOUT rendering any text/letters/numbers: "${ctx.selectedCopy.headline}" (${ctx.strategy.keyMessage}). Translate it into color/atmosphere/abstract imagery only.
+- Keep a clearly readable, uncluttered central/upper region with high legibility for overlaid text (avoid busy patterns where text will sit).
+
+# Tone
+- Sober, clear, trustworthy, administrative. ${tone ? `Tone override: ${tone}.` : "Avoid premium/luxury flashiness, avoid gold-glitter aesthetics, avoid feed-stopping hype."}
+- Calm, restrained palette. Soft contrast. This is an informational notice, not a hype ad.
+
+# Channel composition (leave these zones clean for text)
+${composition}
+
+# Avoid
+- Any text, number, or character of any language
+- Any logo, brand mark, watermark, emblem
+- People, faces, product close-ups
+- Busy, cluttered, high-contrast hype visuals
+- Before/after layouts${
+    ctx.regenInstruction
+      ? `
+
+# User re-generation direction
+${ctx.regenInstruction}`
+      : ""
+  }`;
 }
 
 export function buildGeminiPrompt(
   ctx: VisualPromptContext,
   spec: VisualVariantSpec,
 ): string {
+  if (ctx.isNotice) return buildNoticeBackgroundPrompt(ctx, spec);
   const brand = ctx.memory.brand.name;
   const category = ctx.memory.brand.category ?? "business";
   const focus = focusInstruction(spec, ctx.strategy);
@@ -308,7 +367,19 @@ export const visualValidatorTool: Tool = {
   },
 };
 
-export function buildValidatorSystem(): string {
+export function buildValidatorSystem(isNotice = false): string {
+  if (isNotice) {
+    return `당신은 안내문 소재용 "글자 없는 배경"을 4축으로 평가하는 크리에이티브 디렉터입니다. 텍스트·로고는 이후 합성 단계에서 얹히므로 이 이미지에는 텍스트·로고가 없어야 정상입니다.
+
+평가 기준 (안내문 배경 기준으로 재해석):
+- hookStrength(1~5): 정보 카드로서의 정돈감·차분함·시선 안정. 과한 hype가 아닐수록 높음
+- textReady(1~5): 오버레이될 한국어 텍스트를 위한 깨끗하고 가독성 높은 빈 영역 확보도 (글자가 없고 텍스트 자리가 깔끔할수록 높음)
+- brandConsistency(1~5): 브랜드 컬러·톤과 일치하되 프리미엄 과시 없이 중립적
+- policyClear(1~5): 정책 준수 + 텍스트·로고 미포함
+- overall: 4축 산술 평균
+
+도구 ${VISUAL_VALIDATOR_TOOL}로 기록.`;
+  }
   return `당신은 퍼포먼스 광고 비주얼을 4축으로 평가하는 크리에이티브 디렉터입니다.
 
 평가 기준:
@@ -327,7 +398,12 @@ export function buildValidatorMessages(
   spec: VisualVariantSpec,
 ): MessageParam[] {
   const brand = ctx.memory.brand.name;
-  const context = `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} BOFU 광고 후보(${spec.label})입니다.
+  const context = ctx.isNotice
+    ? `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} 안내문 소재용 "글자 없는 배경" 후보(${spec.label})입니다.
+텍스트·로고는 이후 합성에서 얹히므로 이 이미지엔 글자가 없어야 정상입니다.
+오버레이될 카피(참고) — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
+배경 기준 4축으로 평가해주세요.`
+    : `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} BOFU 광고 후보(${spec.label})입니다.
 전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
 예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
 이 맥락에서 4축으로 평가해주세요.`;
@@ -427,7 +503,15 @@ export function buildBatchValidatorMessages(
   ctx: VisualPromptContext,
 ): MessageParam[] {
   const brand = ctx.memory.brand.name;
-  const header = `아래는 브랜드 "${brand}" ${ctx.channel.label} BOFU 광고의 후보 ${items.length}개입니다.
+  const header = ctx.isNotice
+    ? `아래는 브랜드 "${brand}" ${ctx.channel.label} 안내문 소재용 "글자 없는 배경" 후보 ${items.length}개입니다.
+텍스트·로고는 이후 합성에서 얹히므로 각 이미지엔 글자가 없어야 정상입니다.
+오버레이될 카피(참고) — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
+
+각 이미지는 바로 앞에 표시된 "### variantId: ..." 라벨로 식별됩니다.
+각각에 대해 배경 기준 4축(hookStrength·textReady·brandConsistency·policyClear)을 1~5점으로 매기고,
+${VISUAL_BATCH_VALIDATOR_TOOL} 도구로 한 번에 기록하세요.`
+    : `아래는 브랜드 "${brand}" ${ctx.channel.label} BOFU 광고의 후보 ${items.length}개입니다.
 전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
 예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
 

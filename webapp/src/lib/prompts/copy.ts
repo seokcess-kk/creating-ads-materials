@@ -7,6 +7,8 @@ import type { FunnelGuide } from "@/lib/funnel/types";
 import type { StrategyAlternative } from "./strategy";
 import { buildCopyPatternDigest, type DigestOpts } from "@/lib/vision/digest";
 import { buildPreferenceDigest } from "@/lib/learning/digest";
+import type { NoticeMeta } from "@/lib/campaigns/types";
+import { formatNoticeMeta } from "@/lib/notice/extract";
 
 export const COPY_PROMPT_VERSION = "copy@1.2.0";
 export const COPY_TOOL_NAME = "record_copy_drafts";
@@ -146,13 +148,19 @@ export interface CopyContext {
   selectedKeyVisualIds?: string[];
   regenInstruction?: string;
   previousHeadlines?: string[];
+  // 안내문(notice) 모드: offer/audience 대신 원문+정보슬롯을 1급 소스로.
+  isNotice?: boolean;
+  rawContent?: string | null;
+  noticeMeta?: NoticeMeta | null;
+  toneOverride?: string | null;
 }
 
 function copyDigestOpts(ctx: CopyContext): DigestOpts {
   return { goal: ctx.funnel.stage, channel: ctx.channel };
 }
 
-export function buildCopySystem(): string {
+export function buildCopySystem(isNotice = false): string {
+  if (isNotice) return buildNoticeCopySystem();
   return `당신은 퍼포먼스 광고 시니어 카피라이터입니다. 선택된 전략 기반 카피 5~6개 변형 + 각 변형 4축 self-critique.
 
 ## 작성 원칙
@@ -178,6 +186,36 @@ export function buildCopySystem(): string {
 ## Brand Preferences 활용
 - 참고 정보, 강제 반영 금지
 - 선호 훅·"자주 수정한 영역"을 의식적으로 반영하되 진입점은 다양화
+
+도구 ${COPY_TOOL_NAME}로 variants + critiques 한 번에 기록.`;
+}
+
+function buildNoticeCopySystem(): string {
+  return `당신은 안내문/공지를 SNS 소재 카피로 옮기는 카피라이터입니다. 안내문 카피 5~6개 변형 + 각 변형 self-critique.
+
+## 안내문 모드 핵심 (설득형 광고와 다름)
+- 목적은 "설득·전환"이 아니라 **핵심 정보의 명확한 전달 + 신청/확인 행동 유도**.
+- 원문/정보 슬롯에 있는 사실만 사용. 혜택·수치·결과 창작 절대 금지.
+- 톤: 사무적·정확·신뢰. 과장·감탄사·물결표·이모지 금지. 프리미엄 과시·감성 수사 지양.
+- tone_override 가 있으면 브랜드 Identity voice 보다 우선.
+- 실제 마감(선착순·정원 등)은 사실대로만. 없는 긴급성 연출 금지.
+
+## 변형 다양성
+- 5~6개는 서로 다른 정보 위계·진입점 (정원 우선 / 대상 적합성 우선 / 신청 방법 우선 / 핵심 요약 우선 등)
+- 단순 단어 교체 금지
+
+## 슬롯
+- headline ≤40자: 핵심 정보를 곧장. 무엇에 대한 안내인지 즉시 이해되게
+- subCopy ≤80자: 대상·정원·마감·신청 안내 중 보조 정보. (URL 자체는 캡션/버튼에서 처리되므로 헤드라인엔 넣지 말 것)
+- cta ≤15자: 행동 경로 ("지금 신청", "신청서 작성", "자세히 보기" 등)
+- rationale: 이 변형이 어떤 정보 위계로 명확성을 만드는지 한 줄
+
+## Self-critique (1~5점) — 안내문 기준으로 해석
+- taboosClear: 과장·확약·정책 위반 없음
+- frameworkFit: 정보 전달 구조 충실 (핵심→보조→행동)
+- hookStrength: **이 모드에선 "정보 명료성·신청 행동 명확성"으로 해석** (무엇을·누가·어떻게가 즉시 읽히는가)
+- koreanNatural: 사무적이되 자연스러운 한국어 (번역체·AI 티 배제)
+- overall: 4축 평균
 
 도구 ${COPY_TOOL_NAME}로 variants + critiques 한 번에 기록.`;
 }
@@ -229,7 +267,16 @@ function formatStrategy(s: StrategyAlternative): string {
   ].join("\n");
 }
 
-function formatPlaybook(p: Playbook): string {
+function formatPlaybook(p: Playbook, isNotice = false): string {
+  if (isNotice) {
+    // notice 모드: 설득형 톤·taboos·cta verbs를 주입하지 않고 길이 구조만 가이드.
+    return [
+      "(안내문 모드 — 아래 길이 구조만 적용. 설득형 톤·금기·CTA 동사는 미적용)",
+      `headline: ${p.structure.headline.maxLen}자 이내, 선호 ${p.structure.headline.preferredLen}자`,
+      `sub: ${p.structure.subCopy.maxLen}자 이내, 선호 ${p.structure.subCopy.preferredLen}자`,
+      `cta: ${p.structure.cta.maxLen}자 이내, 선호 ${p.structure.cta.preferredLen}자 / 동사형`,
+    ].join("\n");
+  }
   return [
     `version: ${p.version}`,
     `tone: ${p.tone.style}`,
@@ -292,7 +339,7 @@ ${buildCopyPatternDigest(ctx.memory, copyDigestOpts(ctx))}
 ${buildPreferenceDigest(ctx.memory)}
 
 # Playbook
-${formatPlaybook(ctx.playbook)}
+${formatPlaybook(ctx.playbook, ctx.isNotice)}
 
 # Funnel Guide
 ${formatFunnel(ctx.funnel)}`;
@@ -306,7 +353,28 @@ ${formatFunnel(ctx.funnel)}`;
     : "";
 
   // Campaign-level: 캠페인·전략별로 달라지는 부분.
-  const campaignBlock = `# Offer
+  const campaignBlock = ctx.isNotice
+    ? `# 안내문 원문 (1급 소스 — 이 사실만 사용, 창작 금지)
+${ctx.rawContent?.trim() || "(원문 없음)"}
+
+# 정보 슬롯 (추출·검수됨)
+${formatNoticeMeta(ctx.noticeMeta)}
+
+# 톤 오버라이드
+${ctx.toneOverride?.trim() || "(없음 — 사무적·명확 기본. Identity 프리미엄 voice 과용 금지)"}
+
+# Intent Note
+${ctx.intentNote ?? "(없음)"}
+
+# Selected Strategy (보조 참조 — 정보 위계 가이드)
+${formatStrategy(ctx.strategy)}
+
+# Selected Key Visuals
+${formatKeyVisuals(ctx)}${prev}${regen}
+
+# TASK
+안내문의 핵심 정보를 서로 다른 정보 위계로 5~6개 카피 + 각 self-critique. 사실만, 사무적 톤. ${COPY_TOOL_NAME}로 기록.`
+    : `# Offer
 ${formatOffer(ctx)}
 
 # Audience

@@ -28,7 +28,7 @@ export async function validateVisualImage(
   const response = await callClaude({
     model: "opus",
     maxTokens: 1500,
-    system: buildValidatorSystem(),
+    system: buildValidatorSystem(ctx.isNotice ?? false),
     messages: buildValidatorMessages(imageUrl, ctx, spec),
     tools: [visualValidatorTool],
     toolChoice: { type: "tool", name: VISUAL_VALIDATOR_TOOL },
@@ -72,7 +72,7 @@ export async function validateVisualImagesBatch(
     model: "opus",
     // variant 수 × 개별 평가 결과 분량 고려.
     maxTokens: Math.max(1500, items.length * 800),
-    system: buildValidatorSystem(),
+    system: buildValidatorSystem(ctx.isNotice ?? false),
     messages: buildBatchValidatorMessages(resolved, ctx),
     tools: [visualBatchValidatorTool],
     toolChoice: { type: "tool", name: VISUAL_BATCH_VALIDATOR_TOOL },

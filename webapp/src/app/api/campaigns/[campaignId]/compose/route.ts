@@ -9,7 +9,12 @@ import {
   updateRunStatus,
   upsertStage,
 } from "@/lib/campaigns";
-import { composeAd, LOGO_POSITIONS, type LogoPosition } from "@/lib/canvas/compositor";
+import {
+  composeAd,
+  LOGO_POSITIONS,
+  type ComposeConfig,
+  type LogoPosition,
+} from "@/lib/canvas/compositor";
 import { buildComposeSource } from "@/lib/canvas/compose-from-run";
 import { ApiError, ok, serverError } from "@/lib/api-utils";
 import { z } from "zod";
@@ -105,26 +110,71 @@ export async function POST(
           ? "user"
           : source.logoDefaults.source;
 
+      // notice 모드: 텍스트를 배경에 굽지 않고 여기서 컴포지터로 오버레이.
+      // visual 단계가 textless 배경을 생성하므로 이중 텍스트가 아니며,
+      // 카피만 바꾼 뒤 compose 재실행 시 배경을 그대로 둔 채 텍스트만 갱신된다.
+      const isNotice = campaign.content_mode === "notice";
+
       let resultUrl: string;
       let outputPath: string;
       let logoApplied = false;
+      let textOverlaid = false;
 
-      if (logoUrl) {
+      if (logoUrl || isNotice) {
         outputPath = `${campaignId}/compose/${Date.now()}.png`;
-        resultUrl = await composeAd({
+        const config: ComposeConfig = {
           backgroundImageUrl: source.baseUrl,
           output: { bucket: "generated-images", path: outputPath },
-          overlay: { top: false, bottom: false },
-          logo: {
+          overlay: isNotice
+            ? { top: true, topOpacity: 150, bottom: true, bottomOpacity: 200 }
+            : { top: false, bottom: false },
+        };
+        if (isNotice) {
+          // 중립 톤(프리미엄 골드 강제 해제). 폰트는 캠페인 fontSet 사용.
+          config.fontSet = source.fontSet;
+          config.mainCopy = {
+            text: source.copy.headline,
+            color: "#FFFFFF",
+            sizeRatio: 0.052,
+            yRatio: 0.28,
+            center: true,
+            autoFit: true,
+            maxLines: 3,
+            maxWidthRatio: 0.86,
+          };
+          config.subCopy = {
+            text: source.copy.subCopy,
+            color: "#E5E7EB",
+            sizeRatio: 0.028,
+            yRatio: 0.62,
+            center: true,
+            autoFit: true,
+            maxLines: 2,
+            maxWidthRatio: 0.86,
+          };
+          config.cta = {
+            text: source.copy.cta,
+            bgColor: "#1F2937",
+            textColor: "#FFFFFF",
+            sizeRatio: 0.028,
+            yRatio: 0.84,
+            autoFit: true,
+            maxWidthRatio: 0.78,
+          };
+          textOverlaid = true;
+        }
+        if (logoUrl) {
+          config.logo = {
             url: logoUrl,
             position: isCustomCoords ? undefined : position,
             widthRatio,
             marginRatio: 0.04,
             xRatio: overrides.logoXRatio,
             yRatio: overrides.logoYRatio,
-          },
-        });
-        logoApplied = true;
+          };
+          logoApplied = true;
+        }
+        resultUrl = await composeAd(config);
       } else {
         outputPath = `${campaignId}/compose/${Date.now()}_passthrough`;
         resultUrl = source.baseUrl;
@@ -141,6 +191,7 @@ export async function POST(
               path: outputPath,
               baseUrl: source.baseUrl,
               baseSource: source.baseSource,
+              textOverlaid,
               logoApplied,
               logoPosition: logoApplied && !isCustomCoords ? position : null,
               logoSizeRatio: logoApplied ? widthRatio : null,
