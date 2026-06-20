@@ -35,17 +35,8 @@ interface IntentFormProps {
   usesRealAssets: boolean;
 }
 
-// 위저드에서 검수·편집하는 안내문 정보 슬롯(모두 문자열, requestFields는 콤마 구분).
-interface NoticeMetaForm {
-  summary: string;
-  capacity: string;
-  eligibility: string;
-  deadline: string;
-  applyUrl: string;
-  noticeUrl: string;
-  requestFields: string;
-}
-
+// 설득형(BOFU) 단일 광고 캠페인 위저드.
+// 안내문·공지처럼 정보 전달형 소재는 별도 한 화면(/cardnews)에서 처리한다.
 export function IntentForm({
   brandId,
   brandName,
@@ -69,14 +60,6 @@ export function IntentForm({
   const [selectedKvIds, setSelectedKvIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // 안내문(notice) 모드
-  const [contentMode, setContentMode] = useState<"persuasion" | "notice">("persuasion");
-  const [rawContent, setRawContent] = useState("");
-  const [toneOverride, setToneOverride] = useState("");
-  const [noticeMeta, setNoticeMeta] = useState<NoticeMetaForm | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
-  const isNotice = contentMode === "notice";
-
   const toggleKv = (id: string) =>
     setSelectedKvIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -85,62 +68,7 @@ export function IntentForm({
   const selectedChannel = CHANNELS.find((c) => c.id === channelId) ?? CHANNELS[0];
 
   const canSubmit =
-    name.trim().length > 0 &&
-    (isNotice
-      ? rawContent.trim().length >= 10
-      : offers.length > 0 && audiences.length > 0);
-
-  async function analyzeNotice() {
-    if (rawContent.trim().length < 10) {
-      toast.error("안내문 원문을 먼저 붙여넣어 주세요");
-      return;
-    }
-    setAnalyzing(true);
-    try {
-      const res = await fetch(`/api/brands/${brandId}/notice/extract`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raw_content: rawContent.trim() }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "분석 실패");
-      }
-      const { notice_meta } = await res.json();
-      setNoticeMeta({
-        summary: notice_meta?.summary ?? "",
-        capacity: notice_meta?.capacity ?? "",
-        eligibility: notice_meta?.eligibility ?? "",
-        deadline: notice_meta?.deadline ?? "",
-        applyUrl: notice_meta?.applyUrl ?? "",
-        noticeUrl: notice_meta?.noticeUrl ?? "",
-        requestFields: (notice_meta?.requestFields ?? []).join(", "),
-      });
-      toast.success("안내문 분석 완료 — 내용을 검수·수정하세요");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
-    } finally {
-      setAnalyzing(false);
-    }
-  }
-
-  function buildNoticeMetaPayload() {
-    if (!isNotice || !noticeMeta) return null;
-    const rf = noticeMeta.requestFields
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const payload = {
-      summary: noticeMeta.summary.trim() || undefined,
-      capacity: noticeMeta.capacity.trim() || undefined,
-      eligibility: noticeMeta.eligibility.trim() || undefined,
-      deadline: noticeMeta.deadline.trim() || undefined,
-      applyUrl: noticeMeta.applyUrl.trim() || undefined,
-      noticeUrl: noticeMeta.noticeUrl.trim() || undefined,
-      requestFields: rf.length ? rf : undefined,
-    };
-    return Object.values(payload).some((v) => v !== undefined) ? payload : null;
-  }
+    name.trim().length > 0 && offers.length > 0 && audiences.length > 0;
 
   async function submit() {
     if (!canSubmit) return;
@@ -152,17 +80,13 @@ export function IntentForm({
         body: JSON.stringify({
           name: name.trim(),
           goal: "BOFU",
-          content_mode: contentMode,
-          offer_id: isNotice ? null : offerId,
-          audience_id: isNotice ? null : audienceId,
+          offer_id: offerId,
+          audience_id: audienceId,
           channel: channelId,
           constraints: note.trim() ? { note: note.trim() } : {},
           automation_level: automationLevel,
-          key_visual_intent: isNotice ? null : keyVisualIntent.trim() || null,
-          selected_key_visual_ids: isNotice ? [] : selectedKvIds,
-          raw_content: isNotice ? rawContent.trim() : null,
-          notice_meta: buildNoticeMetaPayload(),
-          tone_override: isNotice ? toneOverride.trim() || null : null,
+          key_visual_intent: keyVisualIntent.trim() || null,
+          selected_key_visual_ids: selectedKvIds,
         }),
       });
       if (!res.ok) {
@@ -188,10 +112,23 @@ export function IntentForm({
             <strong>{brandName}</strong>
           </p>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="secondary">{isNotice ? "안내문 (정보 전달)" : "설득형 · BOFU (전환)"}</Badge>
+            <Badge variant="secondary">설득형 · BOFU (전환)</Badge>
             <Badge variant="outline">{selectedChannel.label}</Badge>
             <Badge variant="outline">{selectedChannel.size}</Badge>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-dashed bg-muted/20">
+        <CardContent className="py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            📋 안내문·공지를 소재로 만들려면 카드뉴스가 더 빠릅니다
+          </p>
+          <Link href={`/brands/${brandId}/cardnews`}>
+            <Button variant="outline" size="sm">
+              카드뉴스로 →
+            </Button>
+          </Link>
         </CardContent>
       </Card>
 
@@ -202,143 +139,6 @@ export function IntentForm({
           </h2>
           <p className="text-xs text-muted-foreground">캠페인이 노출될 채널과 식별용 이름</p>
         </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">콘텐츠 유형 *</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setContentMode("persuasion")}
-              disabled={saving}
-              className={`border rounded-md p-3 text-left transition-colors ${
-                contentMode === "persuasion"
-                  ? "border-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <div className="text-sm font-medium">📣 설득형 캠페인</div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                오퍼·페르소나 기반 전환 광고 (BOFU)
-              </p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setContentMode("notice")}
-              disabled={saving}
-              className={`border rounded-md p-3 text-left transition-colors ${
-                contentMode === "notice"
-                  ? "border-primary bg-primary/5"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <div className="text-sm font-medium">📋 안내문</div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                원문을 붙여넣어 정보 전달 소재 생성 (오퍼 불필요)
-              </p>
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {isNotice && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">안내문 원문 *</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Textarea
-                value={rawContent}
-                onChange={(e) => setRawContent(e.target.value)}
-                placeholder="안내문/공지 원문을 통째로 붙여넣으세요"
-                rows={8}
-                disabled={saving}
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={analyzeNotice}
-                  disabled={saving || analyzing || rawContent.trim().length < 10}
-                >
-                  {analyzing ? "분석 중..." : "안내문 분석 →"}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  핵심 정보(정원·신청 링크·마감 등)를 자동 추출합니다 (선택)
-                </p>
-              </div>
-            </div>
-
-            {noticeMeta && (
-              <div className="space-y-3 border-t pt-4">
-                <p className="text-xs font-medium text-muted-foreground">
-                  추출 정보 검수 — 수정 가능
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <NoticeField
-                    label="요약"
-                    value={noticeMeta.summary}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, summary: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="모집/정원"
-                    value={noticeMeta.capacity}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, capacity: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="대상/자격"
-                    value={noticeMeta.eligibility}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, eligibility: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="마감/일정"
-                    value={noticeMeta.deadline}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, deadline: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="신청 링크"
-                    value={noticeMeta.applyUrl}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, applyUrl: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="공지 링크"
-                    value={noticeMeta.noticeUrl}
-                    onChange={(v) => setNoticeMeta({ ...noticeMeta, noticeUrl: v })}
-                    disabled={saving}
-                  />
-                  <NoticeField
-                    label="기입 요청 (콤마 구분)"
-                    value={noticeMeta.requestFields}
-                    onChange={(v) =>
-                      setNoticeMeta({ ...noticeMeta, requestFields: v })
-                    }
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>톤 오버라이드 (선택)</Label>
-              <Input
-                value={toneOverride}
-                onChange={(e) => setToneOverride(e.target.value)}
-                placeholder="예: 사무적·간결, 프리미엄 톤 지양"
-                disabled={saving}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -401,7 +201,6 @@ export function IntentForm({
 
       </section>
 
-      {!isNotice && (
       <section className="space-y-3" aria-labelledby="intent-section-content">
         <div className="px-1">
           <h2 id="intent-section-content" className="text-sm font-semibold tracking-tight">
@@ -513,7 +312,6 @@ export function IntentForm({
       </Card>
 
       </section>
-      )}
 
       <section className="space-y-3" aria-labelledby="intent-section-options">
         <div className="px-1">
@@ -585,7 +383,7 @@ export function IntentForm({
         </CardContent>
       </Card>
 
-      {!isNotice && (usesRealAssets || keyVisuals.length > 0) && (
+      {(usesRealAssets || keyVisuals.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">실사 자산 (선택)</CardTitle>
@@ -705,13 +503,11 @@ export function IntentForm({
               ? "준비됨 — 시작 시 Strategy 단계로 이동합니다"
               : !name.trim()
                 ? "● 캠페인 이름을 입력하세요"
-                : isNotice
-                  ? "● 안내문 원문을 붙여넣으세요"
-                  : offers.length === 0
-                    ? "● 오퍼를 등록하세요"
-                    : audiences.length === 0
-                      ? "● 페르소나를 등록하세요"
-                      : "● 필수 항목 확인"}
+                : offers.length === 0
+                  ? "● 오퍼를 등록하세요"
+                  : audiences.length === 0
+                    ? "● 페르소나를 등록하세요"
+                    : "● 필수 항목 확인"}
           </span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => router.back()} disabled={saving}>
@@ -723,29 +519,6 @@ export function IntentForm({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function NoticeField({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      />
     </div>
   );
 }
