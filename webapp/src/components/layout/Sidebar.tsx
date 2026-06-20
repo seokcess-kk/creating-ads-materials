@@ -88,6 +88,42 @@ export function Sidebar({ recentBrands }: SidebarProps) {
           </Link>
         ))}
 
+        {currentBrandId && (
+          <div className="pt-4">
+            <p className="px-3 mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              현재 브랜드
+            </p>
+            <div className="space-y-0.5">
+              <Link
+                href={`/brands/${currentBrandId}/cardnews`}
+                prefetch
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
+                  pathname === `/brands/${currentBrandId}/cardnews`
+                    ? "bg-primary/10 text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <span aria-hidden>📋</span>
+                <span>카드뉴스</span>
+              </Link>
+              <Link
+                href={`/brands/${currentBrandId}`}
+                prefetch
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors",
+                  pathname === `/brands/${currentBrandId}`
+                    ? "bg-primary/10 text-foreground font-medium"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <span aria-hidden>🧠</span>
+                <span>브랜드 메모리</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {brands.length > 0 && (
           <div className="pt-4">
             <button

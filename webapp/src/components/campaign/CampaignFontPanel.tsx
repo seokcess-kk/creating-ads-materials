@@ -43,6 +43,9 @@ export function CampaignFontPanel({
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
+    // 추천은 Visual 결과 기반이라 Visual 완료 전엔 부정확 → fetch 지연(초기 로드 절감).
+    // 수동 선택('모두 보기')은 visualReady와 무관하게 항상 가능.
+    if (!visualReady) return;
     let cancelled = false;
     (async () => {
       setLoadingSuggestions(true);
@@ -64,7 +67,7 @@ export function CampaignFontPanel({
     return () => {
       cancelled = true;
     };
-  }, [campaignId]);
+  }, [campaignId, visualReady]);
 
   async function apply(target: TonePresetId | null) {
     setApplying(target ?? "clear");
