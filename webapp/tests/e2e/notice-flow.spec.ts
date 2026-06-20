@@ -91,14 +91,14 @@ test.describe("안내문(notice) 모드 — 라우트/DB/게이트 E2E", () => {
       timeout: 20_000,
     });
     await page.getByRole("button", { name: "Strategy 생성" }).click();
-    // manual 모드 → 자동선택 없이 전략 카드 노출(각 카드에 "카피 더 보기")
+    // manual 모드 → 자동선택 없이 전략 카드 노출(각 카드에 "카피 변형 더 생성")
     await expect(
-      page.getByRole("button", { name: "카피 더 보기" }).first(),
+      page.getByRole("button", { name: "카피 변형 더 생성" }).first(),
       "Strategy가 게이트 우회로 생성되어야 함",
     ).toBeVisible({ timeout: 180_000 });
 
     // 7) 첫 전략 선택 + Copy 생성 (notice 카피)
-    await page.getByRole("button", { name: "카피 더 보기" }).first().click();
+    await page.getByRole("button", { name: "카피 변형 더 생성" }).first().click();
     await expect(
       page.getByRole("button", { name: "이 카피 선택" }).first(),
       "notice 모드 Copy가 생성되어야 함",
