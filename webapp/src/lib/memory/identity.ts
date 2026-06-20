@@ -39,8 +39,3 @@ export async function upsertIdentity(
   if (error) throw error;
   return data as BrandIdentity;
 }
-
-export function getPrimaryLogo(logos: BrandLogo[]): BrandLogo | null {
-  if (logos.length === 0) return null;
-  return logos.find((l) => l.is_primary) ?? logos[0];
-}

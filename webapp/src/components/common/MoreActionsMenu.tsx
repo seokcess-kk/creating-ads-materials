@@ -98,35 +98,3 @@ export function MoreActionsMenu({
     </div>
   );
 }
-
-interface MenuItemProps {
-  onClick?: (e: React.MouseEvent) => void;
-  destructive?: boolean;
-  disabled?: boolean;
-  children: ReactNode;
-}
-
-export function MenuItem({
-  onClick,
-  destructive,
-  disabled,
-  children,
-}: MenuItemProps) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "block w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors",
-        destructive
-          ? "text-destructive hover:bg-destructive/10"
-          : "hover:bg-muted",
-        disabled && "cursor-not-allowed opacity-50",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

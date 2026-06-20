@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["scripts/**/*.ts!", "next.config.{js,ts,mjs}", "*.config.{js,ts,mjs}"],
+  "ignore": ["src/components/ui/**"],
+  "ignoreDependencies": ["sharp"],
+  "ignoreExportsUsedInFile": true
+}

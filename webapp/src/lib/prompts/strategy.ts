@@ -12,8 +12,6 @@ import { formatNoticeMeta } from "@/lib/notice/extract";
 export const STRATEGY_PROMPT_VERSION = "strategy@2.2.0";
 export const STRATEGY_TOOL_NAME = "record_strategy_alternatives";
 
-export type StrategyRole = "safe" | "explore" | "challenge";
-
 // 샘플 카피. Strategy 단계에서 대안별로 1개씩 생성하여 사용자가
 // Strategy 선택 화면에서 카피 샘플까지 한 번에 검토 가능하도록 한다.
 // 별도 Copy 단계 없이도 이 샘플을 Visual로 바로 넘길 수 있음.
@@ -50,7 +48,6 @@ export type StrategyAlternative = z.infer<typeof StrategyAlternativeSchema>;
 export const StrategyOutputSchema = z.object({
   alternatives: z.array(StrategyAlternativeSchema).length(3),
 });
-export type StrategyOutput = z.infer<typeof StrategyOutputSchema>;
 
 export const strategyTool: Tool = {
   name: STRATEGY_TOOL_NAME,

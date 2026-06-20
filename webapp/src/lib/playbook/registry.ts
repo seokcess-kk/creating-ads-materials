@@ -36,19 +36,3 @@ export function getPlaybook(
   if (latest && latest.funnelStage === funnelStage) return latest;
   throw new Error(`플레이북 없음: channel=${channel}, stage=${funnelStage}`);
 }
-
-export function listPlaybookVersions(): Array<{
-  version: string;
-  channel: string;
-  funnelStage: string;
-}> {
-  return ALL_PLAYBOOKS.map((p) => ({
-    version: p.version,
-    channel: p.channel,
-    funnelStage: p.funnelStage,
-  }));
-}
-
-export function listSupportedChannels(): string[] {
-  return ALL_PLAYBOOKS.map((p) => p.channel);
-}

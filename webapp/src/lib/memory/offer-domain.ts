@@ -141,5 +141,3 @@ export function getDomainOptions(category: string | null | undefined): DomainOpt
   if (!category) return GENERIC;
   return REGISTRY[category.toLowerCase()] ?? GENERIC;
 }
-
-export const KNOWN_CATEGORIES = Object.keys(REGISTRY);

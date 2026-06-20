@@ -3,7 +3,6 @@ import type {
   Message,
   MessageCreateParams,
   MessageParam,
-  TextBlock,
   TextBlockParam,
   Tool,
   ToolUseBlock,
@@ -95,13 +94,6 @@ export async function callClaude(input: ClaudeCallInput): Promise<Message> {
   }
 
   return response;
-}
-
-export function extractText(response: Message): string {
-  return response.content
-    .filter((b): b is TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 }
 
 export function extractToolUse<T = Record<string, unknown>>(

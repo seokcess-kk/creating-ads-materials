@@ -21,9 +21,3 @@ export async function signIn(formData: FormData) {
 
   redirect(redirectTo.startsWith("/") ? redirectTo : "/");
 }
-
-export async function signOut() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  redirect("/login");
-}

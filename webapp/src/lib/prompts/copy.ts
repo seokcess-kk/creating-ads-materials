@@ -40,7 +40,6 @@ export const CopyOutputSchema = z.object({
   variants: z.array(CopyVariantSchema).min(5).max(6),
   critiques: z.array(CopyCritiqueSchema),
 });
-export type CopyOutput = z.infer<typeof CopyOutputSchema>;
 
 export const copyTool: Tool = {
   name: COPY_TOOL_NAME,

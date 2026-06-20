@@ -10,7 +10,6 @@ import type {
 } from "@/lib/memory/types";
 import type { UsageContext } from "@/lib/usage/record";
 
-export const OFFER_DRAFT_VERSION = "offer-draft@1.0.0";
 export const OFFER_DRAFT_TOOL = "record_offer_drafts";
 
 const OfferDraftSchema = z.object({
@@ -23,8 +22,6 @@ const OfferDraftSchema = z.object({
   angle: z.string(),
   rationale: z.string(),
 });
-export type OfferDraft = z.infer<typeof OfferDraftSchema>;
-
 export const OfferDraftBatchSchema = z.object({
   drafts: z.array(OfferDraftSchema).min(2).max(6),
 });

@@ -328,45 +328,6 @@ export const VisualValidatorSchema = z.object({
 });
 export type VisualValidatorResult = z.infer<typeof VisualValidatorSchema>;
 
-export const visualValidatorTool: Tool = {
-  name: VISUAL_VALIDATOR_TOOL,
-  description: "광고 비주얼 후보를 4축으로 평가",
-  input_schema: {
-    type: "object",
-    properties: {
-      hookStrength: {
-        type: "number",
-        description: "1~5. 첫 3초 스크롤 멈춤. 수치·대비·대상 명확도",
-      },
-      textReady: {
-        type: "number",
-        description:
-          "1~5. 헤드라인·CTA가 이미지 안에서 이미 잘 렌더되어 있는가 (loader/타이포 품질)",
-      },
-      brandConsistency: {
-        type: "number",
-        description: "1~5. 브랜드 컬러·톤 일관성",
-      },
-      policyClear: {
-        type: "number",
-        description:
-          "1~5. Meta 정책 위반 요소 없음(before-after, 개인 속성 단정, 부적절 콘텐츠)",
-      },
-      overall: { type: "number", description: "1~5. 4축 산술 평균" },
-      issues: { type: "array", items: { type: "string" } },
-      suggestions: { type: "array", items: { type: "string" } },
-      notes: { type: "string" },
-    },
-    required: [
-      "hookStrength",
-      "textReady",
-      "brandConsistency",
-      "policyClear",
-      "overall",
-    ],
-  },
-};
-
 export function buildValidatorSystem(isNotice = false): string {
   if (isNotice) {
     return `당신은 안내문 소재용 "글자 없는 배경"을 4축으로 평가하는 크리에이티브 디렉터입니다. 텍스트·로고는 이후 합성 단계에서 얹히므로 이 이미지에는 텍스트·로고가 없어야 정상입니다.
@@ -392,36 +353,6 @@ export function buildValidatorSystem(isNotice = false): string {
 도구 ${VISUAL_VALIDATOR_TOOL}로 기록.`;
 }
 
-export function buildValidatorMessages(
-  imageUrl: string,
-  ctx: VisualPromptContext,
-  spec: VisualVariantSpec,
-): MessageParam[] {
-  const brand = ctx.memory.brand.name;
-  const context = ctx.isNotice
-    ? `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} 안내문 소재용 "글자 없는 배경" 후보(${spec.label})입니다.
-텍스트·로고는 이후 합성에서 얹히므로 이 이미지엔 글자가 없어야 정상입니다.
-오버레이될 카피(참고) — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
-배경 기준 4축으로 평가해주세요.`
-    : `이 이미지는 브랜드 "${brand}"의 ${ctx.channel.label} BOFU 광고 후보(${spec.label})입니다.
-전략: ${ctx.strategy.angleName} (${ctx.strategy.hookType}, ${ctx.strategy.frameworkId})
-예상 카피 — 헤드라인: "${ctx.selectedCopy.headline}" / CTA: "${ctx.selectedCopy.cta}"
-이 맥락에서 4축으로 평가해주세요.`;
-
-  return [
-    {
-      role: "user",
-      content: [
-        {
-          type: "image",
-          source: { type: "url", url: imageUrl },
-        },
-        { type: "text", text: context },
-      ],
-    },
-  ];
-}
-
 // ========== 배치 Validator (variant N개를 한 번의 Claude 호출로 평가) ==========
 // 기존 per-variant 3회 호출을 1회로 합쳐 공통 context 재전송을 제거. 입력 토큰 65%↓.
 
@@ -435,7 +366,6 @@ export type VisualBatchValidatorItem = z.infer<typeof VisualBatchValidatorItemSc
 export const VisualBatchValidatorSchema = z.object({
   variants: z.array(VisualBatchValidatorItemSchema).min(1),
 });
-export type VisualBatchValidatorResult = z.infer<typeof VisualBatchValidatorSchema>;
 
 export const visualBatchValidatorTool: Tool = {
   name: VISUAL_BATCH_VALIDATOR_TOOL,

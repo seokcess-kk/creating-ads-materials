@@ -1,17 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { CardNewsRecord, CardNewsResult } from "./types";
 
-export async function getCardNews(campaignId: string): Promise<CardNewsRecord | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("cardnews")
-    .select("*")
-    .eq("campaign_id", campaignId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as CardNewsRecord | null) ?? null;
-}
-
 export async function upsertCardNews(
   campaignId: string,
   result: CardNewsResult,

@@ -1,6 +1,6 @@
 // 상태 enum의 사용자 표시 라벨 단일 소스. DB enum 원문(draft/visual/complete 등)이
 // 여러 화면에 그대로 노출되지 않도록 여기서만 매핑한다.
-import type { CampaignStatus, RunStatus, CreativeStageName } from "./types";
+import type { CampaignStatus, RunStatus } from "./types";
 
 const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
   draft: "초안",
@@ -21,23 +21,10 @@ const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   failed: "실패",
 };
 
-const STAGE_LABELS: Record<CreativeStageName, string> = {
-  strategy: "Strategy",
-  copy: "Copy",
-  visual: "Visual",
-  retouch: "Retouch",
-  compose: "Compose",
-  ship: "Ship",
-};
-
 export function campaignStatusLabel(status: string): string {
   return CAMPAIGN_STATUS_LABELS[status as CampaignStatus] ?? status;
 }
 
 export function runStatusLabel(status: string): string {
   return RUN_STATUS_LABELS[status as RunStatus] ?? status;
-}
-
-export function stageLabel(stage: string): string {
-  return STAGE_LABELS[stage as CreativeStageName] ?? stage;
 }

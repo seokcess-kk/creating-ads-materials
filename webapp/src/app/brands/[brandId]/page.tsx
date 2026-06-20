@@ -162,6 +162,9 @@ export default async function BrandDetailPage({
         description={brand.website_url ?? undefined}
         actions={
           <>
+            <Link href={`/brands/${brandId}/cardnews`}>
+              <Button size="sm">📋 카드뉴스</Button>
+            </Link>
             <Link href={`/brands/${brandId}/insights`}>
               <Button variant="outline" size="sm">
                 Insights
@@ -259,6 +262,11 @@ export default async function BrandDetailPage({
                 </Button>
               </Link>
             )}
+            <Link href={`/brands/${brandId}/cardnews`}>
+              <Button variant="outline" size="sm">
+                📋 카드뉴스
+              </Button>
+            </Link>
             <Link href={`/brands/${brandId}/campaigns/new`}>
               <Button size="sm" disabled={!memoryReady}>
                 + 캠페인 시작
@@ -268,8 +276,14 @@ export default async function BrandDetailPage({
 
           {!memoryReady && (
             <Card className="bg-muted/30">
-              <CardContent className="py-4 text-sm text-muted-foreground">
-                캠페인 시작 전에 Identity · Offer · Audience 최소 1개씩 설정해주세요.
+              <CardContent className="py-4 text-sm text-muted-foreground space-y-2">
+                <p>캠페인 시작 전에 Identity · Offer · Audience 최소 1개씩 설정해주세요.</p>
+                <Link
+                  href={`/brands/${brandId}/cardnews`}
+                  className="inline-block text-primary underline"
+                >
+                  메모리 없이 바로 카드뉴스 만들기 →
+                </Link>
               </CardContent>
             </Card>
           )}

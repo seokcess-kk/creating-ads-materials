@@ -1,5 +1,3 @@
-import type { FontTier } from "@/lib/memory/types";
-
 export interface Tier1FontWeight {
   name: string;
   cdnUrl: string;
@@ -18,8 +16,6 @@ export interface Tier1FontFamily {
   licenseUrl?: string;
   source: string;
 }
-
-export const TIER: FontTier = "tier1";
 
 export const TIER1_FAMILIES: Tier1FontFamily[] = [
   {

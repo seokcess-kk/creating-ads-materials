@@ -97,16 +97,6 @@ export const TONE_PRESETS: TonePreset[] = [
   },
 ];
 
-export function findPresetByIndustry(industry: string | null | undefined): TonePreset | null {
-  if (!industry) return null;
-  const normalized = industry.toLowerCase();
-  return (
-    TONE_PRESETS.find((p) =>
-      p.matchIndustries.some((i) => normalized.includes(i) || i.includes(normalized)),
-    ) ?? null
-  );
-}
-
 export function getPresetById(id: TonePresetId): TonePreset | null {
   return TONE_PRESETS.find((p) => p.id === id) ?? null;
 }

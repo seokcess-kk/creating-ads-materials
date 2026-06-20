@@ -27,7 +27,3 @@ export function resolveFunnelGuide(
   if (contentMode === "notice") return NOTICE_GUIDE;
   return getFunnelGuide(goal);
 }
-
-export function isActiveFunnelStage(stage: FunnelStage): boolean {
-  return Boolean(GUIDES[stage]);
-}

@@ -125,41 +125,6 @@ export async function listRecentShippedRuns(
   }));
 }
 
-export interface CampaignProgress {
-  totalRuns: number;
-  shippedRuns: number;
-  runningRuns: number;
-  pendingRuns: number;
-  failedRuns: number;
-}
-
-/**
- * 캠페인의 활성 소재 진행도를 derived로 계산. campaign.status에 의존하지 않음.
- */
-export async function getCampaignProgress(
-  campaignId: string,
-): Promise<CampaignProgress> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("creative_runs")
-    .select("status")
-    .eq("campaign_id", campaignId)
-    .is("archived_at", null);
-  if (error) throw error;
-  const rows = (data ?? []) as Array<{ status: string }>;
-  return {
-    totalRuns: rows.length,
-    shippedRuns: rows.filter((r) => r.status === "complete").length,
-    runningRuns: rows.filter((r) =>
-      ["strategy", "copy", "visual", "retouch", "compose", "ship"].includes(
-        r.status,
-      ),
-    ).length,
-    pendingRuns: rows.filter((r) => r.status === "pending").length,
-    failedRuns: rows.filter((r) => r.status === "failed").length,
-  };
-}
-
 export async function getCampaign(campaignId: string): Promise<Campaign | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -683,19 +648,6 @@ export async function listBatches(stageId: string): Promise<BatchSummary[]> {
     }
   }
   return Array.from(groups.values()).sort((a, b) => b.batch_index - a.batch_index);
-}
-
-export async function getVariantById(
-  variantId: string,
-): Promise<CreativeVariant | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("creative_variants")
-    .select("*")
-    .eq("id", variantId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as CreativeVariant | null) ?? null;
 }
 
 export async function selectVariant(

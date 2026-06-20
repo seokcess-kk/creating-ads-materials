@@ -198,7 +198,7 @@ export function IntentForm({
       <section className="space-y-3" aria-labelledby="intent-section-basic">
         <div className="px-1">
           <h2 id="intent-section-basic" className="text-sm font-semibold tracking-tight">
-            1. 기본 정보
+            기본 정보
           </h2>
           <p className="text-xs text-muted-foreground">캠페인이 노출될 채널과 식별용 이름</p>
         </div>
@@ -405,7 +405,7 @@ export function IntentForm({
       <section className="space-y-3" aria-labelledby="intent-section-content">
         <div className="px-1">
           <h2 id="intent-section-content" className="text-sm font-semibold tracking-tight">
-            2. 콘텐츠
+            콘텐츠
           </h2>
           <p className="text-xs text-muted-foreground">전환을 일으킬 오퍼와 대상 페르소나</p>
         </div>
@@ -518,7 +518,7 @@ export function IntentForm({
       <section className="space-y-3" aria-labelledby="intent-section-options">
         <div className="px-1">
           <h2 id="intent-section-options" className="text-sm font-semibold tracking-tight">
-            3. 옵션
+            옵션
           </h2>
           <p className="text-xs text-muted-foreground">자동화 수준·실사 자산·제약 조건</p>
         </div>

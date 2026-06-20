@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { PencilIcon, PlusIcon, ArchiveIcon, CheckIcon, XIcon } from "lucide-react";
+import { PencilIcon, ArchiveIcon, CheckIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { NewMaterialDialog } from "./NewMaterialDialog";
@@ -316,6 +316,3 @@ export function MaterialSwitcher({
     </div>
   );
 }
-
-// helper icon re-export so consumers can import it next to MaterialSwitcher
-export const MaterialIcons = { PlusIcon };

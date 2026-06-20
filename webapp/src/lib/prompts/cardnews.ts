@@ -6,8 +6,6 @@ import { formatNoticeMeta } from "@/lib/notice/extract";
 export const CARDNEWS_PROMPT_VERSION = "cardnews@0.1.0";
 export const CARDNEWS_TOOL_NAME = "record_cardnews_outline";
 
-export type SlideRole = "hook" | "point" | "cta";
-
 export const SlideSchema = z.object({
   index: z.number().int().min(1),
   role: z.enum(["hook", "point", "cta"]),
@@ -25,7 +23,6 @@ export const CardNewsOutlineSchema = z.object({
   title: z.string().min(1).max(40),
   slides: z.array(SlideSchema).min(4).max(6),
 });
-export type CardNewsOutline = z.infer<typeof CardNewsOutlineSchema>;
 
 export const cardNewsTool: Tool = {
   name: CARDNEWS_TOOL_NAME,

@@ -17,12 +17,6 @@ export function getFramework(id: FrameworkId): Framework {
   return f;
 }
 
-export function listFrameworks(funnelStage?: "TOFU" | "MOFU" | "BOFU"): Framework[] {
-  const unique = [PAS, FAB, FOUR_U];
-  if (!funnelStage) return unique;
-  return unique.filter((f) => f.compatibleFunnels.includes(funnelStage));
-}
-
 export function recommendFrameworksFor(
   funnelStage: "TOFU" | "MOFU" | "BOFU",
 ): FrameworkId[] {

@@ -76,13 +76,3 @@ export function buildPreferenceDigest(memory: BrandMemory): string {
   }
   return lines.join("\n");
 }
-
-export function hasPreferenceSignal(memory: BrandMemory): boolean {
-  const learnings = memory.learnings;
-  if (!learnings) return false;
-  const hook = learnings.hook_win_rates_json as Record<string, number> | undefined;
-  const fw = learnings.framework_win_rates_json as Record<string, number> | undefined;
-  const hookCount = hook ? Object.keys(hook).length : 0;
-  const fwCount = fw ? Object.keys(fw).length : 0;
-  return hookCount > 0 || fwCount > 0;
-}
