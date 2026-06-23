@@ -11,12 +11,14 @@ export const maxDuration = 180;
 
 const Schema = z.object({
   concept: z.string().min(4).max(1000),
+  keyMessage: z.string().max(500).nullable().optional(),
   headline: z.string().max(120).nullable().optional(),
   sub: z.string().max(200).nullable().optional(),
   cta: z.string().max(60).nullable().optional(),
   tone: z.string().max(300).nullable().optional(),
   aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   referenceImageUrl: z.string().url().nullable().optional(),
+  referenceMode: z.enum(["style", "base"]).optional(),
   brandId: z.string().uuid().nullable().optional(),
   renderMode: z.enum(["overlay", "full"]).optional(),
   count: z.number().int().min(1).max(4).optional(),

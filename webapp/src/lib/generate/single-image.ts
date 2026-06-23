@@ -12,16 +12,20 @@ import {
   EMPTY_BRAND_CONTEXT,
   type BrandContext,
 } from "./prompt";
+import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
+import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import type {
   SingleImageInput,
   SingleImageResult,
   GeneratedImageVariant,
   SingleRenderMode,
+  ReferenceMode,
+  DesignReference,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.1.0";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.2.0";
 
-// 후보별 다양성 — 프롬프트에 스타일 변주를 인덱스로 주입(랜덤 대신 결정적).
+// 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
   "minimal and clean composition with generous negative space",
   "bold, vivid colors with strong focal contrast",
@@ -37,9 +41,10 @@ function decideMode(input: SingleImageInput): SingleRenderMode {
 
 /**
  * 단일 이미지 N장 후보 생성.
- *  - overlay: 텍스트 없는 배경(generate/edit) → 컴포지터 한글 오버레이
- *  - full:    이미지에 텍스트까지 베이킹(또는 텍스트 없는 순수 비주얼)
- *  - 참고이미지가 있으면 editImage로 베이스를 생성.
+ *  - 사용자의 의도/맥락을 크리에이티브 브리프로 모아 아트디렉터(Claude)가
+ *    gpt-image 최적화 프롬프트 N개로 확장 → 각 프롬프트로 생성.
+ *  - 레퍼런스: style(디자인 요소만 차용) / base(레퍼런스 자체를 editImage로 변형).
+ *  - overlay 모드면 텍스트 없는 배경에 컴포지터로 한글 오버레이.
  */
 export async function generateSingleImageVariants(
   generationId: string,
@@ -48,7 +53,9 @@ export async function generateSingleImageVariants(
   const aspectRatio: AspectRatio = input.aspectRatio ?? "1:1";
   const count = Math.min(Math.max(input.count ?? 3, 1), 4);
   const mode = decideMode(input);
+  const hasText = Boolean(input.headline || input.sub || input.cta);
 
+  // 선택적 브랜드 컨텍스트(컬러/로고/톤)
   let brand: BrandContext = EMPTY_BRAND_CONTEXT;
   if (input.brandId) {
     try {
@@ -58,65 +65,99 @@ export async function generateSingleImageVariants(
     }
   }
 
-  const reference = input.referenceImageUrl
-    ? await fetchAsBase64(input.referenceImageUrl)
-    : null;
+  // 레퍼런스 처리
+  const refUrl = input.referenceImageUrl?.trim() || null;
+  const refMode: ReferenceMode = input.referenceMode ?? "style";
+  const isEdit = Boolean(refUrl) && refMode === "base";
 
-  const textFields = {
-    headline: input.headline,
-    sub: input.sub,
-    cta: input.cta,
+  let designRef: DesignReference | null = null;
+  if (refUrl && refMode === "style") {
+    designRef = await analyzeReferenceDesign(refUrl, {
+      operation: "single_image_ref_analyze",
+      brandId: input.brandId ?? null,
+      metadata: { generationId },
+    });
+  }
+  const reference = isEdit && refUrl ? await fetchAsBase64(refUrl) : null;
+
+  // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
+  const brief: CreativeBrief = {
+    concept: input.concept,
+    keyMessage: input.keyMessage,
+    copy: { headline: input.headline, sub: input.sub, cta: input.cta },
+    tone: input.tone,
+    brandHint: brand.promptHint || null,
+    designRef,
+    aspectRatio,
+    mode,
+    isEdit,
   };
+  const directed = await buildImagePrompts(brief, count, {
+    operation: "single_image_art_director",
+    brandId: input.brandId ?? null,
+    metadata: { generationId, mode, refMode: refUrl ? refMode : "none" },
+  });
+
+  const designRefText = designRef ? formatDesignReference(designRef) : null;
+  function fallbackPrompt(i: number): string {
+    const styleHint = STYLE_HINTS[i % STYLE_HINTS.length];
+    if (isEdit) {
+      return buildEditPrompt({
+        mode,
+        concept: input.concept,
+        tone: input.tone,
+        brand,
+        styleHint,
+        designRef: designRefText,
+        headline: input.headline,
+        sub: input.sub,
+        cta: input.cta,
+      });
+    }
+    if (mode === "overlay") {
+      return buildTextlessBackgroundPrompt({
+        concept: input.concept,
+        tone: input.tone,
+        brand,
+        styleHint,
+        designRef: designRefText,
+      });
+    }
+    return buildFullImagePrompt({
+      concept: input.concept,
+      tone: input.tone,
+      brand,
+      styleHint,
+      designRef: designRefText,
+      headline: input.headline,
+      sub: input.sub,
+      cta: input.cta,
+    });
+  }
 
   const results = await Promise.allSettled(
     Array.from({ length: count }, (_, i) => i).map(async (i) => {
-      const styleHint = STYLE_HINTS[i % STYLE_HINTS.length];
-      const label = `v${i + 1}`;
+      const prompt = directed?.[i]?.prompt ?? fallbackPrompt(i);
+      const label = directed?.[i]?.label || `v${i + 1}`;
       const usageContext = {
-        operation: mode === "overlay" ? "single_image_bg" : "single_image_full",
+        operation: isEdit ? "single_image_edit" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, label, mode, styleHint },
+        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none" },
       };
 
       // 1) 베이스 이미지
-      let base;
-      if (reference) {
-        const prompt = buildEditPrompt({
-          mode,
-          concept: input.concept,
-          tone: input.tone,
-          brand,
-          styleHint,
-          ...textFields,
-        });
-        base = await editImage({
-          prompt,
-          baseImage: reference,
-          aspectRatio,
-          imageSize: "1K",
-          usageContext: { ...usageContext, operation: "single_image_edit" },
-        });
-      } else if (mode === "overlay") {
-        const prompt = buildTextlessBackgroundPrompt({
-          concept: input.concept,
-          tone: input.tone,
-          brand,
-          styleHint,
-        });
-        base = await generateImage({ prompt, aspectRatio, imageSize: "1K", usageContext });
-      } else {
-        const prompt = buildFullImagePrompt({
-          concept: input.concept,
-          tone: input.tone,
-          brand,
-          styleHint,
-          ...textFields,
-        });
-        base = await generateImage({ prompt, aspectRatio, imageSize: "1K", usageContext });
-      }
+      const base = reference
+        ? await editImage({
+            prompt,
+            baseImage: reference,
+            aspectRatio,
+            imageSize: "1K",
+            usageContext,
+          })
+        : await generateImage({ prompt, aspectRatio, imageSize: "1K", usageContext });
 
       // 2) overlay면 한글 텍스트 합성, 아니면 베이스 그대로 업로드
-      if (mode === "overlay") {
+      if (mode === "overlay" && hasText) {
         const bgBuf = Buffer.from(base.base64, "base64");
         const config = singleAdConfig({
           headline: input.headline,
@@ -126,7 +167,7 @@ export async function generateSingleImageVariants(
           brandColor: brand.primaryColor,
         });
         const composed = await renderComposite(bgBuf, config);
-        const uploaded = await uploadGeneratedImage(generationId, label, {
+        const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
           mimeType: "image/png",
           base64: composed.toString("base64"),
         });
@@ -138,12 +179,12 @@ export async function generateSingleImageVariants(
         } satisfies GeneratedImageVariant;
       }
 
-      const uploaded = await uploadGeneratedImage(generationId, label, base);
+      const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, base);
       return {
         label,
         url: uploaded.url,
         path: uploaded.path,
-        mode: reference ? "edit" : "full",
+        mode: isEdit ? "edit" : "full",
       } satisfies GeneratedImageVariant;
     }),
   );

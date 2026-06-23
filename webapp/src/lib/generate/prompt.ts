@@ -57,6 +57,8 @@ interface BasePromptInput {
   tone?: string | null;
   brand?: BrandContext | null;
   styleHint?: string | null;
+  /** 레퍼런스에서 추출한 디자인 디스크립터(이미 문자열로 직렬화됨) */
+  designRef?: string | null;
 }
 
 interface TextPromptInput extends BasePromptInput {
@@ -74,6 +76,7 @@ export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
     input.styleHint ? `Style: ${input.styleHint}.` : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
+    input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
     "Leave a calm, uncluttered area with good contrast for overlaid text.",
     "High-quality, professional advertising photography or illustration.",
   ]);
@@ -97,6 +100,7 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
       : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
+    input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
     "Strong visual hierarchy, advertising-grade composition.",
   ]);
 }
