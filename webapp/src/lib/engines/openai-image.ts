@@ -112,16 +112,20 @@ export async function editImage(input: EditImageInput): Promise<ImagePart> {
   const size = sizeForAspect(input.aspectRatio);
   const quality = qualityForSize(input.imageSize);
 
-  // base64 → File (마스크 없이 프롬프트만으로 전체 편집)
-  const buffer = Buffer.from(input.baseImage.base64, "base64");
-  const ext = input.baseImage.mimeType.split("/")[1] ?? "png";
-  const file = await toFile(buffer, `base.${ext}`, {
-    type: input.baseImage.mimeType,
-  });
+  // base64 → File (마스크 없이 프롬프트만으로 편집). 여러 장이면 배열로 전달
+  // (gpt-image는 다중 입력 이미지를 지원 — 예: 베이스 + 브랜드 로고).
+  const parts = [input.baseImage, ...(input.extraImages ?? [])];
+  const files = await Promise.all(
+    parts.map(async (p, i) => {
+      const buffer = Buffer.from(p.base64, "base64");
+      const ext = p.mimeType.split("/")[1] ?? "png";
+      return toFile(buffer, `img_${i}.${ext}`, { type: p.mimeType });
+    }),
+  );
 
   const response = await getClient().images.edit({
     model: OPENAI_IMAGE_MODEL,
-    image: file,
+    image: files.length > 1 ? files : files[0],
     prompt: input.prompt,
     size,
     quality,

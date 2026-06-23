@@ -20,6 +20,8 @@ export interface GenerateImageInput {
 export interface EditImageInput {
   prompt: string;
   baseImage: ImagePart;
+  /** 추가 참조 이미지(예: 브랜드 로고). 모델이 함께 보고 통합/변형. */
+  extraImages?: ImagePart[];
   aspectRatio?: AspectRatio;
   imageSize?: ImageSize;
   usageContext?: UsageContext;

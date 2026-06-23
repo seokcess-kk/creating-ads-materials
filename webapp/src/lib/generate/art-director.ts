@@ -24,6 +24,8 @@ export interface CreativeBrief {
   mode: SingleRenderMode;
   /** 레퍼런스 사진 자체를 변형(editImage)하는 경우 true */
   isEdit?: boolean;
+  /** 브랜드 로고를 입력 이미지로 함께 전달해 통합하는 경우 true */
+  hasLogo?: boolean;
 }
 
 const ImagePromptSchema = z.object({
@@ -77,8 +79,9 @@ TEXT HANDLING (critical):
 - If mode = "overlay": the image MUST be a CLEAN, TEXTLESS background — NO letters, numbers, words, or logos. Deliberately leave calm, uncluttered NEGATIVE SPACE with good contrast where the Korean copy will be overlaid later (size the empty area to fit the given copy length and placement).
 - If mode = "full": render the given Korean text in the image clearly with PERFECT, correct Hangul; do not distort or invent characters. Strong typographic hierarchy.
 
-EDIT MODE:
-- If isEdit = true, the prompt is a TRANSFORMATION instruction applied to a provided reference photo: preserve the core subject, restyle it into the ad direction.
+INPUT IMAGES (when provided):
+- If a base reference photo is provided (isEdit), write a TRANSFORMATION instruction: preserve its core subject, restyle it into the ad direction.
+- If a brand logo is provided (hasLogo), instruct to INTEGRATE the brand logo into the scene naturally and KEEP IT UNDISTORTED and legible — place it small (a corner, or subtly on the product/packaging). Never alter the logo's letters, colors, or shape, and do NOT invent a different logo.
 
 Output ONLY via the ${TOOL} tool. Prompts must be in English (Korean text-to-render stays in Korean inside the prompt).`;
 }
@@ -87,6 +90,8 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
   const lines: string[] = [];
   lines.push(`variants requested: ${count}`);
   lines.push(`mode: ${brief.mode}${brief.isEdit ? " (edit a provided reference photo)" : ""}`);
+  if (brief.isEdit) lines.push("input image: a base reference photo to transform (preserve subject).");
+  if (brief.hasLogo) lines.push("input image: the brand logo — integrate naturally and keep it undistorted/legible.");
   lines.push(`aspect ratio: ${brief.aspectRatio}`);
   lines.push(`concept / scene: ${brief.concept.trim()}`);
   if (brief.keyMessage?.trim()) lines.push(`key message to communicate: ${brief.keyMessage.trim()}`);

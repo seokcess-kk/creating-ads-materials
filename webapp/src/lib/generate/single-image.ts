@@ -1,7 +1,8 @@
-import { generateImage, editImage, type AspectRatio } from "@/lib/engines";
+import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
 import { renderComposite } from "@/lib/canvas/compositor";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
+import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { singleAdConfig } from "./render";
 import {
@@ -23,7 +24,7 @@ import type {
   DesignReference,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.2.0";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.3.0";
 
 // 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
@@ -33,6 +34,9 @@ const STYLE_HINTS = [
   "premium editorial look with refined details",
 ];
 
+const LOGO_NOTE =
+  " Integrate the provided brand logo into the scene naturally and keep it undistorted and legible (small, in a corner or subtly on the product). Do not alter its letters or shape.";
+
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
   if (!hasText) return "full"; // 텍스트 없으면 순수 비주얼
@@ -41,9 +45,9 @@ function decideMode(input: SingleImageInput): SingleRenderMode {
 
 /**
  * 단일 이미지 N장 후보 생성.
- *  - 사용자의 의도/맥락을 크리에이티브 브리프로 모아 아트디렉터(Claude)가
- *    gpt-image 최적화 프롬프트 N개로 확장 → 각 프롬프트로 생성.
- *  - 레퍼런스: style(디자인 요소만 차용) / base(레퍼런스 자체를 editImage로 변형).
+ *  - 의도/맥락을 크리에이티브 브리프로 모아 아트디렉터(Claude)가 gpt-image 프롬프트 N개로 확장.
+ *  - 브랜드: 카테고리(프롬프트 힌트) + 로고(입력 이미지로 전달해 통합). 색상은 미사용.
+ *  - 레퍼런스: style(디자인 요소만 차용) / base(레퍼런스 자체를 변형).
  *  - overlay 모드면 텍스트 없는 배경에 컴포지터로 한글 오버레이.
  */
 export async function generateSingleImageVariants(
@@ -55,11 +59,15 @@ export async function generateSingleImageVariants(
   const mode = decideMode(input);
   const hasText = Boolean(input.headline || input.sub || input.cta);
 
-  // 선택적 브랜드 컨텍스트(컬러/로고/톤)
+  // 선택적 브랜드 컨텍스트(카테고리 + 로고만)
   let brand: BrandContext = EMPTY_BRAND_CONTEXT;
   if (input.brandId) {
     try {
-      brand = buildBrandContext(await getIdentity(input.brandId));
+      const [b, identity] = await Promise.all([
+        getBrand(input.brandId),
+        getIdentity(input.brandId),
+      ]);
+      brand = buildBrandContext(b, identity);
     } catch {
       brand = EMPTY_BRAND_CONTEXT;
     }
@@ -70,15 +78,25 @@ export async function generateSingleImageVariants(
   const refMode: ReferenceMode = input.referenceMode ?? "style";
   const isEdit = Boolean(refUrl) && refMode === "base";
 
-  let designRef: DesignReference | null = null;
-  if (refUrl && refMode === "style") {
+  // 업로드 시 이미 분석했으면(input.designRef) 재분석 생략, 아니면 style 모드에서 분석.
+  let designRef: DesignReference | null = input.designRef ?? null;
+  if (!designRef && refUrl && refMode === "style") {
     designRef = await analyzeReferenceDesign(refUrl, {
       operation: "single_image_ref_analyze",
       brandId: input.brandId ?? null,
       metadata: { generationId },
     });
   }
-  const reference = isEdit && refUrl ? await fetchAsBase64(refUrl) : null;
+
+  // 입력 이미지: base 레퍼런스(변형 대상) + 브랜드 로고(통합 대상)
+  const [baseRef, logo] = await Promise.all([
+    isEdit && refUrl ? fetchAsBase64(refUrl) : Promise.resolve(null),
+    brand.logoUrl ? fetchAsBase64(brand.logoUrl).catch(() => null) : Promise.resolve(null),
+  ]);
+  const inputImages: ImagePart[] = [baseRef, logo].filter(
+    (p): p is ImagePart => p != null,
+  );
+  const hasLogo = logo != null;
 
   // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
   const brief: CreativeBrief = {
@@ -91,18 +109,20 @@ export async function generateSingleImageVariants(
     aspectRatio,
     mode,
     isEdit,
+    hasLogo,
   };
   const directed = await buildImagePrompts(brief, count, {
     operation: "single_image_art_director",
     brandId: input.brandId ?? null,
-    metadata: { generationId, mode, refMode: refUrl ? refMode : "none" },
+    metadata: { generationId, mode, refMode: refUrl ? refMode : "none", hasLogo },
   });
 
   const designRefText = designRef ? formatDesignReference(designRef) : null;
   function fallbackPrompt(i: number): string {
     const styleHint = STYLE_HINTS[i % STYLE_HINTS.length];
+    let p: string;
     if (isEdit) {
-      return buildEditPrompt({
+      p = buildEditPrompt({
         mode,
         concept: input.concept,
         tone: input.tone,
@@ -113,43 +133,46 @@ export async function generateSingleImageVariants(
         sub: input.sub,
         cta: input.cta,
       });
-    }
-    if (mode === "overlay") {
-      return buildTextlessBackgroundPrompt({
+    } else if (mode === "overlay") {
+      p = buildTextlessBackgroundPrompt({
         concept: input.concept,
         tone: input.tone,
         brand,
         styleHint,
         designRef: designRefText,
       });
+    } else {
+      p = buildFullImagePrompt({
+        concept: input.concept,
+        tone: input.tone,
+        brand,
+        styleHint,
+        designRef: designRefText,
+        headline: input.headline,
+        sub: input.sub,
+        cta: input.cta,
+      });
     }
-    return buildFullImagePrompt({
-      concept: input.concept,
-      tone: input.tone,
-      brand,
-      styleHint,
-      designRef: designRefText,
-      headline: input.headline,
-      sub: input.sub,
-      cta: input.cta,
-    });
+    return hasLogo ? p + LOGO_NOTE : p;
   }
 
   const results = await Promise.allSettled(
     Array.from({ length: count }, (_, i) => i).map(async (i) => {
       const prompt = directed?.[i]?.prompt ?? fallbackPrompt(i);
       const label = directed?.[i]?.label || `v${i + 1}`;
+      const useEdit = inputImages.length > 0;
       const usageContext = {
-        operation: isEdit ? "single_image_edit" : "single_image_gen",
+        operation: useEdit ? "single_image_edit" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none" },
+        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none", hasLogo },
       };
 
-      // 1) 베이스 이미지
-      const base = reference
+      // 1) 베이스 이미지 (입력 이미지가 있으면 edit, 없으면 text-to-image)
+      const base = useEdit
         ? await editImage({
             prompt,
-            baseImage: reference,
+            baseImage: inputImages[0],
+            extraImages: inputImages.slice(1),
             aspectRatio,
             imageSize: "1K",
             usageContext,
@@ -163,8 +186,6 @@ export async function generateSingleImageVariants(
           headline: input.headline,
           sub: input.sub,
           cta: input.cta,
-          logoUrl: brand.logoUrl,
-          brandColor: brand.primaryColor,
         });
         const composed = await renderComposite(bgBuf, config);
         const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {

@@ -44,6 +44,8 @@ export interface SingleImageInput {
   aspectRatio?: AspectRatio;
   referenceImageUrl?: string | null;
   referenceMode?: ReferenceMode;
+  /** 업로드 직후 이미 추출한 디자인 요소(있으면 생성 시 비전 재분석 생략) */
+  designRef?: DesignReference | null;
   brandId?: string | null;
   renderMode?: SingleRenderMode;
   count?: number;

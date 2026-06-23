@@ -90,6 +90,95 @@ export async function analyzeReferenceDesign(
   }
 }
 
+// ── 컨셉 초안 + 디자인 요소 동시 추출 (업로드 직후 1콜) ──────────
+const DRAFT_TOOL = "record_reference_draft";
+
+export const ReferenceDraftSchema = DesignReferenceSchema.extend({
+  conceptDraft: z.string().min(1).max(400),
+});
+
+export interface ReferenceDraft {
+  conceptDraft: string;
+  design: DesignReference;
+}
+
+const draftTool: Tool = {
+  name: DRAFT_TOOL,
+  description:
+    "레퍼런스 이미지를 참고해 (1) 새 광고 이미지의 컨셉 초안과 (2) 재현 가능한 디자인 요소를 함께 기록.",
+  input_schema: {
+    type: "object",
+    properties: {
+      conceptDraft: {
+        type: "string",
+        description:
+          "이 레퍼런스를 참고해 새로 만들 광고 이미지의 컨셉 초안(한국어 1~2문장, 장면·소재·분위기). 사용자 핵심 메시지가 있으면 반영.",
+      },
+      palette: { type: "array", items: { type: "string" }, description: "주요 색 3~6개(hex/색이름)" },
+      mood: { type: "string", description: "전체 무드/톤" },
+      composition: { type: "string", description: "구도/시선 흐름/여백" },
+      layout: { type: "string", description: "요소 배치/정렬" },
+      typographyVibe: { type: "string", description: "타이포 느낌(있다면)" },
+      notes: { type: "string", description: "재현에 도움되는 메모(선택)" },
+    },
+    required: ["conceptDraft", "palette", "mood", "composition", "layout", "typographyVibe"],
+  },
+};
+
+/**
+ * 레퍼런스 → 컨셉 초안 + 디자인 요소(1콜). 업로드 직후 호출용.
+ * 실패 시 null.
+ */
+export async function analyzeReferenceForDraft(
+  imageUrl: string,
+  opts: {
+    keyMessage?: string | null;
+    brandName?: string | null;
+    brandCategory?: string | null;
+  } = {},
+  usageContext?: UsageContext,
+): Promise<ReferenceDraft | null> {
+  try {
+    const img = await fetchAsBase64(imageUrl);
+    const key = opts.keyMessage?.trim() ? `\n사용자 핵심 메시지: ${opts.keyMessage.trim()}` : "";
+    const brand = opts.brandName?.trim()
+      ? `\n브랜드: ${opts.brandName.trim()}${opts.brandCategory?.trim() ? ` (${opts.brandCategory.trim()})` : ""}`
+      : "";
+    const resp = await callClaude({
+      model: "sonnet",
+      maxTokens: 1000,
+      system:
+        "당신은 광고 아트 디렉터입니다. 주어진 레퍼런스 이미지를 참고해 (1) 새로 만들 광고 이미지의 컨셉 초안과 (2) 재현 가능한 디자인 요소를 추출합니다. 도구로만 기록.",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType(img.mimeType), data: img.base64 },
+            },
+            {
+              type: "text",
+              text: `이 레퍼런스를 참고해 컨셉 초안과 디자인 요소를 ${DRAFT_TOOL} 로 기록하세요.${key}${brand}`,
+            },
+          ],
+        },
+      ],
+      tools: [draftTool],
+      toolChoice: { type: "tool", name: DRAFT_TOOL },
+      usageContext,
+    });
+    const raw = extractToolUse(resp, DRAFT_TOOL);
+    if (!raw) return null;
+    const parsed = ReferenceDraftSchema.parse(raw);
+    const { conceptDraft, ...design } = parsed;
+    return { conceptDraft, design };
+  } catch (e) {
+    console.warn("레퍼런스 초안 생성 실패:", (e as Error).message);
+    return null;
+  }
+}
+
 /** DesignReference → 프롬프트 주입용 영어 디스크립터. */
 export function formatDesignReference(ref: DesignReference): string {
   const parts: string[] = [];

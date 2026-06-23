@@ -77,12 +77,16 @@ export async function generateAdCopy(
     keyMessage?: string | null;
     tone?: string | null;
     brandName?: string | null;
+    brandCategory?: string | null;
     count?: number;
   },
   usageContext?: UsageContext,
 ): Promise<CopyOption[]> {
   const count = Math.min(Math.max(input.count ?? 4, 3), 6);
-  const brand = input.brandName ? `\n# 브랜드\n${input.brandName}` : "";
+  const brandLine = input.brandName
+    ? `${input.brandName}${input.brandCategory ? ` (${input.brandCategory})` : ""}`
+    : "";
+  const brand = brandLine ? `\n# 브랜드\n${brandLine}` : "";
   const key = input.keyMessage?.trim()
     ? `\n# 핵심 메시지/혜택\n${input.keyMessage.trim()}`
     : "";

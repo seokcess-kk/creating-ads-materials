@@ -57,15 +57,13 @@ export async function generateImage(input: GenerateImageInput): Promise<ImagePar
 }
 
 export async function editImage(input: EditImageInput): Promise<ImagePart> {
+  const parts = [input.baseImage, ...(input.extraImages ?? [])];
   const response = await getClient().models.generateContent({
     model: GEMINI_IMAGE_MODEL,
     contents: [
-      {
-        inlineData: {
-          mimeType: input.baseImage.mimeType,
-          data: input.baseImage.base64,
-        },
-      },
+      ...parts.map((p) => ({
+        inlineData: { mimeType: p.mimeType, data: p.base64 },
+      })),
       { text: input.prompt },
     ],
     config: {

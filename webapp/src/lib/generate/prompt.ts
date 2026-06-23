@@ -1,46 +1,33 @@
 import type { BrandIdentity } from "@/lib/memory/types";
 import type { SingleRenderMode } from "./types";
 
-/** 단일 이미지 생성에 주입되는 선택적 브랜드 컨텍스트(경량 — identity만). */
+/**
+ * 단일 이미지 생성에 주입되는 선택적 브랜드 컨텍스트.
+ * 의도적으로 '카테고리'와 '로고'만 사용한다 — 브랜드 색상은 이미지 자유도를
+ * 떨어뜨리므로 제외. 로고는 프롬프트 힌트가 아니라 생성 입력 이미지로 전달된다.
+ */
 export interface BrandContext {
-  /** Gemini/OpenAI 프롬프트용 영어 힌트 */
+  /** 프롬프트용 영어 힌트(카테고리 등 — 색상 제외) */
   promptHint: string;
-  /** 컴포지터 CTA 버튼 배경색 */
-  primaryColor: string | null;
-  accentColor: string | null;
-  /** 컴포지터 로고 오버레이 URL */
+  /** 생성에 통합할 대표 로고 URL */
   logoUrl: string | null;
 }
 
 export const EMPTY_BRAND_CONTEXT: BrandContext = {
   promptHint: "",
-  primaryColor: null,
-  accentColor: null,
   logoUrl: null,
 };
 
-/** identity → 경량 브랜드 컨텍스트(컬러/로고/톤). loadBrandMemory 미사용. */
-export function buildBrandContext(identity: BrandIdentity | null): BrandContext {
-  if (!identity) return EMPTY_BRAND_CONTEXT;
-  const colors = identity.colors_json ?? [];
-  const primary = colors.find((c) => c.role === "primary")?.hex ?? null;
-  const accent =
-    colors.find((c) => c.role === "accent")?.hex ??
-    colors.find((c) => c.role === "secondary")?.hex ??
-    null;
-  const logos = identity.logos_json ?? [];
+/** 브랜드 카테고리 + 대표 로고만 추출(색상/톤 제외). */
+export function buildBrandContext(
+  brand: { category?: string | null } | null,
+  identity: BrandIdentity | null,
+): BrandContext {
+  const logos = identity?.logos_json ?? [];
   const logoUrl = (logos.find((l) => l.is_primary) ?? logos[0])?.url ?? null;
-  const tone = identity.voice_json?.tone;
-
-  const parts: string[] = [];
-  if (primary) parts.push(`brand primary color ${primary}`);
-  if (accent) parts.push(`accent color ${accent}`);
-  if (tone) parts.push(`brand tone: ${tone}`);
-
+  const category = brand?.category?.trim();
   return {
-    promptHint: parts.join(", "),
-    primaryColor: primary,
-    accentColor: accent,
+    promptHint: category ? `brand category: ${category}` : "",
     logoUrl,
   };
 }

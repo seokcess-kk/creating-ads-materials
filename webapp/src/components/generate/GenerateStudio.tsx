@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,6 +79,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [refUrl, setRefUrl] = useState<string | null>(null);
   const [refMode, setRefMode] = useState<"style" | "base">("style");
   const [refUploading, setRefUploading] = useState(false);
+  const [designRef, setDesignRef] = useState<Record<string, unknown> | null>(null);
+  const [conceptDraft, setConceptDraft] = useState<string | null>(null);
+  const [conceptLoading, setConceptLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 카피 자동작성
@@ -88,6 +91,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [generating, setGenerating] = useState(false);
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [variants, setVariants] = useState<ResultVariant[]>([]);
+  const [previewIdx, setPreviewIdx] = useState<number | null>(null);
 
   const canSubmit = concept.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
@@ -109,12 +113,43 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         .uploadToSignedUrl(sign.path, sign.token, file);
       if (error) throw error;
       setRefUrl(sign.publicUrl);
-      toast.success("레퍼런스 첨부됨");
+      toast.success("레퍼런스 첨부됨 · 컨셉 초안을 만드는 중…");
+      await draftConcept(sign.publicUrl);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "업로드 오류");
     } finally {
       setRefUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  // 레퍼런스 → 컨셉 초안 + 디자인 요소(생성 시 재사용). 컨셉이 비어있으면 자동 채움.
+  async function draftConcept(url: string) {
+    setConceptLoading(true);
+    try {
+      const res = await fetch("/api/generate/concept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          referenceImageUrl: url,
+          keyMessage: keyMessage.trim() || null,
+          brandId: brandId || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "컨셉 초안 실패");
+      setDesignRef(data.designRef ?? null);
+      setConceptDraft(data.conceptDraft ?? null);
+      if (!concept.trim() && data.conceptDraft) {
+        setConcept(data.conceptDraft);
+        toast.success("레퍼런스로 컨셉 초안을 채웠어요 (수정 가능)");
+      } else {
+        toast.success("레퍼런스 디자인 반영 준비됨 · '초안 적용'으로 컨셉을 바꿀 수 있어요");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "컨셉 초안 오류");
+    } finally {
+      setConceptLoading(false);
     }
   }
 
@@ -174,6 +209,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           aspectRatio,
           referenceImageUrl: refUrl,
           referenceMode: refUrl ? refMode : undefined,
+          designRef: refUrl && refMode === "style" ? designRef : undefined,
           brandId: brandId || null,
           renderMode: bakeText ? "full" : "overlay",
           count,
@@ -209,6 +245,26 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     }
   }
 
+  const showPrev = () =>
+    setPreviewIdx((i) => (i === null ? i : (i - 1 + variants.length) % variants.length));
+  const showNext = () =>
+    setPreviewIdx((i) => (i === null ? i : (i + 1) % variants.length));
+
+  useEffect(() => {
+    if (previewIdx === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPreviewIdx(null);
+      else if (e.key === "ArrowLeft")
+        setPreviewIdx((i) => (i === null ? i : (i - 1 + variants.length) % variants.length));
+      else if (e.key === "ArrowRight")
+        setPreviewIdx((i) => (i === null ? i : (i + 1) % variants.length));
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewIdx, variants.length]);
+
+  const preview = previewIdx !== null ? variants[previewIdx] ?? null : null;
+
   return (
     <div className="space-y-6">
       <Card>
@@ -240,7 +296,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               {refUrl ? (
                 <button
                   type="button"
-                  onClick={() => setRefUrl(null)}
+                  onClick={() => {
+                    setRefUrl(null);
+                    setDesignRef(null);
+                    setConceptDraft(null);
+                  }}
                   className="text-[11px] text-muted-foreground underline"
                 >
                   제거
@@ -270,7 +330,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                   alt="레퍼런스"
                   className="h-16 w-16 rounded-md border object-cover"
                 />
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <span className="text-[11px] text-muted-foreground">활용 방식</span>
                   <div className="flex gap-1.5">
                     {[
@@ -293,6 +353,25 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       </button>
                     ))}
                   </div>
+                  {conceptLoading ? (
+                    <span className="text-[11px] text-muted-foreground">
+                      컨셉 초안 작성 중…
+                    </span>
+                  ) : (
+                    conceptDraft && (
+                      <button
+                        type="button"
+                        disabled={generating}
+                        onClick={() => {
+                          setConcept(conceptDraft);
+                          toast.success("컨셉 초안을 적용했어요 (수정 가능)");
+                        }}
+                        className="self-start text-[11px] text-primary underline disabled:opacity-50"
+                      >
+                        컨셉 초안 적용
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
             )}
@@ -371,7 +450,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">브랜드 (선택 — 컬러·로고 반영)</Label>
+              <Label className="text-xs">브랜드 (선택 — 로고·카테고리 반영)</Label>
               <select
                 value={brandId}
                 onChange={(e) => setBrandId(e.target.value)}
@@ -462,27 +541,36 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {variants.map((v) => (
+              {variants.map((v, i) => (
                 <div key={v.label} className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => select(v)}
+                    onClick={() => setPreviewIdx(i)}
+                    title="클릭하면 크게 보기"
                     className={cn(
-                      "block w-full overflow-hidden rounded-md border bg-muted",
+                      "group relative block w-full overflow-hidden rounded-md border bg-muted",
                       v.selected ? "border-2 border-foreground" : "border-border",
                     )}
                   >
                     <img
                       src={v.url}
                       alt={v.label}
-                      className="w-full aspect-square object-cover"
+                      className="w-full aspect-square object-cover transition-opacity group-hover:opacity-90"
                     />
                   </button>
                   <div className="flex items-center justify-between gap-1">
-                    <span className="truncate text-[10px] text-muted-foreground">
-                      {v.selected ? "선택됨 · " : ""}
-                      {v.label}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => select(v)}
+                      className={cn(
+                        "text-[11px] underline",
+                        v.selected
+                          ? "font-medium text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {v.selected ? "✓ 선택됨" : "선택"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => downloadImage(v.url, `ad_${v.label}.png`)}
@@ -496,6 +584,63 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {preview && previewIdx !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewIdx(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewIdx(null)}
+            aria-label="닫기"
+            className="absolute right-4 top-4 text-2xl text-white/80 hover:text-white"
+          >
+            ✕
+          </button>
+          <div
+            className="flex max-h-full flex-col items-center gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={preview.url}
+              alt={preview.label}
+              className="max-h-[80vh] max-w-[92vw] rounded-lg object-contain"
+            />
+            <div className="flex items-center gap-4 text-sm text-white">
+              {variants.length > 1 && (
+                <button type="button" onClick={showPrev} className="hover:underline">
+                  ← 이전
+                </button>
+              )}
+              <span className="text-xs tabular-nums text-white/60">
+                {previewIdx + 1} / {variants.length}
+              </span>
+              {variants.length > 1 && (
+                <button type="button" onClick={showNext} className="hover:underline">
+                  다음 →
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => select(preview)}
+                className="rounded-md border border-white/40 px-2 py-1 text-xs hover:bg-white/10"
+              >
+                {preview.selected ? "✓ 선택됨" : "선택"}
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadImage(preview.url, `ad_${preview.label}.png`)}
+                className="rounded-md border border-white/40 px-2 py-1 text-xs hover:bg-white/10"
+              >
+                다운로드
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import {
   SINGLE_IMAGE_PROMPT_VERSION,
 } from "@/lib/generate/single-image";
 import { createGeneration, insertVariants } from "@/lib/generate/queries";
+import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
 import type { SingleImageInput } from "@/lib/generate/types";
 
 export const maxDuration = 180;
@@ -19,6 +20,7 @@ const Schema = z.object({
   aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   referenceImageUrl: z.string().url().nullable().optional(),
   referenceMode: z.enum(["style", "base"]).optional(),
+  designRef: DesignReferenceSchema.nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
   renderMode: z.enum(["overlay", "full"]).optional(),
   count: z.number().int().min(1).max(4).optional(),

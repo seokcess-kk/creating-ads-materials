@@ -16,15 +16,14 @@ const Schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, Schema);
-    const brandName = input.brandId
-      ? (await getBrand(input.brandId))?.name ?? null
-      : null;
+    const brand = input.brandId ? await getBrand(input.brandId) : null;
     const options = await generateAdCopy(
       {
         concept: input.concept,
         keyMessage: input.keyMessage,
         tone: input.tone,
-        brandName,
+        brandName: brand?.name ?? null,
+        brandCategory: brand?.category ?? null,
         count: input.count,
       },
       { operation: "single_image_copy", brandId: input.brandId ?? null },
