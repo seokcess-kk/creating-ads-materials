@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
-import type { NoticeMeta } from "@/lib/campaigns/types";
+import type { NoticeMeta } from "./types";
 import type { UsageContext } from "@/lib/usage/record";
 
 export const NOTICE_EXTRACT_TOOL = "record_notice_meta";

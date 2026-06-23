@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { deleteBrand, getBrand, updateBrand, loadBrandMemory } from "@/lib/memory";
+import { deleteBrand, getBrand, updateBrand } from "@/lib/memory";
 import { ok, fail, parseJson, serverError } from "@/lib/api-utils";
 
 export async function GET(
@@ -9,14 +9,6 @@ export async function GET(
 ) {
   try {
     const { brandId } = await params;
-    const url = new URL(request.url);
-    const withMemory = url.searchParams.get("memory") === "1";
-
-    if (withMemory) {
-      const memory = await loadBrandMemory(brandId);
-      if (!memory) return fail("브랜드를 찾을 수 없습니다", 404);
-      return ok({ memory });
-    }
     const brand = await getBrand(brandId);
     if (!brand) return fail("브랜드를 찾을 수 없습니다", 404);
     return ok({ brand });

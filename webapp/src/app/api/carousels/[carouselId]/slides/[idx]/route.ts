@@ -1,0 +1,59 @@
+import { z } from "zod";
+import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
+import { recomposeSlide } from "@/lib/carousel/generate";
+import {
+  getCarousel,
+  updateSlideCopy,
+  updateSlideImage,
+} from "@/lib/carousel/queries";
+
+export const maxDuration = 120;
+
+const PatchSchema = z.object({
+  kicker: z.string().max(24).nullable().optional(),
+  headline: z.string().min(1).max(30).optional(),
+  body: z.string().max(90).nullable().optional(),
+});
+
+/** 카피 인라인 편집 → 기존 배경으로 재합성(LLM 호출 없음). */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ carouselId: string; idx: string }> },
+) {
+  try {
+    const { carouselId, idx } = await params;
+    const slideIdx = Number(idx);
+    if (!Number.isInteger(slideIdx)) throw new ApiError(400, "잘못된 슬라이드 인덱스");
+    const patch = await parseJson(request, PatchSchema);
+
+    const data = await getCarousel(carouselId);
+    if (!data) throw new ApiError(404, "캐러셀을 찾을 수 없습니다");
+    const slide = data.slides.find((s) => s.idx === slideIdx);
+    if (!slide) throw new ApiError(404, "슬라이드를 찾을 수 없습니다");
+
+    const updated = await updateSlideCopy(slide.id, patch);
+
+    const bgUrl = updated.bg_url ?? data.carousel.bg_url;
+    if (!bgUrl) {
+      // 배경이 없으면 카피만 저장(재합성 불가)
+      return ok({ slide: updated });
+    }
+
+    const { image_url, image_path } = await recomposeSlide({
+      carouselId,
+      bgUrl,
+      total: data.slides.length,
+      slide: {
+        index: updated.idx,
+        role: updated.role,
+        kicker: updated.kicker ?? undefined,
+        headline: updated.headline,
+        body: updated.body ?? undefined,
+      },
+    });
+    const finalRow = await updateSlideImage(slide.id, { image_url, image_path });
+    return ok({ slide: finalRow });
+  } catch (e) {
+    return serverError(e);
+  }
+}

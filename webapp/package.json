@@ -9,10 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "seed:tier1": "tsx scripts/seed-tier1-fonts.ts",
-    "seed:catalog": "tsx scripts/seed-catalog-fonts.ts",
-    "dump:tiktok-cc": "tsx scripts/dump-tiktok-cc.ts"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
@@ -23,6 +20,7 @@
     "@supabase/supabase-js": "^2.103.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fflate": "^0.8.3",
     "lucide-react": "^1.8.0",
     "next": "16.2.4",
     "next-themes": "^0.4.6",

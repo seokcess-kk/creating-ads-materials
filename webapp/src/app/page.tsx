@@ -1,231 +1,87 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/common/EmptyState";
-import { listBrands, listBrandsWithMemoryGaps } from "@/lib/memory";
-import { getDashboardStats, listRecentShippedRuns } from "@/lib/campaigns";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { listBrands } from "@/lib/memory";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { formatKst } from "@/lib/format/date";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
-  const [brands, stats, shippedRuns, memoryGaps] = await Promise.all([
-    listBrands(),
-    getDashboardStats(),
-    listRecentShippedRuns(5),
-    listBrandsWithMemoryGaps(5),
-  ]);
-
-  // 첫 진입(브랜드 0개) — "어디서 시작하나"에 답하는 온보딩
-  if (brands.length === 0) {
-    return (
-      <PageContainer>
-        <PageHeader
-          title="Dashboard"
-          description="Creative System — Brand Memory 중심"
-        />
-        <EmptyState
-          title="Ad Studio에 오신 걸 환영합니다"
-          description="브랜드를 등록해 Identity·Offer·Audience 메모리를 축적하면, 그 자산을 재활용해 일관된 광고 소재를 반복 생성할 수 있습니다."
-          action={
-            <Link href="/brands/new">
-              <Button>첫 브랜드 등록하기</Button>
-            </Link>
-          }
-        />
-      </PageContainer>
-    );
-  }
+export default async function HomePage() {
+  const brands = await listBrands().catch(() => []);
 
   return (
     <PageContainer>
       <PageHeader
-        title="Dashboard"
-        description="Creative System — Brand Memory 중심"
+        title="무엇을 만들까요?"
+        description="이미지 한 장 또는 캐러셀을 바로 생성합니다."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Link href="/brands" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
-            <CardHeader className="pb-2">
-              <CardDescription>Brands</CardDescription>
-              <CardTitle className="text-3xl">{brands.length}</CardTitle>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link href="/generate" className="block rounded-lg">
+          <Card className="h-full transition-colors hover:border-foreground/30 cursor-pointer">
+            <CardHeader>
+              <CardTitle className="text-lg">단일 이미지</CardTitle>
+              <CardDescription>
+                컨셉·카피 입력 → 이미지 생성 → 다운로드
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
-                브랜드 메모리 — Identity · Offer · Audience
+              <p className="text-sm text-muted-foreground">
+                광고 이미지 한 장을 빠르게. 텍스트는 안정적인 한글 오버레이로 합성합니다.
               </p>
             </CardContent>
           </Card>
         </Link>
 
-        <Link href="/campaigns" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
-            <CardHeader className="pb-2">
-              <CardDescription>Campaigns</CardDescription>
-              <CardTitle className="text-3xl">{stats.campaigns}</CardTitle>
+        <Link href="/carousel" className="block rounded-lg">
+          <Card className="h-full transition-colors hover:border-foreground/30 cursor-pointer">
+            <CardHeader>
+              <CardTitle className="text-lg">캐러셀</CardTitle>
+              <CardDescription>
+                원문 → 번들 기획 → 슬라이드별 상세 → 합성
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">
-                진행 중 소재 {stats.runningMaterials} · ship 완료 {stats.shippedMaterials}
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="#shipped" className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
-          <Card className="h-full hover:border-foreground/30 transition-colors cursor-pointer">
-            <CardHeader className="pb-2">
-              <CardDescription>완료된 소재</CardDescription>
-              <CardTitle className="text-3xl">{stats.shippedMaterials}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">
-                Ship 단계까지 완주한 소재
+              <p className="text-sm text-muted-foreground">
+                전체 콘셉트·서사를 먼저 잡고 슬라이드를 구체화. 단계마다 검토·편집할 수 있습니다.
               </p>
             </CardContent>
           </Card>
         </Link>
       </div>
 
-      <div
-        className={
-          memoryGaps.length > 0
-            ? "grid grid-cols-1 gap-6 lg:grid-cols-2"
-            : "space-y-3"
-        }
-      >
-        {/* 메모리 갭 — 막힌 브랜드 알림 (갭이 있을 때만 노출) */}
-        {memoryGaps.length > 0 && (
-          <section className="space-y-3">
-            <div>
-              <h2 className="text-sm font-semibold tracking-tight">
-                브랜드 메모리 갭
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                캠페인 시작 전에 채워야 할 항목
-              </p>
-            </div>
-            <div className="space-y-2">
-              {memoryGaps.map((gap) => (
-                <Link
-                  key={gap.id}
-                  href={`/brands/${gap.id}`}
-                  className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Card className="transition-colors hover:border-foreground/30 cursor-pointer">
-                    <CardContent className="flex items-center justify-between gap-2 py-3">
-                      <span className="truncate text-sm font-medium">
-                        {gap.name}
-                      </span>
-                      <div className="flex shrink-0 gap-1">
-                        {gap.needsIdentity && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Identity 필요
-                          </Badge>
-                        )}
-                        {gap.needsOffer && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Offer 필요
-                          </Badge>
-                        )}
-                        {gap.needsAudience && (
-                          <Badge variant="outline" className="text-[10px]">
-                            Audience 필요
-                          </Badge>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* 최근 ship된 소재 — 갭 없을 때 풀 폭 그리드, 있을 때 우측 컬럼 */}
-        <section id="shipped" className="space-y-3 scroll-mt-20">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight">
-              최근 ship된 소재
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Ship 단계까지 완주한 최근 5개
-            </p>
-          </div>
-          {shippedRuns.length === 0 ? (
-            <Card>
-              <CardContent className="py-6 text-center text-xs text-muted-foreground">
-                아직 ship된 소재가 없습니다
-              </CardContent>
-            </Card>
-          ) : (
-            <div
-              className={
-                memoryGaps.length === 0
-                  ? "grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-                  : "space-y-2"
-              }
-            >
-              {shippedRuns.map((m) => (
-                <Link
-                  key={m.runId}
-                  href={`/campaigns/${m.campaignId}?run=${m.runId}`}
-                  className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <Card className="h-full transition-colors hover:border-foreground/30 cursor-pointer">
-                    <CardContent className="space-y-1 py-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">
-                          {m.runLabel ?? "소재"}
-                        </span>
-                        {m.rating != null && (
-                          <span
-                            className="shrink-0 text-[10px] text-muted-foreground"
-                            aria-label={`평점 ${m.rating}`}
-                          >
-                            {"★".repeat(m.rating)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        {m.brandName} · {m.campaignName}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {formatKst(m.completedAt, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+      <div className="flex items-center gap-4 text-sm">
+        <Link href="/gallery" className="text-primary underline">
+          최근 결과 보기 →
+        </Link>
+        <Link href="/brands" className="text-muted-foreground underline">
+          브랜드 관리
+        </Link>
       </div>
 
       {brands.length > 0 && (
         <div>
-          <h2 className="text-sm font-semibold mb-3">최근 브랜드</h2>
+          <h2 className="mb-3 text-sm font-semibold">브랜드</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {brands.slice(0, 6).map((b) => (
               <Link
                 key={b.id}
                 href={`/brands/${b.id}`}
-                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="block rounded-lg"
               >
-                <Card className="hover:border-foreground/30 transition-colors cursor-pointer">
+                <Card className="transition-colors hover:border-foreground/30 cursor-pointer">
                   <CardHeader>
                     <CardTitle className="text-base">{b.name}</CardTitle>
                     {b.category && (
-                      <CardDescription className="text-xs">{b.category}</CardDescription>
+                      <CardDescription className="text-xs">
+                        {b.category}
+                      </CardDescription>
                     )}
                   </CardHeader>
                 </Card>

@@ -47,6 +47,9 @@ export interface ComposeConfig {
     topOpacity?: number;
     bottom?: boolean;
     bottomOpacity?: number;
+    // 전체 캔버스에 깔리는 은은한 어둠(0~255). AI 생성 배경의 밝은 영역에서도
+    // 오버레이 텍스트 가독성을 보장하기 위한 단일 이미지용 옵션.
+    scrim?: number;
   };
   brand?: {
     text: string;
@@ -74,6 +77,8 @@ export interface ComposeConfig {
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
+    // 어두운 외곽선으로 임의 배경 위 가독성 강화(단일 이미지용).
+    stroke?: boolean;
   };
   subCopy?: {
     text: string;
@@ -84,6 +89,7 @@ export interface ComposeConfig {
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
+    stroke?: boolean;
   };
   cta?: {
     text: string;
@@ -180,10 +186,17 @@ function drawTextWithShadow(
   color: string,
   shadowOffset: number = 2,
   align: CanvasTextAlign = "left",
+  stroke?: { color: string; width: number },
 ) {
   ctx.textAlign = align;
   ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
   ctx.fillText(text, x + shadowOffset, y + shadowOffset);
+  if (stroke && stroke.width > 0) {
+    ctx.lineJoin = "round";
+    ctx.lineWidth = stroke.width;
+    ctx.strokeStyle = stroke.color;
+    ctx.strokeText(text, x, y);
+  }
   ctx.fillStyle = color;
   ctx.fillText(text, x, y);
 }
@@ -228,6 +241,10 @@ export async function renderComposite(
   const overlay = config.overlay ?? { top: true, bottom: true };
   if (overlay.top) addGradientOverlay(ctx, w, h, "top", overlay.topOpacity ?? 180);
   if (overlay.bottom) addGradientOverlay(ctx, w, h, "bottom", overlay.bottomOpacity ?? 220);
+  if (overlay.scrim) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(255, overlay.scrim) / 255})`;
+    ctx.fillRect(0, 0, w, h);
+  }
 
   if (config.fontSet) {
     const entries = (Object.values(config.fontSet) as Array<CanvasFontEntry | undefined>)
@@ -304,13 +321,16 @@ export async function renderComposite(
     const lineSpacing = config.mainCopy.autoFit
       ? fontSize * 1.3
       : h * (config.mainCopy.lineSpacingRatio ?? 0.075);
+    const mainStroke = config.mainCopy.stroke
+      ? { color: "rgba(0, 0, 0, 0.5)", width: Math.max(2, fontSize * 0.08) }
+      : undefined;
 
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;
       if (center) {
-        drawTextWithShadow(ctx, w / 2, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "center");
+        drawTextWithShadow(ctx, w / 2, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "center", mainStroke);
       } else {
-        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3);
+        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "left", mainStroke);
       }
     }
   }
@@ -339,12 +359,15 @@ export async function renderComposite(
     ctx.font = `${fontSize}px ${family}`;
     const yStart = h * (config.subCopy.yRatio ?? 0.8);
     const lineSpacing = fontSize * 1.3;
+    const subStroke = config.subCopy.stroke
+      ? { color: "rgba(0, 0, 0, 0.45)", width: Math.max(1.5, fontSize * 0.07) }
+      : undefined;
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;
       if (center) {
-        drawTextWithShadow(ctx, w / 2, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "center");
+        drawTextWithShadow(ctx, w / 2, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "center", subStroke);
       } else {
-        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.subCopy.color ?? "#D4AF37", 2);
+        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "left", subStroke);
       }
     }
   }
