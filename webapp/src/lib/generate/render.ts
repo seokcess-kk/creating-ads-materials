@@ -14,7 +14,10 @@ export function singleAdFontSet(): ComposeFontSet {
 }
 
 export interface SingleAdLogo {
-  url: string;
+  /** 로고 바이트(생성 경로 — fetch 회피). buffer 우선, 없으면 url. */
+  buffer?: Buffer | Uint8Array;
+  /** 로고 URL(재합성 경로 등 buffer가 없을 때 fetch) */
+  url?: string;
   position?: LogoPosition;
   /** 가독성 패널 색(없으면 미사용) */
   backingColor?: string | null;
@@ -41,8 +44,9 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     overlay: { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },
   };
 
-  if (input.logo?.url) {
+  if (input.logo?.buffer || input.logo?.url) {
     config.logo = {
+      buffer: input.logo.buffer,
       url: input.logo.url,
       position: input.logo.position ?? "top-left",
       widthRatio: 0.16,

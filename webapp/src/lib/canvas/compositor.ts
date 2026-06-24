@@ -59,7 +59,10 @@ export interface ComposeConfig {
     yRatio?: number;
   };
   logo?: {
-    url: string;
+    /** 로고 바이트(우선). 있으면 fetch 없이 직접 디코드 → data: URL fetch 불확실성·CPU 회피. */
+    buffer?: Buffer | Uint8Array;
+    /** 로고 원격 URL(buffer 없을 때만 fetch). */
+    url?: string;
     position?: LogoPosition;
     widthRatio?: number;
     marginRatio?: number;
@@ -254,11 +257,16 @@ export async function renderComposite(
     await Promise.all(entries.map(ensureFontRegistered));
   }
 
-  if (config.logo?.url) {
+  if (config.logo?.buffer || config.logo?.url) {
     try {
-      const logoRes = await fetch(config.logo.url);
-      if (logoRes.ok) {
-        const logoBuffer = Buffer.from(await logoRes.arrayBuffer());
+      let logoBuffer: Buffer | null = null;
+      if (config.logo.buffer) {
+        logoBuffer = Buffer.from(config.logo.buffer);
+      } else if (config.logo.url) {
+        const logoRes = await fetch(config.logo.url);
+        if (logoRes.ok) logoBuffer = Buffer.from(await logoRes.arrayBuffer());
+      }
+      if (logoBuffer) {
         const logoImg = await decodeImage(logoBuffer);
 
         const logoW = w * (config.logo.widthRatio ?? 0.14);

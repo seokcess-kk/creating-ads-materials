@@ -54,6 +54,7 @@ async function composeLogoOnly(buf: Buffer, logo: SingleAdLogo): Promise<Buffer>
     output: { bucket: "", path: "" },
     overlay: { top: false, bottom: false },
     logo: {
+      buffer: logo.buffer,
       url: logo.url,
       position: logo.position ?? "top-left",
       widthRatio: 0.16,
@@ -184,7 +185,7 @@ export async function generateSingleImageVariants(
     return p;
   }
 
-  // 로고 버퍼를 data URL로(컴포지터가 네트워크 재fetch 없이 사용). 포맷은 sharp가 내용으로 판별.
+  // 로고 버퍼를 컴포지터에 직접 전달(fetch 없이). 포맷은 sharp가 내용으로 판별.
   function logoForCompositor(
     placement: { url: string; position: SingleAdLogo["position"]; backingColor: string | null } | null,
   ): SingleAdLogo | null {
@@ -192,7 +193,7 @@ export async function generateSingleImageVariants(
     const asset = logoAssets.find((a) => a.url === placement.url);
     if (!asset) return null;
     return {
-      url: `data:image/png;base64,${asset.buf.toString("base64")}`,
+      buffer: asset.buf,
       position: placement.position,
       backingColor: placement.backingColor,
     };

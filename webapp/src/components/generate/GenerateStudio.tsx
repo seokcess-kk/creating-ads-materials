@@ -72,6 +72,29 @@ async function downloadImage(url: string, filename: string) {
   }
 }
 
+// 응답을 JSON으로 안전하게 파싱. 비-JSON(타임아웃 시 플랫폼이 내는 "An error o..." 평문/HTML 등)이면
+// 'Unexpected token' 대신 사람이 읽을 수 있는 메시지로 변환한다. 응답 실패(!ok)도 함께 처리.
+async function readJson(res: Response, failMsg: string) {
+  let text: string;
+  try {
+    text = await res.text();
+  } catch {
+    throw new Error(failMsg);
+  }
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      res.status === 504 || res.status === 408 || res.status === 503
+        ? "생성이 시간 내 완료되지 않았어요(타임아웃). 후보 수를 줄이거나 잠시 후 다시 시도해 주세요."
+        : `서버 오류(${res.status || "네트워크"}). 잠시 후 다시 시도해 주세요.`,
+    );
+  }
+  if (!res.ok) throw new Error(data?.error ?? failMsg);
+  return data;
+}
+
 export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [concept, setConcept] = useState("");
   const [keyMessage, setKeyMessage] = useState("");
@@ -148,8 +171,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           brandId: brandId || null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "비주얼 초안 실패");
+      const data = await readJson(res, "비주얼 초안 실패");
       setDesignRef(data.designRef ?? null);
       setConceptDraft(data.conceptDraft ?? null);
       if (!concept.trim() && data.conceptDraft) {
@@ -182,8 +204,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           brandId: brandId || null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "카피 생성 실패");
+      const data = await readJson(res, "카피 생성 실패");
       setCopyOptions(data.options as CopyOption[]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -227,8 +248,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           count,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "생성 실패");
+      const data = await readJson(res, "생성 실패");
       // 각 후보의 초기 카피 = 생성에 쓰인 폼 카피(=베이킹/합성된 값). 이후 후보별로 독립 편집.
       const formCopy: VariantCopy = {
         headline: headline.trim(),
@@ -292,8 +312,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           cta: v.copy.cta.trim() || null,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "재합성 실패");
+      const data = await readJson(res, "재합성 실패");
       const newUrl = data.variant.url as string;
       setVariants((prev) => prev.map((x) => (x.id === v.id ? { ...x, url: newUrl } : x)));
       toast.success("재합성 완료 (이미지 모델 호출 없음)");
