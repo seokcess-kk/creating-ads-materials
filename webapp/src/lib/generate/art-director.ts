@@ -10,10 +10,10 @@ const TOOL = "record_image_prompts";
 
 /** 사용자의 의도·맥락을 구조화한 크리에이티브 브리프. 아트디렉터가 이미지 프롬프트로 확장. */
 export interface CreativeBrief {
-  /** 사용자가 입력한 장면/아이디어 */
-  concept: string;
-  /** 알리려는 핵심 메시지/혜택 */
-  keyMessage?: string | null;
+  /** 알리려는 핵심 메시지/혜택 — 필수(아트디렉터가 리드) */
+  keyMessage: string;
+  /** 비주얼·장면(선택) — 레퍼런스 첨부 시 자동, 없으면 메시지로 구성 */
+  concept?: string | null;
   /** 소재에 얹힐 카피(구도가 텍스트를 위한 여백을 확보하도록 전달) */
   copy?: { headline?: string | null; sub?: string | null; cta?: string | null };
   tone?: string | null;
@@ -93,8 +93,8 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
   if (brief.isEdit) lines.push("input image: a base reference photo to transform (preserve subject).");
   if (brief.hasLogo) lines.push("input image: the brand logo — integrate naturally and keep it undistorted/legible.");
   lines.push(`aspect ratio: ${brief.aspectRatio}`);
-  lines.push(`concept / scene: ${brief.concept.trim()}`);
-  if (brief.keyMessage?.trim()) lines.push(`key message to communicate: ${brief.keyMessage.trim()}`);
+  lines.push(`key message to communicate (lead with this): ${brief.keyMessage.trim()}`);
+  if (brief.concept?.trim()) lines.push(`visual direction / scene (optional): ${brief.concept.trim()}`);
   if (brief.tone?.trim()) lines.push(`tone: ${brief.tone.trim()}`);
   if (brief.brandHint?.trim()) lines.push(`brand cues: ${brief.brandHint.trim()}`);
   if (brief.designRef) lines.push(`design reference (mimic this style): ${formatDesignReference(brief.designRef)}`);

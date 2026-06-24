@@ -32,11 +32,12 @@ export interface CopyOption {
   angle: CopyAngle;
 }
 
-/** 단일 이미지 생성 요청 입력. concept만 필수, 나머지는 선택. */
+/** 단일 이미지 생성 요청 입력. keyMessage(알릴 핵심)만 필수, 나머지는 선택. */
 export interface SingleImageInput {
-  concept: string;
-  /** 이 소재로 알리려는 핵심 메시지/혜택(아트디렉터·카피 품질 향상용) */
-  keyMessage?: string | null;
+  /** 알리려는 핵심 메시지/혜택 — 필수 1차 입력(카피·아트디렉터 의도를 주도) */
+  keyMessage: string;
+  /** 비주얼·장면(선택) — 레퍼런스 첨부 시 자동 채움. 없으면 메시지+레퍼런스로 아트디렉터가 구성 */
+  concept?: string | null;
   headline?: string | null;
   sub?: string | null;
   cta?: string | null;

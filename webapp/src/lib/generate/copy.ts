@@ -73,8 +73,10 @@ function buildSystem(tone?: string | null): string {
 
 export async function generateAdCopy(
   input: {
-    concept: string;
-    keyMessage?: string | null;
+    /** 알릴 핵심 메시지/혜택 — 카피의 1차 입력 */
+    keyMessage: string;
+    /** 비주얼·장면(선택) — 참고 맥락 */
+    concept?: string | null;
     tone?: string | null;
     brandName?: string | null;
     brandCategory?: string | null;
@@ -87,8 +89,8 @@ export async function generateAdCopy(
     ? `${input.brandName}${input.brandCategory ? ` (${input.brandCategory})` : ""}`
     : "";
   const brand = brandLine ? `\n# 브랜드\n${brandLine}` : "";
-  const key = input.keyMessage?.trim()
-    ? `\n# 핵심 메시지/혜택\n${input.keyMessage.trim()}`
+  const visual = input.concept?.trim()
+    ? `\n# 비주얼/장면(참고)\n${input.concept.trim()}`
     : "";
   const resp = await callClaude({
     model: "opus",
@@ -98,10 +100,10 @@ export async function generateAdCopy(
     messages: [
       {
         role: "user",
-        content: `# 컨셉/장면\n${input.concept.trim()}${key}${brand}
+        content: `# 핵심 메시지/혜택\n${input.keyMessage.trim()}${visual}${brand}
 
 # TASK
-위 내용으로 서로 다른 앵글의 광고 카피 ${count}벌을 ${TOOL} 로 기록.`,
+위 메시지로 서로 다른 앵글의 광고 카피 ${count}벌을 ${TOOL} 로 기록.`,
       },
     ],
     tools: [tool],

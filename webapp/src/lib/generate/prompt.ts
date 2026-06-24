@@ -49,7 +49,10 @@ function joinSentences(parts: Array<string | null | undefined>): string {
 }
 
 interface BasePromptInput {
-  concept: string;
+  /** 알릴 핵심 메시지/혜택(필수) */
+  keyMessage: string;
+  /** 비주얼·장면(선택) */
+  concept?: string | null;
   tone?: string | null;
   brand?: BrandContext | null;
   styleHint?: string | null;
@@ -68,7 +71,8 @@ export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
   return joinSentences([
     "Design a CLEAN, TEXTLESS BACKGROUND for a Korean social media advertisement.",
     "The image MUST contain NO text, letters, numbers, words, or logos of any kind.",
-    `Scene / subject: ${input.concept}.`,
+    `Suit an advertisement about: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
@@ -87,7 +91,8 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
 
   return joinSentences([
     "Create a polished, professional Korean social media advertisement image.",
-    `Scene / subject: ${input.concept}.`,
+    `The ad communicates: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
     textLines.length
       ? `Render the following Korean text clearly, legibly, and with PERFECT, correct Hangul spelling: ${textLines.join(
@@ -107,7 +112,8 @@ export function buildEditPrompt(input: TextPromptInput & { mode: SingleRenderMod
     return joinSentences([
       "Transform this image into a clean, professional advertisement background.",
       "Remove or avoid any text, letters, or logos — the result MUST be textless.",
-      input.concept ? `Direction: ${input.concept}.` : null,
+      `Suit an advertisement about: ${input.keyMessage}.`,
+      input.concept?.trim() ? `Direction: ${input.concept.trim()}.` : null,
       input.styleHint ? `Style: ${input.styleHint}.` : null,
       input.tone ? `Mood / tone: ${input.tone}.` : null,
       "Keep the core subject recognizable. Leave a calm area for overlaid text.",

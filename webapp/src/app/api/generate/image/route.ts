@@ -15,8 +15,8 @@ import type { SingleImageInput, SingleImageResult } from "@/lib/generate/types";
 export const maxDuration = 180;
 
 const Schema = z.object({
-  concept: z.string().min(4).max(1000),
-  keyMessage: z.string().max(500).nullable().optional(),
+  keyMessage: z.string().min(4).max(500),
+  concept: z.string().max(1000).nullable().optional(),
   headline: z.string().max(120).nullable().optional(),
   sub: z.string().max(200).nullable().optional(),
   cta: z.string().max(60).nullable().optional(),

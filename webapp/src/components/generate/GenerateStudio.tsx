@@ -105,7 +105,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음). 카피는 후보별(variant.copy)로 보관.
   const [reBusy, setReBusy] = useState(false);
 
-  const canSubmit = concept.trim().length >= 4;
+  const canSubmit = keyMessage.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
 
   async function onPickReference(file: File | null) {
@@ -125,7 +125,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         .uploadToSignedUrl(sign.path, sign.token, file);
       if (error) throw error;
       setRefUrl(sign.publicUrl);
-      toast.success("레퍼런스 첨부됨 · 컨셉 초안을 만드는 중…");
+      toast.success("레퍼런스 첨부됨 · 비주얼 초안을 만드는 중…");
       await draftConcept(sign.publicUrl);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "업로드 오류");
@@ -135,7 +135,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     }
   }
 
-  // 레퍼런스 → 컨셉 초안 + 디자인 요소(생성 시 재사용). 컨셉이 비어있으면 자동 채움.
+  // 레퍼런스 → 비주얼·장면 초안 + 디자인 요소(생성 시 재사용). 비주얼 필드가 비어있으면 자동 채움.
   async function draftConcept(url: string) {
     setConceptLoading(true);
     try {
@@ -149,17 +149,17 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "컨셉 초안 실패");
+      if (!res.ok) throw new Error(data.error ?? "비주얼 초안 실패");
       setDesignRef(data.designRef ?? null);
       setConceptDraft(data.conceptDraft ?? null);
       if (!concept.trim() && data.conceptDraft) {
         setConcept(data.conceptDraft);
-        toast.success("레퍼런스로 컨셉 초안을 채웠어요 (수정 가능)");
+        toast.success("레퍼런스로 비주얼·장면을 채웠어요 (수정 가능)");
       } else {
-        toast.success("레퍼런스 디자인 반영 준비됨 · '초안 적용'으로 컨셉을 바꿀 수 있어요");
+        toast.success("레퍼런스 디자인 반영 준비됨 · '비주얼 초안 적용'으로 바꿀 수 있어요");
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "컨셉 초안 오류");
+      toast.error(e instanceof Error ? e.message : "비주얼 초안 오류");
     } finally {
       setConceptLoading(false);
     }
@@ -167,7 +167,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
 
   async function autoCopy() {
     if (!canSubmit) {
-      toast.error("컨셉을 4자 이상 입력하세요");
+      toast.error("메시지를 4자 이상 입력하세요");
       return;
     }
     setCopyLoading(true);
@@ -176,8 +176,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          concept: concept.trim(),
-          keyMessage: keyMessage.trim() || null,
+          keyMessage: keyMessage.trim(),
+          concept: concept.trim() || null,
           tone: tone.trim() || null,
           brandId: brandId || null,
         }),
@@ -201,7 +201,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
 
   async function generate() {
     if (!canSubmit) {
-      toast.error("컨셉/프롬프트를 4자 이상 입력하세요");
+      toast.error("메시지를 4자 이상 입력하세요");
       return;
     }
     setGenerating(true);
@@ -212,8 +212,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          concept: concept.trim(),
-          keyMessage: keyMessage.trim() || null,
+          keyMessage: keyMessage.trim(),
+          concept: concept.trim() || null,
           headline: headline.trim() || null,
           sub: sub.trim() || null,
           cta: cta.trim() || null,
@@ -328,22 +328,23 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">이미지 컨셉 *</CardTitle>
+          <CardTitle className="text-base">메시지 · 혜택 *</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <Textarea
-            value={concept}
-            onChange={(e) => setConcept(e.target.value)}
-            placeholder="만들고 싶은 이미지의 장면·분위기·소재를 한두 문장으로 (예: 따뜻한 햇살이 드는 카페에서 라떼 한 잔)"
-            rows={3}
+            value={keyMessage}
+            onChange={(e) => setKeyMessage(e.target.value)}
+            placeholder="이 소재로 무엇을 알릴까요? 핵심 메시지·혜택 (예: 시그니처 라떼 2+1, 이번 주말 한정)"
+            rows={2}
             disabled={generating}
           />
           <div className="space-y-1">
-            <Label className="text-xs">핵심 메시지 / 혜택 (선택)</Label>
-            <Input
-              value={keyMessage}
-              onChange={(e) => setKeyMessage(e.target.value)}
-              placeholder="이 소재로 알리려는 핵심 (예: 시그니처 라떼 2+1, 이번 주말 한정)"
+            <Label className="text-xs">비주얼·장면 (선택 — 레퍼런스 첨부 시 자동)</Label>
+            <Textarea
+              value={concept}
+              onChange={(e) => setConcept(e.target.value)}
+              placeholder="원하는 장면·분위기·소재 (예: 따뜻한 햇살이 드는 카페에서 라떼 한 잔). 레퍼런스를 첨부하면 자동으로 채워집니다."
+              rows={2}
               disabled={generating}
             />
           </div>
@@ -414,7 +415,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                   </div>
                   {conceptLoading ? (
                     <span className="text-[11px] text-muted-foreground">
-                      컨셉 초안 작성 중…
+                      비주얼 초안 작성 중…
                     </span>
                   ) : (
                     conceptDraft && (
@@ -423,11 +424,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                         disabled={generating}
                         onClick={() => {
                           setConcept(conceptDraft);
-                          toast.success("컨셉 초안을 적용했어요 (수정 가능)");
+                          toast.success("비주얼 초안을 적용했어요 (수정 가능)");
                         }}
                         className="self-start text-[11px] text-primary underline disabled:opacity-50"
                       >
-                        컨셉 초안 적용
+                        비주얼 초안 적용
                       </button>
                     )
                   )}

@@ -121,8 +121,8 @@ export async function generateSingleImageVariants(
 
   // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
   const brief: CreativeBrief = {
-    concept: input.concept,
     keyMessage: input.keyMessage,
+    concept: input.concept ?? null,
     copy: { headline: input.headline, sub: input.sub, cta: input.cta },
     tone: input.tone,
     brandHint: brand.promptHint || null,
@@ -145,6 +145,7 @@ export async function generateSingleImageVariants(
     if (isEdit) {
       p = buildEditPrompt({
         mode,
+        keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
         brand,
@@ -156,6 +157,7 @@ export async function generateSingleImageVariants(
       });
     } else if (mode === "overlay") {
       p = buildTextlessBackgroundPrompt({
+        keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
         brand,
@@ -164,6 +166,7 @@ export async function generateSingleImageVariants(
       });
     } else {
       p = buildFullImagePrompt({
+        keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
         brand,

@@ -6,8 +6,8 @@ import { generateAdCopy } from "@/lib/generate/copy";
 export const maxDuration = 60;
 
 const Schema = z.object({
-  concept: z.string().min(4).max(1000),
-  keyMessage: z.string().max(500).nullable().optional(),
+  keyMessage: z.string().min(4).max(500),
+  concept: z.string().max(1000).nullable().optional(),
   tone: z.string().max(300).nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
   count: z.number().int().min(3).max(6).optional(),
