@@ -11,24 +11,33 @@ export interface BrandContext {
   promptHint: string;
   /** 생성에 통합할 대표 로고 URL */
   logoUrl: string | null;
+  /**
+   * CTA 버튼 배경용 브랜드 primary 색상(예: "#2563EB").
+   * 이미지 생성 프롬프트엔 주입하지 않는다(자유도 보존) — 컴포지터 오버레이 버튼에만 사용.
+   */
+  ctaColor: string | null;
 }
 
 export const EMPTY_BRAND_CONTEXT: BrandContext = {
   promptHint: "",
   logoUrl: null,
+  ctaColor: null,
 };
 
-/** 브랜드 카테고리 + 대표 로고만 추출(색상/톤 제외). */
+/** 브랜드 카테고리 + 대표 로고 추출(프롬프트엔 색상 미주입). primary 색상은 CTA 버튼용으로만. */
 export function buildBrandContext(
   brand: { category?: string | null } | null,
   identity: BrandIdentity | null,
 ): BrandContext {
   const logos = identity?.logos_json ?? [];
   const logoUrl = (logos.find((l) => l.is_primary) ?? logos[0])?.url ?? null;
+  const colors = identity?.colors_json ?? [];
+  const ctaColor = (colors.find((c) => c.role === "primary") ?? colors[0])?.hex ?? null;
   const category = brand?.category?.trim();
   return {
     promptHint: category ? `brand category: ${category}` : "",
     logoUrl,
+    ctaColor,
   };
 }
 

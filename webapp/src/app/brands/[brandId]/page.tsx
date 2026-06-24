@@ -64,7 +64,7 @@ export default async function BrandDetailPage({
           <Card className="h-full transition-colors hover:border-foreground/30 cursor-pointer">
             <CardHeader>
               <CardTitle className="text-base">단일 이미지 만들기</CardTitle>
-              <CardDescription>이 브랜드 컬러·로고를 반영해 생성</CardDescription>
+              <CardDescription>이 브랜드 카테고리·로고를 반영해 생성</CardDescription>
             </CardHeader>
           </Card>
         </Link>

@@ -1,9 +1,12 @@
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
 import { renderComposite } from "@/lib/canvas/compositor";
+import { resizeToChannel } from "@/lib/canvas/resize";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
+import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
+import { getVariant, updateVariantImage } from "./queries";
 import { singleAdConfig } from "./render";
 import {
   buildTextlessBackgroundPrompt,
@@ -88,15 +91,22 @@ export async function generateSingleImageVariants(
     });
   }
 
-  // 입력 이미지: base 레퍼런스(변형 대상) + 브랜드 로고(통합 대상)
+  // overlay 모드는 로고를 이미지에 굽지 않고 컴포지터로 오버레이한다(카피·로고 변경 시 재합성만으로 갱신).
+  // full/edit는 컴포지터를 거치지 않으므로 종전대로 로고를 입력 이미지로 넘겨 모델이 통합한다.
+  const bakeLogo = mode !== "overlay";
+
+  // 입력 이미지: base 레퍼런스(변형 대상) + (bake 시) 브랜드 로고(통합 대상)
   const [baseRef, logo] = await Promise.all([
     isEdit && refUrl ? fetchAsBase64(refUrl) : Promise.resolve(null),
-    brand.logoUrl ? fetchAsBase64(brand.logoUrl).catch(() => null) : Promise.resolve(null),
+    bakeLogo && brand.logoUrl
+      ? fetchAsBase64(brand.logoUrl).catch(() => null)
+      : Promise.resolve(null),
   ]);
   const inputImages: ImagePart[] = [baseRef, logo].filter(
     (p): p is ImagePart => p != null,
   );
-  const hasLogo = logo != null;
+  const hasLogo = logo != null; // 프롬프트 LOGO_NOTE는 bake(full/edit) 시에만
+  const overlayLogoUrl = mode === "overlay" ? brand.logoUrl : null;
 
   // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
   const brief: CreativeBrief = {
@@ -179,33 +189,63 @@ export async function generateSingleImageVariants(
           })
         : await generateImage({ prompt, aspectRatio, imageSize: "1K", usageContext });
 
-      // 2) overlay면 한글 텍스트 합성, 아니면 베이스 그대로 업로드
+      // variant 추적 메타(meta_json) — 어떤 프롬프트/모델/사이즈/합성으로 만들어졌는지 보존.
+      const meta: Record<string, unknown> = {
+        mode,
+        label,
+        prompt,
+        promptVersion: SINGLE_IMAGE_PROMPT_VERSION,
+        provider: base.provider,
+        model: base.model,
+        size: base.size ?? null,
+        aspectRatio,
+        refMode: refUrl ? refMode : "none",
+        hasLogo,
+      };
+
+      // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
       if (mode === "overlay" && hasText) {
-        const bgBuf = Buffer.from(base.base64, "base64");
+        const bgBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+        const bgUploaded = await uploadGeneratedImage(generationId, `bg_v${i + 1}`, {
+          mimeType: "image/png",
+          base64: bgBuf.toString("base64"),
+        });
         const config = singleAdConfig({
           headline: input.headline,
           sub: input.sub,
           cta: input.cta,
+          logoUrl: overlayLogoUrl,
+          brandColor: brand.ctaColor,
         });
         const composed = await renderComposite(bgBuf, config);
         const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
           mimeType: "image/png",
           base64: composed.toString("base64"),
         });
+        meta.compose = { logoUrl: overlayLogoUrl, brandColor: brand.ctaColor };
         return {
           label,
           url: uploaded.url,
           path: uploaded.path,
           mode: "overlay",
+          bgUrl: bgUploaded.url,
+          meta,
         } satisfies GeneratedImageVariant;
       }
 
-      const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, base);
+      // full/edit: 텍스트가 이미지에 베이킹됨(재합성 불가). 채널 픽셀로 리사이즈 후 업로드.
+      const finalBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+      const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
+        mimeType: "image/png",
+        base64: finalBuf.toString("base64"),
+      });
       return {
         label,
         url: uploaded.url,
         path: uploaded.path,
         mode: isEdit ? "edit" : "full",
+        bgUrl: null,
+        meta,
       } satisfies GeneratedImageVariant;
     }),
   );
@@ -228,4 +268,57 @@ export async function generateSingleImageVariants(
   }
 
   return { variants, failures };
+}
+
+async function fetchBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`배경 이미지 fetch 실패: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * 카피 수정 후 단일 이미지 후보 재합성 — 보존된 배경(bg_url)을 재사용하며 이미지 모델을 호출하지 않는다.
+ * overlay 후보만 가능(full/edit는 텍스트가 이미지에 베이킹됨). 캐러셀 recomposeSlide와 동형.
+ */
+export async function recomposeVariant(
+  generationId: string,
+  input: {
+    variantId: string;
+    headline?: string | null;
+    sub?: string | null;
+    cta?: string | null;
+  },
+): Promise<{ id: string; url: string; path: string }> {
+  const variant = await getVariant(input.variantId);
+  if (!variant || variant.generation_id !== generationId) {
+    throw new ApiError(404, "후보를 찾을 수 없습니다");
+  }
+  const bgUrl = variant.bg_url;
+  if (!bgUrl) {
+    throw new ApiError(400, "이 후보는 재합성할 수 없습니다(overlay 후보만 가능)");
+  }
+
+  const compose =
+    (variant.meta_json as {
+      compose?: { logoUrl?: string | null; brandColor?: string | null };
+    })?.compose ?? {};
+  const bgBuf = await fetchBuffer(bgUrl);
+  const config = singleAdConfig({
+    headline: input.headline,
+    sub: input.sub,
+    cta: input.cta,
+    logoUrl: compose.logoUrl ?? null,
+    brandColor: compose.brandColor ?? null,
+  });
+  const composed = await renderComposite(bgBuf, config);
+  // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).
+  const uploaded = await uploadGeneratedImage(generationId, `re_${variant.id}`, {
+    mimeType: "image/png",
+    base64: composed.toString("base64"),
+  });
+  const row = await updateVariantImage(variant.id, {
+    url: uploaded.url,
+    storage_path: uploaded.path,
+  });
+  return { id: row.id, url: row.url, path: row.storage_path };
 }

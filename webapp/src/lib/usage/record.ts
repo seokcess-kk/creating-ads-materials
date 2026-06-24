@@ -4,6 +4,7 @@ import {
   estimateGeminiImageCost,
   estimateGeminiEmbeddingCost,
   estimateOpenAIImageCost,
+  estimateOpenAIImageTokenCost,
   GEMINI_IMAGE_PRICING,
 } from "./pricing";
 
@@ -31,6 +32,11 @@ export interface RecordUsageInput extends UsageContext {
   imageQuality?: string | null;
   /** Gemini 임베딩 토큰 추정치 — 이미지 단가로 잘못 과금되지 않도록 */
   approxTokens?: number | null;
+  /** OpenAI 이미지 토큰 기반 단가 계산용(응답 usage가 있을 때) */
+  openaiTextInputTokens?: number;
+  openaiImageInputTokens?: number;
+  /** edit 시 입력 이미지 장수(추적용) */
+  inputImageCount?: number;
 }
 
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
@@ -50,12 +56,22 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       ? estimateGeminiImageCost(input.model, input.imageCount ?? 1)
       : estimateGeminiEmbeddingCost(input.approxTokens ?? 0);
   } else if (input.provider === "openai") {
-    cost = estimateOpenAIImageCost(
-      input.model,
-      input.imageDimensions,
-      input.imageQuality,
-      input.imageCount ?? 1,
-    );
+    // 응답 토큰이 있으면 토큰 기반(정확), 없으면 장당 추정 테이블 폴백.
+    const hasTokens =
+      (input.inputTokens ?? 0) > 0 || (input.outputTokens ?? 0) > 0;
+    cost = hasTokens
+      ? estimateOpenAIImageTokenCost(input.model, {
+          textInputTokens:
+            input.openaiTextInputTokens ?? input.inputTokens ?? 0,
+          imageInputTokens: input.openaiImageInputTokens ?? 0,
+          outputTokens: input.outputTokens ?? 0,
+        })
+      : estimateOpenAIImageCost(
+          input.model,
+          input.imageDimensions,
+          input.imageQuality,
+          input.imageCount ?? 1,
+        );
   }
 
   const supabase = createAdminClient();
@@ -72,7 +88,12 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
     cache_creation_tokens: input.cacheCreationTokens ?? null,
     image_count: input.imageCount ?? null,
     estimated_cost_usd: cost,
-    metadata: input.metadata ?? {},
+    metadata: {
+      ...(input.metadata ?? {}),
+      ...(input.inputImageCount != null
+        ? { inputImageCount: input.inputImageCount }
+        : {}),
+    },
   });
   if (error) {
     console.warn("API usage 기록 실패:", error.message);

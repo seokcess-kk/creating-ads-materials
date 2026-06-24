@@ -22,6 +22,7 @@ interface ResultVariant {
   url: string;
   selected: boolean;
   mode: string;
+  recomposable: boolean;
 }
 
 type CopyAngle = "benefit" | "curiosity" | "urgency" | "social_proof" | "emotional";
@@ -92,6 +93,12 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [variants, setVariants] = useState<ResultVariant[]>([]);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+
+  // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음)
+  const [reBusy, setReBusy] = useState(false);
+  const [reHeadline, setReHeadline] = useState("");
+  const [reSub, setReSub] = useState("");
+  const [reCta, setReCta] = useState("");
 
   const canSubmit = concept.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
@@ -243,6 +250,41 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         /* 선택 영속화 실패는 무시 */
       }
     }
+  }
+
+  // 카피 수정 후 보존된 배경으로 재합성(이미지 모델 호출 없음).
+  async function recompose(v: ResultVariant) {
+    if (!generationId || !v.id) return;
+    setReBusy(true);
+    try {
+      const res = await fetch(`/api/generate/image/${generationId}/recompose`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          variantId: v.id,
+          headline: reHeadline.trim() || null,
+          sub: reSub.trim() || null,
+          cta: reCta.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "재합성 실패");
+      const newUrl = data.variant.url as string;
+      setVariants((prev) => prev.map((x) => (x.id === v.id ? { ...x, url: newUrl } : x)));
+      toast.success("재합성 완료 (이미지 모델 호출 없음)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setReBusy(false);
+    }
+  }
+
+  // 미리보기를 열며 재합성 입력값을 현재 카피로 초기화(이후 prev/next 탐색 시엔 유지).
+  function openPreview(i: number) {
+    setReHeadline(headline);
+    setReSub(sub);
+    setReCta(cta);
+    setPreviewIdx(i);
   }
 
   const showPrev = () =>
@@ -545,7 +587,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 <div key={v.label} className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => setPreviewIdx(i)}
+                    onClick={() => openPreview(i)}
                     title="클릭하면 크게 보기"
                     className={cn(
                       "group relative block w-full overflow-hidden rounded-md border bg-muted",
@@ -639,6 +681,45 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 다운로드
               </button>
             </div>
+
+            {preview.recomposable && (
+              <div className="w-full max-w-md space-y-2 rounded-lg border border-white/20 bg-white/5 p-3">
+                <div className="text-[11px] text-white/70">
+                  카피 수정 후 재합성 (이미지 모델 호출 없이 배경 재사용)
+                </div>
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                  <input
+                    value={reHeadline}
+                    onChange={(e) => setReHeadline(e.target.value)}
+                    placeholder="헤드라인"
+                    disabled={reBusy}
+                    className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
+                  />
+                  <input
+                    value={reSub}
+                    onChange={(e) => setReSub(e.target.value)}
+                    placeholder="서브카피"
+                    disabled={reBusy}
+                    className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
+                  />
+                  <input
+                    value={reCta}
+                    onChange={(e) => setReCta(e.target.value)}
+                    placeholder="CTA"
+                    disabled={reBusy}
+                    className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => recompose(preview)}
+                  disabled={reBusy}
+                  className="rounded-md border border-white/40 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+                >
+                  {reBusy ? "재합성 중…" : "재합성 →"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

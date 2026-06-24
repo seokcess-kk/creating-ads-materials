@@ -56,6 +56,10 @@ export interface GeneratedImageVariant {
   url: string;
   path: string;
   mode: VariantMode;
+  /** overlay 모드 재합성용 텍스트 없는 배경 URL(없으면 재합성 불가) */
+  bgUrl?: string | null;
+  /** image_variants.meta_json에 저장할 추적 정보(prompt/provider/model/size/compose 등) */
+  meta?: Record<string, unknown>;
 }
 
 export interface SingleImageResult {
@@ -81,6 +85,8 @@ export interface ImageVariantRow {
   storage_path: string;
   label: string | null;
   selected: boolean;
+  /** overlay 후보의 재합성용 배경 URL(027 마이그레이션). null이면 재합성 불가. */
+  bg_url: string | null;
   meta_json: Record<string, unknown>;
   created_at: string;
 }

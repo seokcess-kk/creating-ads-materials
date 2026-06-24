@@ -4,9 +4,13 @@ import {
   generateSingleImageVariants,
   SINGLE_IMAGE_PROMPT_VERSION,
 } from "@/lib/generate/single-image";
-import { createGeneration, insertVariants } from "@/lib/generate/queries";
+import {
+  createGeneration,
+  insertVariants,
+  setGenerationStatus,
+} from "@/lib/generate/queries";
 import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
-import type { SingleImageInput } from "@/lib/generate/types";
+import type { SingleImageInput, SingleImageResult } from "@/lib/generate/types";
 
 export const maxDuration = 180;
 
@@ -32,14 +36,16 @@ export interface GenerateImageResponseVariant {
   url: string;
   selected: boolean;
   mode: string;
+  /** 카피 수정 후 모델 호출 없이 재합성 가능한 후보(overlay + 배경 보존) */
+  recomposable: boolean;
 }
 
 export async function POST(request: Request) {
+  let generationId: string | null = null;
   try {
     const input = (await parseJson(request, Schema)) as SingleImageInput;
 
     // 1) 생성 행 선저장 (best-effort — 마이그레이션 미적용 시에도 생성은 진행)
-    let generationId: string | null = null;
     try {
       const gen = await createGeneration(input, {
         promptVersion: SINGLE_IMAGE_PROMPT_VERSION,
@@ -53,12 +59,33 @@ export async function POST(request: Request) {
     }
 
     // 2) 이미지 생성 (저장 실패 시 임시 id로 storage 경로만 구성)
-    const result = await generateSingleImageVariants(
-      generationId ?? `tmp_${Date.now()}`,
-      input,
-    );
+    let result: SingleImageResult;
+    try {
+      result = await generateSingleImageVariants(
+        generationId ?? `tmp_${Date.now()}`,
+        input,
+      );
+    } catch (e) {
+      // 전량 실패 — 거짓 'ready'로 남지 않도록 failed로 전이.
+      if (generationId) {
+        await setGenerationStatus(generationId, "failed", (e as Error).message).catch(
+          () => {},
+        );
+      }
+      throw e;
+    }
 
-    // 3) 후보 저장 (best-effort) + 응답 정규화
+    // 3) 상태 전이: ready + (부분 실패 시) 요약을 error에 보존.
+    if (generationId) {
+      const errSummary = result.failures.length
+        ? `${result.failures.length}장 실패 — ${result.failures
+            .map((f) => `${f.label}: ${f.reason}`)
+            .join(" / ")}`
+        : null;
+      await setGenerationStatus(generationId, "ready", errSummary).catch(() => {});
+    }
+
+    // 4) 후보 저장 (best-effort) + 응답 정규화
     let responseVariants: GenerateImageResponseVariant[];
     if (generationId) {
       try {
@@ -69,6 +96,7 @@ export async function POST(request: Request) {
           url: r.url,
           selected: r.selected,
           mode: String((r.meta_json as { mode?: string })?.mode ?? ""),
+          recomposable: Boolean(r.bg_url),
         }));
       } catch (e) {
         console.warn("image_variants 저장 실패:", (e as Error).message);
@@ -78,6 +106,7 @@ export async function POST(request: Request) {
           url: v.url,
           selected: i === 0,
           mode: v.mode,
+          recomposable: false, // 영속화 실패 → 재합성 대상 행 없음
         }));
       }
     } else {
@@ -87,6 +116,7 @@ export async function POST(request: Request) {
         url: v.url,
         selected: i === 0,
         mode: v.mode,
+        recomposable: false,
       }));
     }
 

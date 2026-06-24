@@ -69,6 +69,38 @@ export function estimateOpenAIImageCost(
   return per * count;
 }
 
+// OpenAI 이미지 — 토큰 기반 단가(USD / 1M tokens). API 응답(response.usage)이 있을 때
+// 장당 추정 테이블보다 정확하다(특히 입력 이미지가 여러 장인 edit). 출처: OpenAI pricing(2026-06).
+export interface OpenAIImageTokenRates {
+  textInput: number;
+  imageInput: number;
+  cachedInput: number;
+  output: number;
+}
+
+const OPENAI_IMAGE_TOKEN_PRICING: Record<string, OpenAIImageTokenRates> = {
+  "gpt-image-2": { textInput: 5, imageInput: 8, cachedInput: 2, output: 30 },
+  "gpt-image-1.5": { textInput: 5, imageInput: 8, cachedInput: 2, output: 32 },
+  "gpt-image-1": { textInput: 5, imageInput: 10, cachedInput: 2.5, output: 40 },
+  "gpt-image-1-mini": { textInput: 2, imageInput: 2.5, cachedInput: 0.25, output: 8 },
+};
+
+/** 실제 토큰 사용량으로 OpenAI 이미지 비용을 계산(토큰을 알 때만 사용; 모르면 장당 테이블 폴백). */
+export function estimateOpenAIImageTokenCost(
+  model: string | null | undefined,
+  usage: { textInputTokens: number; imageInputTokens: number; outputTokens: number },
+): number {
+  const r =
+    (model ? OPENAI_IMAGE_TOKEN_PRICING[model] : undefined) ??
+    OPENAI_IMAGE_TOKEN_PRICING["gpt-image-2"];
+  return (
+    (Math.max(0, usage.textInputTokens) * r.textInput +
+      Math.max(0, usage.imageInputTokens) * r.imageInput +
+      Math.max(0, usage.outputTokens) * r.output) /
+    1_000_000
+  );
+}
+
 export function estimateClaudeCost(
   model: string | null | undefined,
   usage: {

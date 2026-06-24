@@ -64,7 +64,7 @@ export default async function BrandsPage({
       {all.length === 0 ? (
         <EmptyState
           title="아직 등록된 브랜드가 없습니다"
-          description="브랜드를 등록하면 생성 시 컬러·로고 등 컨텍스트로 쓸 수 있습니다(선택)."
+          description="브랜드를 등록하면 생성 시 카테고리·로고 등 컨텍스트로 쓸 수 있습니다(선택)."
           action={
             <Link href="/brands/new">
               <Button>첫 브랜드 등록하기</Button>

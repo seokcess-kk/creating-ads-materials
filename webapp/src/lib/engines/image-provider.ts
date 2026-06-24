@@ -2,7 +2,7 @@ import { serverEnv } from "@/lib/env";
 import type {
   GenerateImageInput,
   EditImageInput,
-  ImagePart,
+  GeneratedImage,
 } from "./image-types";
 import * as gemini from "./gemini-image";
 import * as openai from "./openai-image";
@@ -14,13 +14,13 @@ function provider() {
   return serverEnv().IMAGE_PROVIDER;
 }
 
-export async function generateImage(input: GenerateImageInput): Promise<ImagePart> {
+export async function generateImage(input: GenerateImageInput): Promise<GeneratedImage> {
   return provider() === "gemini"
     ? gemini.generateImage(input)
     : openai.generateImage(input);
 }
 
-export async function editImage(input: EditImageInput): Promise<ImagePart> {
+export async function editImage(input: EditImageInput): Promise<GeneratedImage> {
   return provider() === "gemini"
     ? gemini.editImage(input)
     : openai.editImage(input);
@@ -30,6 +30,7 @@ export type {
   AspectRatio,
   ImageSize,
   ImagePart,
+  GeneratedImage,
   GenerateImageInput,
   EditImageInput,
 } from "./image-types";

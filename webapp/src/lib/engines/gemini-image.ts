@@ -5,12 +5,13 @@ import type {
   AspectRatio,
   ImageSize,
   ImagePart,
+  GeneratedImage,
   GenerateImageInput,
   EditImageInput,
 } from "./image-types";
 
 // 기존 `@/lib/engines/gemini-image`를 직접 import하던 코드 호환을 위해 타입 재노출
-export type { AspectRatio, ImageSize, ImagePart, GenerateImageInput, EditImageInput };
+export type { AspectRatio, ImageSize, ImagePart, GeneratedImage, GenerateImageInput, EditImageInput };
 
 let client: GoogleGenAI | null = null;
 
@@ -21,7 +22,7 @@ function getClient(): GoogleGenAI {
 
 export const GEMINI_IMAGE_MODEL = "gemini-3-pro-image-preview";
 
-export async function generateImage(input: GenerateImageInput): Promise<ImagePart> {
+export async function generateImage(input: GenerateImageInput): Promise<GeneratedImage> {
   const response = await getClient().models.generateContent({
     model: GEMINI_IMAGE_MODEL,
     contents: input.prompt,
@@ -53,10 +54,10 @@ export async function generateImage(input: GenerateImageInput): Promise<ImagePar
     );
   }
 
-  return part;
+  return { ...part, provider: "gemini", model: GEMINI_IMAGE_MODEL, size: input.imageSize ?? "2K" };
 }
 
-export async function editImage(input: EditImageInput): Promise<ImagePart> {
+export async function editImage(input: EditImageInput): Promise<GeneratedImage> {
   const parts = [input.baseImage, ...(input.extraImages ?? [])];
   const response = await getClient().models.generateContent({
     model: GEMINI_IMAGE_MODEL,
@@ -95,7 +96,7 @@ export async function editImage(input: EditImageInput): Promise<ImagePart> {
     );
   }
 
-  return part;
+  return { ...part, provider: "gemini", model: GEMINI_IMAGE_MODEL, size: input.imageSize ?? "2K" };
 }
 
 type GenAIResponse = Awaited<ReturnType<ReturnType<typeof getClient>["models"]["generateContent"]>>;

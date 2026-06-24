@@ -16,13 +16,28 @@ export async function createGeneration(
     .insert({
       brand_id: input.brandId ?? null,
       input_json: { ...input },
-      status: "ready",
+      // 생성 시작은 pending — 완료 후 setGenerationStatus로 ready/failed 전이(거짓 성공 방지).
+      status: "pending",
       prompt_version: opts.promptVersion,
     })
     .select()
     .single();
   if (error) throw error;
   return data as ImageGenerationRow;
+}
+
+/** 생성 상태 전이(ready/failed). 부분 실패 요약은 error에 보존. carousel setCarouselStatus와 동형. */
+export async function setGenerationStatus(
+  generationId: string,
+  status: "pending" | "ready" | "failed",
+  error?: string | null,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error: dbErr } = await supabase
+    .from("image_generations")
+    .update({ status, error: error ?? null })
+    .eq("id", generationId);
+  if (dbErr) throw dbErr;
 }
 
 export async function insertVariants(
@@ -36,7 +51,8 @@ export async function insertVariants(
     storage_path: v.path,
     label: v.label,
     selected: i === 0, // 첫 후보 기본 선택
-    meta_json: { mode: v.mode },
+    bg_url: v.bgUrl ?? null,
+    meta_json: v.meta ?? { mode: v.mode },
   }));
   const { data, error } = await supabase
     .from("image_variants")
@@ -44,6 +60,32 @@ export async function insertVariants(
     .select();
   if (error) throw error;
   return (data ?? []) as ImageVariantRow[];
+}
+
+export async function getVariant(variantId: string): Promise<ImageVariantRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("image_variants")
+    .select("*")
+    .eq("id", variantId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as ImageVariantRow | null) ?? null;
+}
+
+export async function updateVariantImage(
+  variantId: string,
+  patch: { url: string; storage_path: string },
+): Promise<ImageVariantRow> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("image_variants")
+    .update(patch)
+    .eq("id", variantId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as ImageVariantRow;
 }
 
 export async function setSelectedVariant(
