@@ -65,6 +65,8 @@ export interface ComposeConfig {
     marginRatio?: number;
     xRatio?: number;
     yRatio?: number;
+    /** 가독성 부족 시 로고 뒤에 깔 반투명 패널 색(예: "rgba(0,0,0,0.32)"). 없으면 미사용. */
+    backingColor?: string | null;
   };
   mainCopy?: {
     text: string;
@@ -279,6 +281,21 @@ export async function renderComposite(
           } else {
             logoX = margin;
           }
+        }
+        // 가독성 패널: 로고 뒤에 반투명 라운드 사각형(대비 부족 배경에서 로고가 읽히도록).
+        if (config.logo.backingColor) {
+          const padX = logoW * 0.12;
+          const padY = logoH * 0.18;
+          ctx.fillStyle = config.logo.backingColor;
+          drawRoundedRect(
+            ctx,
+            logoX - padX,
+            logoY - padY,
+            logoW + padX * 2,
+            logoH + padY * 2,
+            Math.min(logoW, logoH) * 0.22,
+          );
+          ctx.fill();
         }
         ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
       }

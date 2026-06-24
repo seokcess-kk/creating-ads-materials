@@ -1,16 +1,17 @@
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
-import { renderComposite } from "@/lib/canvas/compositor";
+import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
 import { resizeToChannel } from "@/lib/canvas/resize";
 import {
   uploadGeneratedImage,
   deleteGeneratedImage,
 } from "@/lib/storage/generated-images";
 import { fetchAsBase64, fetchAsBuffer } from "@/lib/utils/image-fetch";
+import { analyzeLogos, planLogoPlacement, type LogoCandidate } from "@/lib/canvas/logo-placement";
 import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { getVariant, updateVariantImage } from "./queries";
-import { singleAdConfig } from "./render";
+import { singleAdConfig, type SingleAdLogo } from "./render";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
@@ -40,19 +41,34 @@ const STYLE_HINTS = [
   "premium editorial look with refined details",
 ];
 
-const LOGO_NOTE =
-  " Integrate the provided brand logo into the scene naturally and keep it undistorted and legible (small, in a corner or subtly on the product). Do not alter its letters or shape.";
-
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
   if (!hasText) return "full"; // 텍스트 없으면 순수 비주얼
   return input.renderMode === "full" ? "full" : "overlay";
 }
 
+/** 로고만 오버레이(어둠 처리 없이). full/edit 모드에서 베이킹된 이미지 위에 로고 1개를 얹는다. */
+async function composeLogoOnly(buf: Buffer, logo: SingleAdLogo): Promise<Buffer> {
+  const config: ComposeConfig = {
+    backgroundImageUrl: "",
+    output: { bucket: "", path: "" },
+    overlay: { top: false, bottom: false },
+    logo: {
+      url: logo.url,
+      position: logo.position ?? "top-left",
+      widthRatio: 0.16,
+      marginRatio: 0.05,
+      backingColor: logo.backingColor ?? null,
+    },
+  };
+  return renderComposite(buf, config);
+}
+
 /**
  * 단일 이미지 N장 후보 생성.
  *  - 의도/맥락을 크리에이티브 브리프로 모아 아트디렉터(Claude)가 gpt-image 프롬프트 N개로 확장.
- *  - 브랜드: 카테고리(프롬프트 힌트) + 로고(입력 이미지로 전달해 통합). 색상은 미사용.
+ *  - 브랜드: 카테고리(프롬프트 힌트)만 모델에 주입. 로고는 모델에 굽지 않고 생성 후 컴포지터로
+ *    정확히 1개 오버레이(배경 대비에 맞춰 모서리·에셋 선택·가독성 패널). 색상은 CTA 버튼에만.
  *  - 레퍼런스: style(디자인 요소만 차용) / base(레퍼런스 자체를 변형).
  *  - overlay 모드면 텍스트 없는 배경에 컴포지터로 한글 오버레이.
  */
@@ -94,32 +110,21 @@ export async function generateSingleImageVariants(
     });
   }
 
-  // overlay 모드는 로고를 이미지에 굽지 않고 컴포지터로 오버레이한다(카피·로고 변경 시 재합성만으로 갱신).
-  // full/edit는 컴포지터를 거치지 않으므로 종전대로 로고를 입력 이미지로 넘겨 모델이 통합한다.
-  const bakeLogo = mode !== "overlay";
-
-  // 입력 이미지: base 레퍼런스(변형 대상) + (bake 시) 브랜드 로고(통합 대상).
-  // overlay 로고는 컴포지터용으로 1회만 받아 data URL로 후보들에 공유한다(후보마다 재fetch·비결정성 방지).
-  const [baseRef, logo, overlayLogo] = await Promise.all([
-    isEdit && refUrl ? fetchAsBase64(refUrl) : Promise.resolve(null),
-    bakeLogo && brand.logoUrl
-      ? fetchAsBase64(brand.logoUrl).catch(() => null)
-      : Promise.resolve(null),
-    !bakeLogo && brand.logoUrl
-      ? fetchAsBase64(brand.logoUrl).catch(() => null)
-      : Promise.resolve(null),
-  ]);
-  const inputImages: ImagePart[] = [baseRef, logo].filter(
+  // 로고는 모델에 굽지 않는다(중복·왜곡 방지) → 입력 이미지는 base 레퍼런스(변형 대상)만.
+  const baseRef = isEdit && refUrl ? await fetchAsBase64(refUrl).catch(() => null) : null;
+  const inputImages: ImagePart[] = [baseRef].filter(
     (p): p is ImagePart => p != null,
   );
-  const hasLogo = logo != null; // 프롬프트 LOGO_NOTE는 bake(full/edit) 시에만
-  const overlayLogoUrl = mode === "overlay" ? brand.logoUrl : null; // meta.compose 저장용(실제 URL)
-  // 컴포지터 입력: 네트워크 재fetch 없이 1회 받은 로고를 data URL로 재사용(후보 공통).
-  const overlayLogoData = overlayLogo
-    ? `data:${overlayLogo.mimeType};base64,${overlayLogo.base64}`
-    : null;
 
-  // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
+  // 브랜드 로고는 생성당 1회만 받아 휘도 분석(후보별 배경 대비에 맞춰 1개 선택·배치).
+  const logoAssets: LogoCandidate[] = brand.logos.length
+    ? await analyzeLogos(
+        brand.logos.map((l) => l.url),
+        fetchAsBuffer,
+      )
+    : [];
+
+  // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백). 로고는 합성 단계라 hasLogo=false.
   const brief: CreativeBrief = {
     keyMessage: input.keyMessage,
     concept: input.concept ?? null,
@@ -130,12 +135,11 @@ export async function generateSingleImageVariants(
     aspectRatio,
     mode,
     isEdit,
-    hasLogo,
   };
   const directed = await buildImagePrompts(brief, count, {
     operation: "single_image_art_director",
     brandId: input.brandId ?? null,
-    metadata: { generationId, mode, refMode: refUrl ? refMode : "none", hasLogo },
+    metadata: { generationId, mode, refMode: refUrl ? refMode : "none" },
   });
 
   const designRefText = designRef ? formatDesignReference(designRef) : null;
@@ -177,7 +181,21 @@ export async function generateSingleImageVariants(
         cta: input.cta,
       });
     }
-    return hasLogo ? p + LOGO_NOTE : p;
+    return p;
+  }
+
+  // 로고 버퍼를 data URL로(컴포지터가 네트워크 재fetch 없이 사용). 포맷은 sharp가 내용으로 판별.
+  function logoForCompositor(
+    placement: { url: string; position: SingleAdLogo["position"]; backingColor: string | null } | null,
+  ): SingleAdLogo | null {
+    if (!placement) return null;
+    const asset = logoAssets.find((a) => a.url === placement.url);
+    if (!asset) return null;
+    return {
+      url: `data:image/png;base64,${asset.buf.toString("base64")}`,
+      position: placement.position,
+      backingColor: placement.backingColor,
+    };
   }
 
   const results = await Promise.allSettled(
@@ -188,7 +206,7 @@ export async function generateSingleImageVariants(
       const usageContext = {
         operation: useEdit ? "single_image_edit" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none", hasLogo },
+        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none" },
       };
 
       // 1) 베이스 이미지 (입력 이미지가 있으면 edit, 없으면 text-to-image)
@@ -214,17 +232,18 @@ export async function generateSingleImageVariants(
         size: base.size ?? null,
         aspectRatio,
         refMode: refUrl ? refMode : "none",
-        hasLogo,
       };
 
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
       if (mode === "overlay" && hasText) {
         const bgBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+        // 오버레이는 그라데이션+스크림으로 배경이 어두워지므로 darken을 반영해 로고 대비를 판단.
+        const placement = await planLogoPlacement(bgBuf, logoAssets, { darken: 0.55 });
         const config = singleAdConfig({
           headline: input.headline,
           sub: input.sub,
           cta: input.cta,
-          logoUrl: overlayLogoData,
+          logo: logoForCompositor(placement),
           brandColor: brand.ctaColor,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
@@ -239,9 +258,11 @@ export async function generateSingleImageVariants(
           mimeType: "image/png",
           base64: composed.toString("base64"),
         });
-        // 재합성은 실제 로고 URL을 다시 받아 쓰므로 meta엔 data URL이 아닌 실제 URL 저장. 합성 카피도 보존.
+        // 재합성은 실제 로고 URL을 다시 받아 쓰므로 meta엔 data URL이 아닌 실제 URL/배치 저장. 합성 카피도 보존.
         meta.compose = {
-          logoUrl: overlayLogoUrl,
+          logoUrl: placement?.url ?? null,
+          logoPosition: placement?.position ?? null,
+          logoBacking: placement?.backingColor ?? null,
           brandColor: brand.ctaColor,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
@@ -257,12 +278,23 @@ export async function generateSingleImageVariants(
         } satisfies GeneratedImageVariant;
       }
 
-      // full/edit: 텍스트·로고가 이미지에 베이킹됨(재합성 불가). 비율이 맞을 때만 스케일(crop 금지 — 잘림 방지).
-      const finalBuf = await resizeToChannel(
+      // full/edit: 텍스트가 이미지에 베이킹됨(재합성 불가). 비율이 맞을 때만 스케일(crop 금지 — 잘림 방지).
+      let finalBuf = await resizeToChannel(
         Buffer.from(base.base64, "base64"),
         aspectRatio,
         { allowCrop: false },
       );
+      // 로고는 모델에 굽지 않고 여기서 1개만 오버레이(어둠 처리 없이 로고만). 배경 대비로 모서리·에셋 선택.
+      const fullPlacement = await planLogoPlacement(finalBuf, logoAssets);
+      const fullLogo = logoForCompositor(fullPlacement);
+      if (fullLogo) {
+        finalBuf = await composeLogoOnly(finalBuf, fullLogo);
+        meta.logo = {
+          url: fullPlacement?.url ?? null,
+          position: fullPlacement?.position ?? null,
+          backing: fullPlacement?.backingColor ?? null,
+        };
+      }
       const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
         mimeType: "image/png",
         base64: finalBuf.toString("base64"),
@@ -332,13 +364,25 @@ export async function recomposeVariant(
 
   const meta = (variant.meta_json ?? {}) as Record<string, unknown>;
   const compose =
-    (meta.compose as { logoUrl?: string | null; brandColor?: string | null }) ?? {};
+    (meta.compose as {
+      logoUrl?: string | null;
+      logoPosition?: SingleAdLogo["position"];
+      logoBacking?: string | null;
+      brandColor?: string | null;
+    }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
     headline: input.headline,
     sub: input.sub,
     cta: input.cta,
-    logoUrl: compose.logoUrl ?? null,
+    // 생성 시 결정된 로고 배치(위치·가독성 패널)를 그대로 재현.
+    logo: compose.logoUrl
+      ? {
+          url: compose.logoUrl,
+          position: compose.logoPosition,
+          backingColor: compose.logoBacking ?? null,
+        }
+      : null,
     brandColor: compose.brandColor ?? null,
   });
   const composed = await renderComposite(bgBuf, config);

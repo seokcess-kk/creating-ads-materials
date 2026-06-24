@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ComposeConfig, ComposeFontSet } from "@/lib/canvas/compositor";
+import type { ComposeConfig, ComposeFontSet, LogoPosition } from "@/lib/canvas/compositor";
 
 // 한글 렌더 안정성 우선 — Pretendard 고정(public/fonts). 단일 이미지/캐러셀 공통 정책.
 export function singleAdFontSet(): ComposeFontSet {
@@ -13,11 +13,19 @@ export function singleAdFontSet(): ComposeFontSet {
   };
 }
 
+export interface SingleAdLogo {
+  url: string;
+  position?: LogoPosition;
+  /** 가독성 패널 색(없으면 미사용) */
+  backingColor?: string | null;
+}
+
 export interface SingleAdLayoutInput {
   headline?: string | null;
   sub?: string | null;
   cta?: string | null;
-  logoUrl?: string | null;
+  /** 배경 대비에 맞춰 선택·배치된 로고(없으면 로고 미표시) */
+  logo?: SingleAdLogo | null;
   /** CTA 버튼 배경(브랜드 primary) */
   brandColor?: string | null;
 }
@@ -33,12 +41,13 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     overlay: { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },
   };
 
-  if (input.logoUrl) {
+  if (input.logo?.url) {
     config.logo = {
-      url: input.logoUrl,
-      position: "top-left",
+      url: input.logo.url,
+      position: input.logo.position ?? "top-left",
       widthRatio: 0.16,
       marginRatio: 0.05,
+      backingColor: input.logo.backingColor ?? null,
     };
   }
 

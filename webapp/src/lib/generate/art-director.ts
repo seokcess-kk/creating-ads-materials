@@ -24,8 +24,6 @@ export interface CreativeBrief {
   mode: SingleRenderMode;
   /** 레퍼런스 사진 자체를 변형(editImage)하는 경우 true */
   isEdit?: boolean;
-  /** 브랜드 로고를 입력 이미지로 함께 전달해 통합하는 경우 true */
-  hasLogo?: boolean;
 }
 
 const ImagePromptSchema = z.object({
@@ -81,7 +79,7 @@ TEXT HANDLING (critical):
 
 INPUT IMAGES (when provided):
 - If a base reference photo is provided (isEdit), write a TRANSFORMATION instruction: preserve its core subject, restyle it into the ad direction.
-- If a brand logo is provided (hasLogo), instruct to INTEGRATE the brand logo into the scene naturally and KEEP IT UNDISTORTED and legible — place it small (a corner, or subtly on the product/packaging). Never alter the logo's letters, colors, or shape, and do NOT invent a different logo.
+- Do NOT draw, invent, or place any brand logo — the brand logo is composited separately after generation. Keep the image free of logos/wordmarks.
 
 Output ONLY via the ${TOOL} tool. Prompts must be in English (Korean text-to-render stays in Korean inside the prompt).`;
 }
@@ -91,7 +89,7 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
   lines.push(`variants requested: ${count}`);
   lines.push(`mode: ${brief.mode}${brief.isEdit ? " (edit a provided reference photo)" : ""}`);
   if (brief.isEdit) lines.push("input image: a base reference photo to transform (preserve subject).");
-  if (brief.hasLogo) lines.push("input image: the brand logo — integrate naturally and keep it undistorted/legible.");
+  lines.push("do NOT render any brand logo or wordmark (logo is composited separately afterwards).");
   lines.push(`aspect ratio: ${brief.aspectRatio}`);
   lines.push(`key message to communicate (lead with this): ${brief.keyMessage.trim()}`);
   if (brief.concept?.trim()) lines.push(`visual direction / scene (optional): ${brief.concept.trim()}`);

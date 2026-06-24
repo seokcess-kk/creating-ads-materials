@@ -9,8 +9,11 @@ import type { SingleRenderMode } from "./types";
 export interface BrandContext {
   /** 프롬프트용 영어 힌트(카테고리 등 — 색상 제외) */
   promptHint: string;
-  /** 생성에 통합할 대표 로고 URL */
-  logoUrl: string | null;
+  /**
+   * 합성에 쓸 로고 에셋 목록(primary 우선 정렬). 생성 후 컴포지터가 1개만 오버레이하며,
+   * 여러 에셋이 있으면 배경 대비에 맞춰(밝은 곳엔 어두운 로고) 자동 선택한다.
+   */
+  logos: { url: string; label: string | null }[];
   /**
    * CTA 버튼 배경용 브랜드 primary 색상(예: "#2563EB").
    * 이미지 생성 프롬프트엔 주입하지 않는다(자유도 보존) — 컴포지터 오버레이 버튼에만 사용.
@@ -20,23 +23,26 @@ export interface BrandContext {
 
 export const EMPTY_BRAND_CONTEXT: BrandContext = {
   promptHint: "",
-  logoUrl: null,
+  logos: [],
   ctaColor: null,
 };
 
-/** 브랜드 카테고리 + 대표 로고 추출(프롬프트엔 색상 미주입). primary 색상은 CTA 버튼용으로만. */
+/** 브랜드 카테고리 + 로고 에셋 추출(프롬프트엔 색상 미주입). primary 색상은 CTA 버튼용으로만. */
 export function buildBrandContext(
   brand: { category?: string | null } | null,
   identity: BrandIdentity | null,
 ): BrandContext {
-  const logos = identity?.logos_json ?? [];
-  const logoUrl = (logos.find((l) => l.is_primary) ?? logos[0])?.url ?? null;
+  const raw = identity?.logos_json ?? [];
+  // primary를 앞으로 정렬(자동 선택 실패/대비 동률 시 우선 사용).
+  const logos = [...raw]
+    .sort((a, b) => Number(Boolean(b.is_primary)) - Number(Boolean(a.is_primary)))
+    .map((l) => ({ url: l.url, label: l.label ?? null }));
   const colors = identity?.colors_json ?? [];
   const ctaColor = (colors.find((c) => c.role === "primary") ?? colors[0])?.hex ?? null;
   const category = brand?.category?.trim();
   return {
     promptHint: category ? `brand category: ${category}` : "",
-    logoUrl,
+    logos,
     ctaColor,
   };
 }
@@ -102,6 +108,7 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
+    "Do NOT draw any brand logo or wordmark (the logo is added separately afterwards).",
     "Strong visual hierarchy, advertising-grade composition.",
   ]);
 }
