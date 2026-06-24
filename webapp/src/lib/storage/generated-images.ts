@@ -19,3 +19,10 @@ export async function uploadGeneratedImage(
   const { data: urlData } = supabase.storage.from("generated-images").getPublicUrl(path);
   return { url: urlData.publicUrl, path };
 }
+
+/** 더 이상 참조되지 않는 생성물 정리(고아 누적 방지). 호출부에서 best-effort로 사용. */
+export async function deleteGeneratedImage(path: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.storage.from("generated-images").remove([path]);
+  if (error) throw error;
+}

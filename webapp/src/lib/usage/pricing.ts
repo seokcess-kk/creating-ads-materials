@@ -60,9 +60,11 @@ export function estimateOpenAIImageCost(
   quality: string | null | undefined,
   count: number,
 ): number {
-  const modelTable =
-    (model ? OPENAI_IMAGE_PRICING_BY_MODEL[model] : undefined) ??
-    OPENAI_IMAGE_PRICING_BY_MODEL["gpt-image-2"];
+  const knownTable = model ? OPENAI_IMAGE_PRICING_BY_MODEL[model] : undefined;
+  if (model && !knownTable) {
+    console.warn(`알 수 없는 OpenAI 이미지 모델 단가(${model}) → gpt-image-2 단가로 추정`);
+  }
+  const modelTable = knownTable ?? OPENAI_IMAGE_PRICING_BY_MODEL["gpt-image-2"];
   const sizeTable =
     (size ? modelTable[size] : undefined) ?? modelTable["1024x1024"];
   const per = (quality ? sizeTable[quality] : undefined) ?? sizeTable["medium"];
@@ -71,18 +73,19 @@ export function estimateOpenAIImageCost(
 
 // OpenAI 이미지 — 토큰 기반 단가(USD / 1M tokens). API 응답(response.usage)이 있을 때
 // 장당 추정 테이블보다 정확하다(특히 입력 이미지가 여러 장인 edit). 출처: OpenAI pricing(2026-06).
+// cachedInput(캐시 입력 할인)은 OpenAI 이미지 응답이 캐시 토큰을 분리 보고하지 않아 적용 불가 →
+// 의도적으로 단가 테이블에서 제외(불사용 필드로 두면 추후 오해 소지). 분리 보고가 생기면 그때 추가.
 export interface OpenAIImageTokenRates {
   textInput: number;
   imageInput: number;
-  cachedInput: number;
   output: number;
 }
 
 const OPENAI_IMAGE_TOKEN_PRICING: Record<string, OpenAIImageTokenRates> = {
-  "gpt-image-2": { textInput: 5, imageInput: 8, cachedInput: 2, output: 30 },
-  "gpt-image-1.5": { textInput: 5, imageInput: 8, cachedInput: 2, output: 32 },
-  "gpt-image-1": { textInput: 5, imageInput: 10, cachedInput: 2.5, output: 40 },
-  "gpt-image-1-mini": { textInput: 2, imageInput: 2.5, cachedInput: 0.25, output: 8 },
+  "gpt-image-2": { textInput: 5, imageInput: 8, output: 30 },
+  "gpt-image-1.5": { textInput: 5, imageInput: 8, output: 32 },
+  "gpt-image-1": { textInput: 5, imageInput: 10, output: 40 },
+  "gpt-image-1-mini": { textInput: 2, imageInput: 2.5, output: 8 },
 };
 
 /** 실제 토큰 사용량으로 OpenAI 이미지 비용을 계산(토큰을 알 때만 사용; 모르면 장당 테이블 폴백). */
@@ -90,9 +93,11 @@ export function estimateOpenAIImageTokenCost(
   model: string | null | undefined,
   usage: { textInputTokens: number; imageInputTokens: number; outputTokens: number },
 ): number {
-  const r =
-    (model ? OPENAI_IMAGE_TOKEN_PRICING[model] : undefined) ??
-    OPENAI_IMAGE_TOKEN_PRICING["gpt-image-2"];
+  const known = model ? OPENAI_IMAGE_TOKEN_PRICING[model] : undefined;
+  if (model && !known) {
+    console.warn(`알 수 없는 OpenAI 이미지 모델 단가(${model}) → gpt-image-2 단가로 추정`);
+  }
+  const r = known ?? OPENAI_IMAGE_TOKEN_PRICING["gpt-image-2"];
   return (
     (Math.max(0, usage.textInputTokens) * r.textInput +
       Math.max(0, usage.imageInputTokens) * r.imageInput +

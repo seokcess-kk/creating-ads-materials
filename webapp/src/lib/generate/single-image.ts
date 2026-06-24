@@ -1,8 +1,11 @@
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
 import { renderComposite } from "@/lib/canvas/compositor";
 import { resizeToChannel } from "@/lib/canvas/resize";
-import { uploadGeneratedImage } from "@/lib/storage/generated-images";
-import { fetchAsBase64 } from "@/lib/utils/image-fetch";
+import {
+  uploadGeneratedImage,
+  deleteGeneratedImage,
+} from "@/lib/storage/generated-images";
+import { fetchAsBase64, fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
@@ -292,15 +295,11 @@ export async function generateSingleImageVariants(
   return { variants, failures };
 }
 
-async function fetchBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`배경 이미지 fetch 실패: ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
 /**
  * 카피 수정 후 단일 이미지 후보 재합성 — 보존된 배경(bg_url)을 재사용하며 이미지 모델을 호출하지 않는다.
  * overlay 후보만 가능(full/edit는 텍스트가 이미지에 베이킹됨). 캐러셀 recomposeSlide와 동형.
+ * 인가: getVariant/updateVariantImage는 인증 클라이언트(createClient)로 RLS(owner 스코프)가 강제된다.
+ * admin 클라이언트로 바꾸면 IDOR 위험이 생기므로 유지할 것.
  */
 export async function recomposeVariant(
   generationId: string,
@@ -331,7 +330,7 @@ export async function recomposeVariant(
   const meta = (variant.meta_json ?? {}) as Record<string, unknown>;
   const compose =
     (meta.compose as { logoUrl?: string | null; brandColor?: string | null }) ?? {};
-  const bgBuf = await fetchBuffer(bgUrl);
+  const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
     headline: input.headline,
     sub: input.sub,
@@ -355,10 +354,15 @@ export async function recomposeVariant(
       cta: input.cta ?? null,
     },
   };
+  const prevPath = variant.storage_path;
   const row = await updateVariantImage(variant.id, {
     url: uploaded.url,
     storage_path: uploaded.path,
     meta_json: newMeta,
   });
+  // 직전 합성본은 더 이상 참조되지 않으므로 정리(고아 누적 방지). 배경(bg_url)은 재사용하므로 보존.
+  if (prevPath && prevPath !== uploaded.path) {
+    await deleteGeneratedImage(prevPath).catch(() => {});
+  }
   return { id: row.id, url: row.url, path: row.storage_path };
 }

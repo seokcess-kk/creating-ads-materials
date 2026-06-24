@@ -2,6 +2,7 @@ import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import { generateImage } from "@/lib/engines";
 import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
+import { fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { extractNoticeMeta } from "@/lib/notice/extract";
 import type { NoticeMeta } from "@/lib/notice/types";
 import {
@@ -139,12 +140,6 @@ async function uploadBuffer(
   });
 }
 
-async function fetchBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`배경 이미지 fetch 실패: ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
-}
-
 export interface RenderedSlide extends SlideDetail {
   bg_url: string | null;
   image_url: string;
@@ -169,7 +164,7 @@ export async function renderCarouselSlides(params: {
   let sharedBgUrl: string | null = params.sharedBgUrl ?? null;
   if (params.bgMode === "shared") {
     if (sharedBgUrl) {
-      sharedBgBuf = await fetchBuffer(sharedBgUrl);
+      sharedBgBuf = await fetchAsBuffer(sharedBgUrl);
     } else {
       const bg = await generateImage({
         prompt: SHARED_BG_PROMPT,
@@ -245,7 +240,7 @@ export async function recomposeSlide(params: {
   total: number;
   slide: Pick<SlideDetail, "index" | "role" | "kicker" | "headline" | "body">;
 }): Promise<{ image_url: string; image_path: string }> {
-  const bgBuf = await fetchBuffer(params.bgUrl);
+  const bgBuf = await fetchAsBuffer(params.bgUrl);
   const config: ComposeConfig = {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },

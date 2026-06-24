@@ -94,6 +94,13 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       ...(input.inputImageCount != null
         ? { inputImageCount: input.inputImageCount }
         : {}),
+      // 비용 산정에 쓴 text/image 입력 토큰 분해를 보존 → 사후 비용 재계산/감사 가능.
+      ...(input.openaiTextInputTokens != null
+        ? { textInputTokens: input.openaiTextInputTokens }
+        : {}),
+      ...(input.openaiImageInputTokens != null
+        ? { imageInputTokens: input.openaiImageInputTokens }
+        : {}),
     },
   });
   if (error) {
