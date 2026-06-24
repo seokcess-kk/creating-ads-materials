@@ -16,6 +16,12 @@ interface BrandOption {
   name: string;
 }
 
+interface VariantCopy {
+  headline: string;
+  sub: string;
+  cta: string;
+}
+
 interface ResultVariant {
   id: string | null;
   label: string;
@@ -23,6 +29,8 @@ interface ResultVariant {
   selected: boolean;
   mode: string;
   recomposable: boolean;
+  /** 이 후보에 합성된 카피(후보별로 독립 — 재합성 입력 소스). */
+  copy: VariantCopy;
 }
 
 type CopyAngle = "benefit" | "curiosity" | "urgency" | "social_proof" | "emotional";
@@ -94,11 +102,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [variants, setVariants] = useState<ResultVariant[]>([]);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
 
-  // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음)
+  // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음). 카피는 후보별(variant.copy)로 보관.
   const [reBusy, setReBusy] = useState(false);
-  const [reHeadline, setReHeadline] = useState("");
-  const [reSub, setReSub] = useState("");
-  const [reCta, setReCta] = useState("");
 
   const canSubmit = concept.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
@@ -224,7 +229,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "생성 실패");
-      setVariants(data.variants as ResultVariant[]);
+      // 각 후보의 초기 카피 = 생성에 쓰인 폼 카피(=베이킹/합성된 값). 이후 후보별로 독립 편집.
+      const formCopy: VariantCopy = {
+        headline: headline.trim(),
+        sub: sub.trim(),
+        cta: cta.trim(),
+      };
+      setVariants(
+        (data.variants as ResultVariant[]).map((v) => ({ ...v, copy: { ...formCopy } })),
+      );
       setGenerationId(data.generationId ?? null);
       const failed = (data.failures ?? []).length;
       toast.success(
@@ -252,9 +265,21 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     }
   }
 
+  // 후보별 카피 편집(입력은 해당 후보의 copy에 직접 바인딩 — 후보 간 누수 없음).
+  function setVariantCopy(idx: number, field: keyof VariantCopy, value: string) {
+    setVariants((prev) =>
+      prev.map((x, i) => (i === idx ? { ...x, copy: { ...x.copy, [field]: value } } : x)),
+    );
+  }
+
   // 카피 수정 후 보존된 배경으로 재합성(이미지 모델 호출 없음).
   async function recompose(v: ResultVariant) {
     if (!generationId || !v.id) return;
+    const hasCopy = Boolean(v.copy.headline.trim() || v.copy.sub.trim() || v.copy.cta.trim());
+    if (!hasCopy) {
+      toast.error("카피를 1개 이상 입력하세요");
+      return;
+    }
     setReBusy(true);
     try {
       const res = await fetch(`/api/generate/image/${generationId}/recompose`, {
@@ -262,9 +287,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           variantId: v.id,
-          headline: reHeadline.trim() || null,
-          sub: reSub.trim() || null,
-          cta: reCta.trim() || null,
+          headline: v.copy.headline.trim() || null,
+          sub: v.copy.sub.trim() || null,
+          cta: v.copy.cta.trim() || null,
         }),
       });
       const data = await res.json();
@@ -277,14 +302,6 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     } finally {
       setReBusy(false);
     }
-  }
-
-  // 미리보기를 열며 재합성 입력값을 현재 카피로 초기화(이후 prev/next 탐색 시엔 유지).
-  function openPreview(i: number) {
-    setReHeadline(headline);
-    setReSub(sub);
-    setReCta(cta);
-    setPreviewIdx(i);
   }
 
   const showPrev = () =>
@@ -587,7 +604,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 <div key={v.label} className="space-y-1.5">
                   <button
                     type="button"
-                    onClick={() => openPreview(i)}
+                    onClick={() => setPreviewIdx(i)}
                     title="클릭하면 크게 보기"
                     className={cn(
                       "group relative block w-full overflow-hidden rounded-md border bg-muted",
@@ -682,29 +699,29 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               </button>
             </div>
 
-            {preview.recomposable && (
+            {preview.recomposable && previewIdx !== null && (
               <div className="w-full max-w-md space-y-2 rounded-lg border border-white/20 bg-white/5 p-3">
                 <div className="text-[11px] text-white/70">
                   카피 수정 후 재합성 (이미지 모델 호출 없이 배경 재사용)
                 </div>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
                   <input
-                    value={reHeadline}
-                    onChange={(e) => setReHeadline(e.target.value)}
+                    value={preview.copy.headline}
+                    onChange={(e) => setVariantCopy(previewIdx, "headline", e.target.value)}
                     placeholder="헤드라인"
                     disabled={reBusy}
                     className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
                   />
                   <input
-                    value={reSub}
-                    onChange={(e) => setReSub(e.target.value)}
+                    value={preview.copy.sub}
+                    onChange={(e) => setVariantCopy(previewIdx, "sub", e.target.value)}
                     placeholder="서브카피"
                     disabled={reBusy}
                     className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
                   />
                   <input
-                    value={reCta}
-                    onChange={(e) => setReCta(e.target.value)}
+                    value={preview.copy.cta}
+                    onChange={(e) => setVariantCopy(previewIdx, "cta", e.target.value)}
                     placeholder="CTA"
                     disabled={reBusy}
                     className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
@@ -713,7 +730,14 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 <button
                   type="button"
                   onClick={() => recompose(preview)}
-                  disabled={reBusy}
+                  disabled={
+                    reBusy ||
+                    !(
+                      preview.copy.headline.trim() ||
+                      preview.copy.sub.trim() ||
+                      preview.copy.cta.trim()
+                    )
+                  }
                   className="rounded-md border border-white/40 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-50"
                 >
                   {reBusy ? "재합성 중…" : "재합성 →"}

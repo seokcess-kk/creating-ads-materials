@@ -132,7 +132,8 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
   if (!b64) throw new Error("OpenAI 응답에 이미지가 없습니다");
 
   const usage = toTokenUsage(response.usage);
-  record(input.usageContext, size, quality, input.aspectRatio, input.imageSize, false, usage, 0);
+  // text-to-image는 입력 이미지가 없으므로 undefined(메타에 0 노이즈 미저장).
+  record(input.usageContext, size, quality, input.aspectRatio, input.imageSize, false, usage, undefined);
   return {
     mimeType: `image/${OUTPUT_FORMAT}`,
     base64: b64,

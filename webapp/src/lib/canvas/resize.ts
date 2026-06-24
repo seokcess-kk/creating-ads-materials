@@ -22,18 +22,36 @@ export function targetPixels(
 }
 
 /**
- * 생성물을 채널 목표 픽셀로 cover-crop 리사이즈해 PNG 버퍼로 반환.
- * 목표 비율을 모르면 원본을 그대로 반환(안전 폴백).
- * overlay 모드에선 합성 전 배경에 적용해, 텍스트가 최종 해상도에서 또렷하게 렌더되도록 한다.
+ * 생성물을 채널 목표 픽셀로 리사이즈해 PNG 버퍼로 반환. 목표 비율을 모르면 원본 그대로(안전 폴백).
+ *
+ * - allowCrop=true(기본, overlay 배경): cover-crop. 텍스트 없는 배경이라 가장자리가 잘려도 안전하며,
+ *   합성 전 적용해 텍스트가 최종 해상도에서 또렷하게 렌더되도록 한다.
+ * - allowCrop=false(full/edit): 텍스트·로고가 이미지에 베이킹되어 cover-crop이 이를 잘라낼 수 있으므로,
+ *   소스 비율이 목표와 (거의) 같을 때만 스케일하고, 다르면 원본을 그대로 둔다(잘림 방지).
  */
 export async function resizeToChannel(
   buf: Buffer,
   aspect: AspectRatio | undefined,
+  opts: { allowCrop?: boolean } = {},
 ): Promise<Buffer> {
   const target = targetPixels(aspect);
   if (!target) return buf;
-  return sharp(buf, { failOn: "none" })
-    .resize(target.width, target.height, { fit: "cover", position: "centre" })
-    .png()
-    .toBuffer();
+  const allowCrop = opts.allowCrop ?? true;
+
+  if (allowCrop) {
+    return sharp(buf, { failOn: "none" })
+      .resize(target.width, target.height, { fit: "cover", position: "centre" })
+      .png()
+      .toBuffer();
+  }
+
+  // 베이킹된 콘텐츠: 비율이 다르면 잘림이 발생하므로 건드리지 않는다. 비율이 같을 때만 순수 스케일.
+  const img = sharp(buf, { failOn: "none" });
+  const meta = await img.metadata();
+  if (!meta.width || !meta.height) return buf;
+  const srcRatio = meta.width / meta.height;
+  const tgtRatio = target.width / target.height;
+  if (Math.abs(srcRatio - tgtRatio) > 0.01) return buf; // 비율 불일치 → 잘림 방지 위해 원본 유지
+  if (meta.width === target.width && meta.height === target.height) return buf; // 이미 정확 → no-op
+  return img.resize(target.width, target.height, { fit: "fill" }).png().toBuffer();
 }

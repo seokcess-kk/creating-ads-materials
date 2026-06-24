@@ -45,21 +45,28 @@ export async function insertVariants(
   variants: GeneratedImageVariant[],
 ): Promise<ImageVariantRow[]> {
   const supabase = await createClient();
-  const rows = variants.map((v, i) => ({
+  const baseRows = variants.map((v, i) => ({
     generation_id: generationId,
     url: v.url,
     storage_path: v.path,
     label: v.label,
     selected: i === 0, // 첫 후보 기본 선택
-    bg_url: v.bgUrl ?? null,
     meta_json: v.meta ?? { mode: v.mode },
   }));
-  const { data, error } = await supabase
-    .from("image_variants")
-    .insert(rows)
-    .select();
-  if (error) throw error;
-  return (data ?? []) as ImageVariantRow[];
+  const fullRows = baseRows.map((r, i) => ({ ...r, bg_url: variants[i].bgUrl ?? null }));
+
+  const first = await supabase.from("image_variants").insert(fullRows).select();
+  if (!first.error) return (first.data ?? []) as ImageVariantRow[];
+
+  // 027 미적용 등으로 bg_url 컬럼이 없으면 INSERT 전체가 실패한다. bg_url 없이 재시도해
+  // 영속화(선택·이력)는 유지하고 재합성만 비활성화(부분 컬럼 누락이 전체 실패로 번지지 않게).
+  console.warn(
+    "insertVariants: bg_url 포함 저장 실패, bg_url 제외 재시도(재합성 비활성):",
+    first.error.message,
+  );
+  const retry = await supabase.from("image_variants").insert(baseRows).select();
+  if (retry.error) throw retry.error;
+  return (retry.data ?? []) as ImageVariantRow[];
 }
 
 export async function getVariant(variantId: string): Promise<ImageVariantRow | null> {
@@ -75,7 +82,11 @@ export async function getVariant(variantId: string): Promise<ImageVariantRow | n
 
 export async function updateVariantImage(
   variantId: string,
-  patch: { url: string; storage_path: string },
+  patch: {
+    url: string;
+    storage_path: string;
+    meta_json?: Record<string, unknown>;
+  },
 ): Promise<ImageVariantRow> {
   const supabase = await createClient();
   const { data, error } = await supabase

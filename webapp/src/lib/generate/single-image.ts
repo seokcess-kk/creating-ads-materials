@@ -95,10 +95,14 @@ export async function generateSingleImageVariants(
   // full/edit는 컴포지터를 거치지 않으므로 종전대로 로고를 입력 이미지로 넘겨 모델이 통합한다.
   const bakeLogo = mode !== "overlay";
 
-  // 입력 이미지: base 레퍼런스(변형 대상) + (bake 시) 브랜드 로고(통합 대상)
-  const [baseRef, logo] = await Promise.all([
+  // 입력 이미지: base 레퍼런스(변형 대상) + (bake 시) 브랜드 로고(통합 대상).
+  // overlay 로고는 컴포지터용으로 1회만 받아 data URL로 후보들에 공유한다(후보마다 재fetch·비결정성 방지).
+  const [baseRef, logo, overlayLogo] = await Promise.all([
     isEdit && refUrl ? fetchAsBase64(refUrl) : Promise.resolve(null),
     bakeLogo && brand.logoUrl
+      ? fetchAsBase64(brand.logoUrl).catch(() => null)
+      : Promise.resolve(null),
+    !bakeLogo && brand.logoUrl
       ? fetchAsBase64(brand.logoUrl).catch(() => null)
       : Promise.resolve(null),
   ]);
@@ -106,7 +110,11 @@ export async function generateSingleImageVariants(
     (p): p is ImagePart => p != null,
   );
   const hasLogo = logo != null; // 프롬프트 LOGO_NOTE는 bake(full/edit) 시에만
-  const overlayLogoUrl = mode === "overlay" ? brand.logoUrl : null;
+  const overlayLogoUrl = mode === "overlay" ? brand.logoUrl : null; // meta.compose 저장용(실제 URL)
+  // 컴포지터 입력: 네트워크 재fetch 없이 1회 받은 로고를 data URL로 재사용(후보 공통).
+  const overlayLogoData = overlayLogo
+    ? `data:${overlayLogo.mimeType};base64,${overlayLogo.base64}`
+    : null;
 
   // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백)
   const brief: CreativeBrief = {
@@ -206,23 +214,33 @@ export async function generateSingleImageVariants(
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
       if (mode === "overlay" && hasText) {
         const bgBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
-        const bgUploaded = await uploadGeneratedImage(generationId, `bg_v${i + 1}`, {
-          mimeType: "image/png",
-          base64: bgBuf.toString("base64"),
-        });
         const config = singleAdConfig({
           headline: input.headline,
           sub: input.sub,
           cta: input.cta,
-          logoUrl: overlayLogoUrl,
+          logoUrl: overlayLogoData,
           brandColor: brand.ctaColor,
         });
-        const composed = await renderComposite(bgBuf, config);
+        // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
+        const [bgUploaded, composed] = await Promise.all([
+          uploadGeneratedImage(generationId, `bg_v${i + 1}`, {
+            mimeType: "image/png",
+            base64: bgBuf.toString("base64"),
+          }),
+          renderComposite(bgBuf, config),
+        ]);
         const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
           mimeType: "image/png",
           base64: composed.toString("base64"),
         });
-        meta.compose = { logoUrl: overlayLogoUrl, brandColor: brand.ctaColor };
+        // 재합성은 실제 로고 URL을 다시 받아 쓰므로 meta엔 data URL이 아닌 실제 URL 저장. 합성 카피도 보존.
+        meta.compose = {
+          logoUrl: overlayLogoUrl,
+          brandColor: brand.ctaColor,
+          headline: input.headline ?? null,
+          sub: input.sub ?? null,
+          cta: input.cta ?? null,
+        };
         return {
           label,
           url: uploaded.url,
@@ -233,8 +251,12 @@ export async function generateSingleImageVariants(
         } satisfies GeneratedImageVariant;
       }
 
-      // full/edit: 텍스트가 이미지에 베이킹됨(재합성 불가). 채널 픽셀로 리사이즈 후 업로드.
-      const finalBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+      // full/edit: 텍스트·로고가 이미지에 베이킹됨(재합성 불가). 비율이 맞을 때만 스케일(crop 금지 — 잘림 방지).
+      const finalBuf = await resizeToChannel(
+        Buffer.from(base.base64, "base64"),
+        aspectRatio,
+        { allowCrop: false },
+      );
       const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
         mimeType: "image/png",
         base64: finalBuf.toString("base64"),
@@ -298,10 +320,17 @@ export async function recomposeVariant(
     throw new ApiError(400, "이 후보는 재합성할 수 없습니다(overlay 후보만 가능)");
   }
 
+  // 카피가 전부 비면 텍스트 없는 어두운 배경만 남아 기존 소재를 파괴하므로 거부.
+  const hasCopy = Boolean(
+    input.headline?.trim() || input.sub?.trim() || input.cta?.trim(),
+  );
+  if (!hasCopy) {
+    throw new ApiError(400, "카피를 1개 이상 입력하세요");
+  }
+
+  const meta = (variant.meta_json ?? {}) as Record<string, unknown>;
   const compose =
-    (variant.meta_json as {
-      compose?: { logoUrl?: string | null; brandColor?: string | null };
-    })?.compose ?? {};
+    (meta.compose as { logoUrl?: string | null; brandColor?: string | null }) ?? {};
   const bgBuf = await fetchBuffer(bgUrl);
   const config = singleAdConfig({
     headline: input.headline,
@@ -316,9 +345,20 @@ export async function recomposeVariant(
     mimeType: "image/png",
     base64: composed.toString("base64"),
   });
+  // 합성 카피를 meta에 갱신해 추적/이력을 정확히 유지.
+  const newMeta = {
+    ...meta,
+    compose: {
+      ...compose,
+      headline: input.headline ?? null,
+      sub: input.sub ?? null,
+      cta: input.cta ?? null,
+    },
+  };
   const row = await updateVariantImage(variant.id, {
     url: uploaded.url,
     storage_path: uploaded.path,
+    meta_json: newMeta,
   });
   return { id: row.id, url: row.url, path: row.storage_path };
 }

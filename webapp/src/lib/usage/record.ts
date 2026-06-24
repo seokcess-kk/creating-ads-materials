@@ -56,13 +56,14 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       ? estimateGeminiImageCost(input.model, input.imageCount ?? 1)
       : estimateGeminiEmbeddingCost(input.approxTokens ?? 0);
   } else if (input.provider === "openai") {
-    // 응답 토큰이 있으면 토큰 기반(정확), 없으면 장당 추정 테이블 폴백.
-    const hasTokens =
-      (input.inputTokens ?? 0) > 0 || (input.outputTokens ?? 0) > 0;
-    cost = hasTokens
+    // 토큰 기반은 출력 토큰(이미지 비용의 대부분) + 입력 분해(text/image)가 모두 있을 때만 신뢰한다.
+    // 부분 응답(분해 누락 → 전부 textInput으로 오분류, 또는 output 누락 → 비용 ≈0)을 피하려 장당 폴백.
+    const hasTokenBreakdown =
+      (input.outputTokens ?? 0) > 0 &&
+      (input.openaiTextInputTokens != null || input.openaiImageInputTokens != null);
+    cost = hasTokenBreakdown
       ? estimateOpenAIImageTokenCost(input.model, {
-          textInputTokens:
-            input.openaiTextInputTokens ?? input.inputTokens ?? 0,
+          textInputTokens: input.openaiTextInputTokens ?? 0,
           imageInputTokens: input.openaiImageInputTokens ?? 0,
           outputTokens: input.outputTokens ?? 0,
         })
