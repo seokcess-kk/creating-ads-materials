@@ -26,6 +26,7 @@ import {
 } from "./render";
 import { buildCarouselBackgroundPrompts } from "./art-director";
 import { getTemplate } from "./templates";
+import { setSlideRendered } from "./queries";
 import type {
   BundleConcept,
   SlideDetail,
@@ -163,13 +164,10 @@ async function uploadBuffer(
   });
 }
 
-export interface RenderedSlide extends SlideDetail {
-  bg_url: string | null;
-  image_url: string;
-  image_path: string;
-}
-
-/** 슬라이드 상세 → 배경(shared/per-slide) → renderComposite → 업로드. */
+/**
+ * 슬라이드 상세 → 배경(shared/per-slide) → renderComposite → 업로드.
+ * 완성되는 대로 각 슬라이드 행(rowIdByIndex)을 점진 기록 → 클라이언트 폴링이 하나씩 채움.
+ */
 export async function renderCarouselSlides(params: {
   carouselId: string;
   brandId?: string | null;
@@ -182,7 +180,9 @@ export async function renderCarouselSlides(params: {
   designRef?: DesignReference | null;
   /** shared 모드에서 기존 배경 재사용(재생성 시) */
   sharedBgUrl?: string | null;
-}): Promise<{ bgUrl: string | null; slides: RenderedSlide[] }> {
+  /** 슬라이드 index → DB 행 id (점진 업데이트 대상) */
+  rowIdByIndex: Map<number, string>;
+}): Promise<{ bgUrl: string | null }> {
   const total = params.details.length;
   const fontSet = carouselFontSet();
   const template = getTemplate(params.concept.template);
@@ -238,8 +238,9 @@ export async function renderCarouselSlides(params: {
     }
   }
 
-  // 슬라이드 렌더 — per-slide 배경 생성/합성을 동시성 캡(4)으로 병렬화(순서 보존).
-  const slides = await mapWithConcurrency(params.details, 4, async (detail) => {
+  // 슬라이드 렌더 — per-slide 배경 생성/합성을 동시성 캡(4)으로 병렬화.
+  // 각 슬라이드가 끝나는 즉시 DB 행을 갱신 → 폴링 클라이언트가 하나씩 채워 본다.
+  await mapWithConcurrency(params.details, 4, async (detail) => {
     let bgBuf: Buffer;
     let slideBgUrl: string | null;
     if (params.bgMode === "per-slide") {
@@ -281,15 +282,17 @@ export async function renderCarouselSlides(params: {
       composed,
     );
 
-    return {
-      ...detail,
-      bg_url: slideBgUrl,
-      image_url: uploaded.url,
-      image_path: uploaded.path,
-    } satisfies RenderedSlide;
+    const rowId = params.rowIdByIndex.get(detail.index);
+    if (rowId) {
+      await setSlideRendered(rowId, {
+        bg_url: slideBgUrl,
+        image_url: uploaded.url,
+        image_path: uploaded.path,
+      });
+    }
   });
 
-  return { bgUrl: sharedBgUrl, slides };
+  return { bgUrl: sharedBgUrl };
 }
 
 /** 카피 편집 후 단건 재합성(LLM 호출 없음 — 기존 배경 재사용). */

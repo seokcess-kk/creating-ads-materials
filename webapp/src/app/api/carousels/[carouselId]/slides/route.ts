@@ -6,7 +6,7 @@ import {
 } from "@/lib/carousel/generate";
 import {
   getCarousel,
-  replaceSlides,
+  insertSlideSkeletons,
   setCarouselBg,
   setCarouselStatus,
 } from "@/lib/carousel/queries";
@@ -54,7 +54,12 @@ export async function POST(
         carouselId,
       });
 
-      const { bgUrl, slides } = await renderCarouselSlides({
+      // 1) 텍스트만 있는 스켈레톤 먼저 기록 → 클라이언트 폴링이 골격을 즉시 본다.
+      const rows = await insertSlideSkeletons(carouselId, details);
+      const rowIdByIndex = new Map(rows.map((r) => [r.idx, r.id]));
+
+      // 2) 배경 생성 + 합성 — 완성되는 슬라이드부터 행을 점진 갱신.
+      const { bgUrl } = await renderCarouselSlides({
         carouselId,
         brandId: data.carousel.brand_id,
         concept,
@@ -64,9 +69,9 @@ export async function POST(
         toneOverride: data.carousel.tone_override,
         designRef,
         sharedBgUrl: data.carousel.bg_url, // 재생성 시 shared 배경 재사용
+        rowIdByIndex,
       });
 
-      const rows = await replaceSlides(carouselId, slides);
       await setCarouselBg(carouselId, bgUrl);
       await setCarouselStatus(carouselId, "ready");
 
