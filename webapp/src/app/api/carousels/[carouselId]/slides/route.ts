@@ -66,6 +66,7 @@ export async function POST(
         details,
         bgMode: data.carousel.bg_mode,
         contentMode: data.carousel.content_mode,
+        renderMode: data.carousel.render_mode,
         toneOverride: data.carousel.tone_override,
         designRef,
         // 전체 재생성("슬라이드 전체 다시 만들기")은 현재 템플릿·레퍼런스를 반영해야 하므로

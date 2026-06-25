@@ -67,6 +67,7 @@ export interface InitialCarousel {
   brandId: string | null;
   contentMode: "persuasion" | "notice";
   bgMode: "shared" | "per-slide";
+  renderMode: "full" | "overlay";
   referenceUrl: string | null;
   concept: BundleConcept | null;
   slides: SlideRow[];
@@ -142,6 +143,9 @@ export function CarouselStudio({
   );
   const [bgMode, setBgMode] = useState<"shared" | "per-slide">(
     initial?.bgMode ?? "shared",
+  );
+  const [renderMode, setRenderMode] = useState<"full" | "overlay">(
+    initial?.renderMode ?? "full",
   );
 
   // 레퍼런스(선택) — 첨부 시 배경이 그 디자인 룩으로 통일됨(생성 시 서버에서 분석).
@@ -233,6 +237,7 @@ export function CarouselStudio({
           brandId: brandId || null,
           contentMode,
           bgMode,
+          renderMode,
           referenceImageUrl: refUrl,
         }),
       });
@@ -336,6 +341,9 @@ export function CarouselStudio({
   async function saveSlide(slide: SlideRow) {
     if (!carouselId) return;
     setBusy(true);
+    if (renderMode === "full") {
+      toast.info("슬라이드 재생성 중… (완성형은 카피 수정 시 다시 그립니다, ~30초)");
+    }
     try {
       const res = await fetch(
         `/api/carousels/${carouselId}/slides/${slide.idx}`,
@@ -506,20 +514,20 @@ export function CarouselStudio({
               </div>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">배경</Label>
+              <Label className="text-xs">슬라이드 형식</Label>
               <div className="flex gap-1.5">
                 {[
-                  { v: "shared", l: "공통 1장" },
-                  { v: "per-slide", l: "슬라이드별" },
+                  { v: "full", l: "완성형(AI 디자인)" },
+                  { v: "overlay", l: "배경+자막" },
                 ].map((o) => (
                   <button
                     key={o.v}
                     type="button"
                     disabled={busy}
-                    onClick={() => setBgMode(o.v as "shared" | "per-slide")}
+                    onClick={() => setRenderMode(o.v as "full" | "overlay")}
                     className={cn(
                       "rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50",
-                      bgMode === o.v
+                      renderMode === o.v
                         ? "border-foreground font-medium"
                         : "border-border text-muted-foreground hover:text-foreground",
                     )}
@@ -529,7 +537,38 @@ export function CarouselStudio({
                 ))}
               </div>
             </div>
+            {renderMode === "overlay" && (
+              <div className="space-y-1">
+                <Label className="text-xs">배경</Label>
+                <div className="flex gap-1.5">
+                  {[
+                    { v: "shared", l: "공통 1장" },
+                    { v: "per-slide", l: "슬라이드별" },
+                  ].map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setBgMode(o.v as "shared" | "per-slide")}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50",
+                        bgMode === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            {renderMode === "full"
+              ? "완성형: AI가 배경·레이아웃·한글 텍스트를 한 번에 디자인합니다(품질↑). 카피 수정 시 해당 슬라이드를 다시 생성합니다."
+              : "배경+자막: 텍스트 없는 배경에 한글을 얹습니다. 카피 수정이 즉시·무료로 반영됩니다."}
+          </p>
 
           {/* 레퍼런스 첨부(선택) — 배경 디자인 룩 통일 */}
           <div className="space-y-2 rounded-lg border p-3">

@@ -9,6 +9,7 @@ import type {
   SlideDetail,
   CarouselBgMode,
   CarouselContentMode,
+  CarouselRenderMode,
 } from "./types";
 
 const TOOL = "record_carousel_backgrounds";
@@ -27,7 +28,7 @@ const BgListSchema = z.object({
     .array(
       z.object({
         index: z.number().int().min(0),
-        prompt: z.string().min(20).max(1000),
+        prompt: z.string().min(20).max(1400),
       }),
     )
     .min(1)
@@ -80,6 +81,7 @@ function buildSystem(
   toneOverride: string | null | undefined,
   hasRef: boolean,
   textScheme: "light" | "dark",
+  renderMode: CarouselRenderMode,
 ): string {
   const toneLine = isNotice
     ? "Notice/announcement: sober, trustworthy, restrained, institutional. Calm palette. Avoid hype, glow, gradients-as-decoration, or playful elements."
@@ -87,6 +89,33 @@ function buildSystem(
   const over = toneOverride?.trim()
     ? `\n- Tone override (highest priority): ${toneOverride.trim()}`
     : "";
+
+  // ── full 모드: 모델이 텍스트까지 구운 완성형 디자인 슬라이드 ──
+  if (renderMode === "full") {
+    const fullRef = hasRef
+      ? `\n\nDESIGN REFERENCE (in the brief): follow its palette / mood / composition / layout / typography CLOSELY as the shared design system. Do NOT copy any logo or wordmark it contains.`
+      : "";
+    return `You are an expert advertising ART DIRECTOR + prompt engineer for the "gpt-image" text-to-image model. You design COMPLETE Korean Instagram card-news slides (1:1, 1080x1080) — background, layout, AND typeset Korean text together, like a real graphic designer.
+
+You produce:
+1) styleLock: ONE shared DESIGN SYSTEM line (palette, type style, layout grid, decorative motifs, mood) that EVERY slide reuses so the carousel reads as one cohesive set.
+2) slides: ONE prompt per slide that RENDERS that slide's given Korean text as a polished designed slide.
+
+HARD RULES (Korean text rendering is the #1 priority):
+- RENDER the given Korean text IN the image with PERFECT, correct modern Hangul. Use ONLY the exact Korean strings provided — never distort, misspell, translate, or invent characters, and add no extra text/captions/lorem.
+- Strong typographic hierarchy: kicker small, headline dominant and large, body smaller. Real editorial layout (grid, alignment, generous whitespace) — NOT just centered text on a photo.
+- Integrate text WITH the imagery (text panels, color blocks, intentional placement), not text floating over a busy photo. Ensure high text contrast.
+- EVERY slide reuses the SAME design system (palette, type feel, layout structure, decorative elements) per styleLock — vary the content/scene per slide, never the system. The 5 slides must look like ONE set.
+- On-topic, concrete subject imagery tied to the product/topic and each slide's motif (coffee brand → espresso/latte/cafe; gym → training). Relevant beats abstract.
+- 1:1 framing. NO brand logo or wordmark (composited separately). Advertising-grade, premium, clean.
+- If text might garble, prefer fewer words, larger — legibility over density.
+
+TONE:
+- ${toneLine}${over}${fullRef}
+
+Output ONLY via the ${TOOL} tool. Prompt text (design directions) in English; the Korean strings to render stay in Korean.`;
+  }
+
   const readabilityRule =
     textScheme === "dark"
       ? "Keep the reserved text zone BRIGHT, LIGHT and airy so DARK overlay text stays readable there; overall palette stays light/clean — no dark or busy patches where the text sits."
@@ -133,20 +162,35 @@ function buildBrief(
     bgMode: CarouselBgMode;
     designRef?: DesignReference | null;
     templateStyle?: string | null;
+    renderMode?: CarouselRenderMode;
   },
   count: number,
 ): string {
   const c = params.concept;
+  const isFull = params.renderMode === "full";
   const tplLine = params.templateStyle
     ? `\n# TEMPLATE STYLE (use as the base palette/mood of the styleLock)\n${params.templateStyle}\n`
     : "";
   const refLine = params.designRef
-    ? `\n# DESIGN REFERENCE (follow this closely as the styleLock foundation — palette/mood/composition)\n${formatDesignReference(params.designRef)}\n`
+    ? `\n# DESIGN REFERENCE (follow this closely as the styleLock foundation — palette/mood/composition${isFull ? "/typography" : ""})\n${formatDesignReference(params.designRef)}\n`
     : "";
+
   const slideLines = params.details
     .map((d) => {
       const motif = d.visual?.motif?.trim();
       const emph = d.visual?.emphasis;
+      if (isFull) {
+        // full: 렌더할 정확한 한글 텍스트를 슬라이드별로 전달.
+        const parts = [
+          `[${d.index}/${d.role}]`,
+          d.kicker ? `kicker "${d.kicker}"` : null,
+          `headline "${d.headline}"`,
+          d.body ? `body "${d.body}"` : null,
+          motif ? `scene: ${motif}` : null,
+          emph ? `emphasis: ${emph}` : null,
+        ].filter(Boolean);
+        return `- ${parts.join(" | ")}`;
+      }
       const parts = [
         `[${d.index}/${d.role}]`,
         d.headline ? `headline "${d.headline}"` : null,
@@ -156,6 +200,23 @@ function buildBrief(
       return `- ${parts.join(" | ")}`;
     })
     .join("\n");
+
+  if (isFull) {
+    return `mode: full — produce ONE complete designed-slide prompt per slide index below, using that exact index. Each prompt RENDERS that slide's exact Korean text.
+slides requested: ${count}
+${tplLine}${refLine}
+# CAROUSEL CONCEPT (ground the imagery in this product/topic)
+bigIdea: ${c.bigIdea}
+coreMessage: ${c.coreMessage}
+target: ${c.target}
+tone: ${c.tone}
+narrativeArc: ${c.narrativeArc}
+
+# SLIDES (RENDER each slide's EXACT Korean text — kicker/headline/body verbatim)
+${slideLines}
+
+Produce styleLock + ${count} slide prompt(s) via ${TOOL}.`;
+  }
 
   const modeLine =
     params.bgMode === "shared"
@@ -193,19 +254,27 @@ export async function buildCarouselBackgroundPrompts(params: {
   templateStyle?: string | null;
   /** 오버레이 텍스트 색 계열 — 배경의 텍스트 영역 명도를 맞추기 위해 */
   textScheme?: "light" | "dark";
+  /** full = 텍스트까지 구운 완성형 슬라이드 프롬프트 / overlay(기본) = 텍스트 없는 배경 */
+  renderMode?: CarouselRenderMode;
   usageContext?: UsageContext;
 }): Promise<CarouselBgPrompts | null> {
   try {
     const isNotice = params.contentMode === "notice";
-    const count = params.bgMode === "shared" ? 1 : params.details.length;
+    const renderMode = params.renderMode ?? "overlay";
+    // full은 슬라이드별로 1개씩(텍스트 렌더), overlay는 shared면 1개.
+    const count =
+      renderMode === "full" || params.bgMode !== "shared"
+        ? params.details.length
+        : 1;
     const resp = await callClaude({
       model: "sonnet",
-      maxTokens: Math.min(4000, 1000 + count * 400),
+      maxTokens: Math.min(4500, 1200 + count * 500),
       system: buildSystem(
         isNotice,
         params.toneOverride,
         Boolean(params.designRef),
         params.textScheme ?? "light",
+        renderMode,
       ),
       usageContext: params.usageContext,
       messages: [

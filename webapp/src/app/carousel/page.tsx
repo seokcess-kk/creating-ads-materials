@@ -32,6 +32,7 @@ export default async function CarouselPage({
         brandId: c.brand_id,
         contentMode: c.content_mode,
         bgMode: c.bg_mode,
+        renderMode: c.render_mode,
         referenceUrl: c.reference_url,
         concept: parsed.success ? parsed.data : null,
         slides: data.slides.map((s) => ({

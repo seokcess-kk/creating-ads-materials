@@ -4,6 +4,8 @@ import type { CarouselTemplateId } from "./templates";
 export type SlideRole = "hook" | "point" | "cta";
 export type CarouselBgMode = "shared" | "per-slide";
 export type CarouselContentMode = "persuasion" | "notice";
+/** full = 모델이 텍스트까지 구운 완성형 슬라이드 / overlay = 텍스트 없는 배경 + 컴포지터 오버레이 */
+export type CarouselRenderMode = "full" | "overlay";
 export type CarouselStatus =
   | "draft"
   | "concept"
@@ -56,6 +58,7 @@ export interface CarouselRow {
   tone_override: string | null;
   content_mode: CarouselContentMode;
   bg_mode: CarouselBgMode;
+  render_mode: CarouselRenderMode;
   bg_url: string | null;
   reference_url: string | null;
   reference_json: DesignReference | Record<string, never>;
@@ -90,6 +93,7 @@ export interface CarouselInput {
   toneOverride?: string | null;
   contentMode?: CarouselContentMode;
   bgMode?: CarouselBgMode;
+  renderMode?: CarouselRenderMode;
   title?: string | null;
   /** 레퍼런스 이미지 공개 URL(선택) — 디자인 요소 추출 후 배경 styleLock에 반영 */
   referenceImageUrl?: string | null;

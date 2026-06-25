@@ -26,6 +26,27 @@ export function perSlideBgPrompt(
     .join(" ");
 }
 
+// full 모드 폴백 — 아트디렉터 실패 시 텍스트까지 구운 슬라이드를 직접 지시.
+export function fullSlideFallbackPrompt(
+  concept: BundleConcept | null,
+  slide: Pick<SlideDetail, "kicker" | "headline" | "body" | "visual">,
+): string {
+  const motif = slide.visual?.motif?.trim();
+  const idea = concept?.bigIdea?.trim();
+  return [
+    "Design ONE complete, polished Korean Instagram card-news slide (1:1, 1080x1080) — background, layout, and typeset Korean text together, like a professional graphic designer.",
+    "RENDER the EXACT Korean text below with PERFECT modern Hangul (never distort, misspell, translate, or invent characters; add no extra text):",
+    slide.kicker ? `small kicker label "${slide.kicker}"` : null,
+    `bold dominant headline "${slide.headline}"`,
+    slide.body ? `supporting body text "${slide.body}"` : null,
+    idea ? `Theme: ${idea}.` : null,
+    motif ? `Scene/subject: ${motif}.` : null,
+    "Strong typographic hierarchy, real editorial grid, generous whitespace, high text contrast, premium advertising quality. No logos or wordmarks.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 // 슬라이드 역할별 레이아웃 → ComposeConfig (fontSet/배경은 호출자가 채움).
 // 색·오버레이·정렬·폰트 계열은 CarouselStyle(템플릿 또는 레퍼런스)이 구동.
 export function slideConfig(
