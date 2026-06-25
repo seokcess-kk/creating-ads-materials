@@ -892,7 +892,7 @@ export function CarouselStudio({
                       onClick={() => saveSlide(s)}
                       disabled={busy}
                     >
-                      수정 반영(재합성)
+                      {renderMode === "full" ? "카피 반영(재생성·~30초)" : "수정 반영(재합성)"}
                     </Button>
                   </div>
                 </div>

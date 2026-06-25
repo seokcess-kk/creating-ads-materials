@@ -226,6 +226,8 @@ export async function renderCarouselSlides(params: {
   const promptByIndex = new Map<number, string>(
     (ad?.backgrounds ?? []).map((b) => [b.index, b.prompt]),
   );
+  // full 폴백 프롬프트엔 공유 design system이 없어 슬라이드가 겉돈다 → styleLock 주입.
+  const styleLock = ad?.styleLock?.trim() ?? "";
 
   // shared 배경(overlay 전용) — full 모드는 슬라이드별 완성형이라 공통 배경 없음.
   let sharedBgBuf: Buffer | null = null;
@@ -257,9 +259,13 @@ export async function renderCarouselSlides(params: {
 
     if (isFull) {
       // 모델이 텍스트까지 구운 완성형 슬라이드 — 컴포지터 오버레이 없음.
-      const prompt =
-        promptByIndex.get(detail.index) ??
-        fullSlideFallbackPrompt(params.concept, detail);
+      let prompt = promptByIndex.get(detail.index);
+      if (!prompt) {
+        prompt = fullSlideFallbackPrompt(params.concept, detail);
+        if (styleLock) {
+          prompt += ` Shared design system across all slides (match exactly): ${styleLock}.`;
+        }
+      }
       const img = await generateImage({
         prompt,
         aspectRatio: "1:1",

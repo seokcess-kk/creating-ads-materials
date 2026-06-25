@@ -22,49 +22,70 @@ export interface CarouselBgPrompts {
   backgrounds: { index: number; prompt: string }[];
 }
 
+const BgItemSchema = z.object({
+  index: z.number().int().min(0),
+  prompt: z.string().min(20).max(2000),
+});
 const BgListSchema = z.object({
   styleLock: z.string().min(10).max(400),
-  backgrounds: z
-    .array(
-      z.object({
-        index: z.number().int().min(0),
-        prompt: z.string().min(20).max(1400),
-      }),
-    )
-    .min(1)
-    .max(8),
+  backgrounds: z.array(BgItemSchema).min(1).max(8),
 });
 
-function tool(): Tool {
+/**
+ * 관용 파싱 — 프롬프트 1개가 너무 길거나 형식이 어긋나도 전체를 버리지 않고,
+ * 유효한 배경만 살린다(빠진 슬라이드는 호출자가 per-index 폴백). 살릴 게 없으면 null.
+ */
+function parseBgPrompts(raw: unknown): CarouselBgPrompts | null {
+  const strict = BgListSchema.safeParse(raw);
+  if (strict.success) return strict.data;
+  const obj = (raw ?? {}) as { styleLock?: unknown; backgrounds?: unknown };
+  const styleLock = typeof obj.styleLock === "string" ? obj.styleLock : "";
+  const items = Array.isArray(obj.backgrounds) ? obj.backgrounds : [];
+  const backgrounds = items
+    .map((i) => BgItemSchema.safeParse(i))
+    .filter((r): r is { success: true; data: { index: number; prompt: string } } => r.success)
+    .map((r) => r.data);
+  if (!backgrounds.length) return null;
+  return { styleLock, backgrounds };
+}
+
+function tool(renderMode: CarouselRenderMode): Tool {
+  const isFull = renderMode === "full";
   return {
     name: TOOL,
-    description:
-      "캐러셀 콘셉트와 슬라이드 계획을 gpt-image용 '텍스트 없는 배경' 프롬프트로 확장. 전 슬라이드가 하나의 styleLock(팔레트·무드)을 공유해 한 세트처럼 보이게 한다.",
+    description: isFull
+      ? "캐러셀 콘셉트+슬라이드를 gpt-image용 '완성형 슬라이드 프롬프트'(배경+레이아웃+한글 텍스트까지 디자인)로 확장. 전 슬라이드가 하나의 design system을 공유해 한 세트로 보이게 한다."
+      : "캐러셀 콘셉트와 슬라이드 계획을 gpt-image용 '텍스트 없는 배경' 프롬프트로 확장. 전 슬라이드가 하나의 styleLock(팔레트·무드)을 공유해 한 세트처럼 보이게 한다.",
     input_schema: {
       type: "object",
       properties: {
         styleLock: {
           type: "string",
-          description:
-            "모든 배경이 공유할 비주얼 스타일 한 줄(팔레트·라이팅·질감·무드·트리트먼트). 영어.",
+          description: isFull
+            ? "모든 슬라이드가 공유할 design system 한 줄(팔레트·타이포·레이아웃 그리드·장식·무드). 영어."
+            : "모든 배경이 공유할 비주얼 스타일 한 줄(팔레트·라이팅·질감·무드·트리트먼트). 영어.",
         },
         backgrounds: {
           type: "array",
           minItems: 1,
           maxItems: 8,
-          description:
-            "요청 수만큼의 배경 프롬프트. shared면 index 0 한 개, per-slide면 주어진 슬라이드 index마다 1개.",
+          description: isFull
+            ? "요청 수만큼의 완성형 슬라이드 프롬프트. 주어진 슬라이드 index마다 1개."
+            : "요청 수만큼의 배경 프롬프트. shared면 index 0 한 개, per-slide면 주어진 슬라이드 index마다 1개.",
           items: {
             type: "object",
             properties: {
               index: {
                 type: "number",
-                description: "shared는 0, per-slide는 해당 슬라이드 index(1-based).",
+                description: isFull
+                  ? "해당 슬라이드 index(1-based)."
+                  : "shared는 0, per-slide는 해당 슬라이드 index(1-based).",
               },
               prompt: {
                 type: "string",
-                description:
-                  "gpt-image에 보낼 영어 배경 프롬프트. 텍스트/숫자/로고 절대 금지, 한글 오버레이용 여백 확보.",
+                description: isFull
+                  ? "gpt-image에 보낼 영어 프롬프트. 주어진 한글 텍스트를 정확히 렌더(왜곡·오타·창작 금지), 강한 타이포 위계와 레이아웃. 로고/워드마크 금지."
+                  : "gpt-image에 보낼 영어 배경 프롬프트. 텍스트/숫자/로고 절대 금지, 한글 오버레이용 여백 확보.",
               },
             },
             required: ["index", "prompt"],
@@ -268,7 +289,7 @@ export async function buildCarouselBackgroundPrompts(params: {
         : 1;
     const resp = await callClaude({
       model: "sonnet",
-      maxTokens: Math.min(4500, 1200 + count * 500),
+      maxTokens: Math.min(6000, 1500 + count * 700),
       system: buildSystem(
         isNotice,
         params.toneOverride,
@@ -283,12 +304,12 @@ export async function buildCarouselBackgroundPrompts(params: {
           content: buildBrief(params, count),
         },
       ],
-      tools: [tool()],
+      tools: [tool(renderMode)],
       toolChoice: { type: "tool", name: TOOL },
     });
     const raw = extractToolUse(resp, TOOL);
     if (!raw) return null;
-    return BgListSchema.parse(raw);
+    return parseBgPrompts(raw);
   } catch (e) {
     console.warn(
       "캐러셀 아트디렉터 프롬프트 생성 실패(템플릿 폴백):",
