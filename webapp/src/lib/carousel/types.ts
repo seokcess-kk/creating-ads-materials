@@ -1,3 +1,6 @@
+import type { DesignReference } from "@/lib/generate/types";
+import type { CarouselTemplateId } from "./templates";
+
 export type SlideRole = "hook" | "point" | "cta";
 export type CarouselBgMode = "shared" | "per-slide";
 export type CarouselContentMode = "persuasion" | "notice";
@@ -25,6 +28,7 @@ export interface BundleConcept {
   tone: string;
   narrativeArc: string;
   slideCount: number;
+  template: CarouselTemplateId;
   slidePlan: SlidePlanItem[];
 }
 
@@ -53,6 +57,8 @@ export interface CarouselRow {
   content_mode: CarouselContentMode;
   bg_mode: CarouselBgMode;
   bg_url: string | null;
+  reference_url: string | null;
+  reference_json: DesignReference | Record<string, never>;
   concept_json: BundleConcept | Record<string, never>;
   status: CarouselStatus;
   error: string | null;
@@ -85,4 +91,6 @@ export interface CarouselInput {
   contentMode?: CarouselContentMode;
   bgMode?: CarouselBgMode;
   title?: string | null;
+  /** 레퍼런스 이미지 공개 URL(선택) — 디자인 요소 추출 후 배경 styleLock에 반영 */
+  referenceImageUrl?: string | null;
 }

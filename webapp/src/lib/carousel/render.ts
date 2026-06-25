@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { ComposeConfig, ComposeFontSet } from "@/lib/canvas/compositor";
+import type { CarouselTemplate } from "./templates";
 import type { BundleConcept, SlideDetail } from "./types";
 
 // 공통(shared) 배경 — 텍스트·로고 없음. 전 슬라이드 1장 재사용 → 템플릿 일관성.
@@ -39,15 +40,24 @@ export function carouselFontSet(): ComposeFontSet {
 }
 
 // 슬라이드 역할별 레이아웃 → ComposeConfig (fontSet/배경은 호출자가 채움).
+// 색·오버레이·정렬은 템플릿이 구동. AI 배경 가독성 위해 헤드라인/본문에 stroke 적용.
 export function slideConfig(
   slide: Pick<SlideDetail, "index" | "role" | "kicker" | "headline" | "body">,
   total: number,
+  template: CarouselTemplate,
 ): Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> {
+  const c = template.colors;
+  const centered = template.align !== "left";
   const base: Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> = {
-    overlay: { top: true, topOpacity: 140, bottom: true, bottomOpacity: 205 },
+    overlay: {
+      top: true,
+      topOpacity: template.overlay.topOpacity,
+      bottom: true,
+      bottomOpacity: template.overlay.bottomOpacity,
+    },
     slogan: {
       text: `${String(slide.index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
-      color: "#C9CDD6",
+      color: c.slogan,
       sizeRatio: 0.02,
       yRatio: 0.95,
     },
@@ -55,7 +65,7 @@ export function slideConfig(
   if (slide.kicker) {
     base.brand = {
       text: slide.kicker,
-      color: "#E7E9EE",
+      color: c.kicker,
       sizeRatio: 0.026,
       xRatio: 0.08,
       yRatio: 0.12,
@@ -64,51 +74,55 @@ export function slideConfig(
   if (slide.role === "hook") {
     base.mainCopy = {
       text: slide.headline,
-      color: "#FFFFFF",
+      color: c.headline,
       sizeRatio: 0.082,
       yRatio: 0.44,
-      center: true,
+      center: centered,
       autoFit: true,
       maxLines: 3,
       maxWidthRatio: 0.84,
+      stroke: true,
     };
     if (slide.body)
       base.subCopy = {
         text: slide.body,
-        color: "#D1D5DB",
+        color: c.body,
         sizeRatio: 0.03,
         yRatio: 0.66,
-        center: true,
+        center: centered,
         autoFit: true,
         maxLines: 2,
         maxWidthRatio: 0.82,
+        stroke: true,
       };
   } else if (slide.role === "cta") {
     base.mainCopy = {
       text: slide.headline,
-      color: "#FFFFFF",
+      color: c.headline,
       sizeRatio: 0.064,
       yRatio: 0.4,
-      center: true,
+      center: centered,
       autoFit: true,
       maxLines: 3,
       maxWidthRatio: 0.84,
+      stroke: true,
     };
     if (slide.body)
       base.subCopy = {
         text: slide.body,
-        color: "#D1D5DB",
+        color: c.body,
         sizeRatio: 0.03,
         yRatio: 0.6,
-        center: true,
+        center: centered,
         autoFit: true,
         maxLines: 2,
         maxWidthRatio: 0.82,
+        stroke: true,
       };
     base.cta = {
       text: "자세히 보기 ▶",
-      bgColor: "#2563EB",
-      textColor: "#FFFFFF",
+      bgColor: c.ctaBg,
+      textColor: c.ctaText,
       sizeRatio: 0.028,
       yRatio: 0.78,
       autoFit: true,
@@ -117,24 +131,26 @@ export function slideConfig(
   } else {
     base.mainCopy = {
       text: slide.headline,
-      color: "#FFFFFF",
+      color: c.headline,
       sizeRatio: 0.058,
       yRatio: 0.3,
-      center: true,
+      center: centered,
       autoFit: true,
       maxLines: 2,
       maxWidthRatio: 0.84,
+      stroke: true,
     };
     if (slide.body)
       base.subCopy = {
         text: slide.body,
-        color: "#D1D5DB",
+        color: c.body,
         sizeRatio: 0.032,
         yRatio: 0.5,
-        center: true,
+        center: centered,
         autoFit: true,
         maxLines: 4,
         maxWidthRatio: 0.82,
+        stroke: true,
       };
   }
   return base;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import type { NoticeMeta } from "@/lib/notice/types";
 import { formatNoticeMeta } from "@/lib/notice/extract";
+import { TEMPLATE_IDS, DEFAULT_TEMPLATE_ID } from "./templates";
 
 export const CAROUSEL_PROMPT_VERSION = "carousel@0.1.0";
 export const CONCEPT_TOOL_NAME = "record_bundle_concept";
@@ -26,6 +27,8 @@ export const BundleConceptSchema = z.object({
   narrativeArc: z.string().max(240),
   slideCount: z.number().int().min(MIN_SLIDES).max(MAX_SLIDES),
   slidePlan: z.array(SlidePlanItemSchema).min(MIN_SLIDES).max(MAX_SLIDES),
+  // 비주얼 템플릿(없는 구 데이터는 기본값으로 폴백).
+  template: z.enum(TEMPLATE_IDS).default(DEFAULT_TEMPLATE_ID),
 });
 
 export const conceptTool: Tool = {
@@ -51,6 +54,12 @@ export const conceptTool: Tool = {
       slideCount: {
         type: "number",
         description: `콘텐츠 양에 맞는 권장 슬라이드 수 (${MIN_SLIDES}~${MAX_SLIDES})`,
+      },
+      template: {
+        type: "string",
+        enum: [...TEMPLATE_IDS],
+        description:
+          "톤·주제에 가장 맞는 비주얼 템플릿 1개. midnight=신뢰·차분 다크블루(정보/공지/B2B) / noir=프리미엄·에디토리얼 블랙&골드(럭셔리/브랜딩) / vivid=에너지·모던 비비드 컬러(프로모션/MZ).",
       },
       slidePlan: {
         type: "array",
@@ -83,6 +92,7 @@ export const conceptTool: Tool = {
       "tone",
       "narrativeArc",
       "slideCount",
+      "template",
       "slidePlan",
     ],
   },
@@ -184,6 +194,7 @@ export function buildConceptSystem(
 - target / tone: 누구에게, 어떤 톤으로.
 - narrativeArc: 슬라이드를 관통하는 서사 흐름(훅 → 전개 → 행동)을 한 문단으로.
 - slideCount: 콘텐츠 양에 맞는 권장 슬라이드 수(${MIN_SLIDES}~${MAX_SLIDES}).
+- template: 톤·주제에 맞는 비주얼 템플릿 1개 선택. midnight=신뢰·차분 다크블루(정보/공지/B2B), noir=프리미엄·에디토리얼 블랙&골드(럭셔리/브랜딩), vivid=에너지·모던 비비드(프로모션/MZ).
 - slidePlan: 각 슬라이드가 책임질 역할/목적을 '한 줄'씩(상세 카피 금지).
 
 ## 원칙

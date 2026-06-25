@@ -2,9 +2,11 @@ import { z } from "zod";
 import { ok, parseJson, serverError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { generateBundleConcept } from "@/lib/carousel/generate";
+import { analyzeReferenceDesign } from "@/lib/generate/analyze-reference";
 import {
   createCarousel,
   updateConcept,
+  setCarouselReference,
   setCarouselStatus,
   getCarousel,
   listCarousels,
@@ -21,6 +23,7 @@ const Schema = z.object({
   contentMode: z.enum(["persuasion", "notice"]).optional(),
   bgMode: z.enum(["shared", "per-slide"]).optional(),
   title: z.string().max(120).nullable().optional(),
+  referenceImageUrl: z.string().url().max(2000).nullable().optional(),
 });
 
 export async function GET() {
@@ -46,16 +49,28 @@ export async function POST(request: Request) {
       promptVersion: CAROUSEL_PROMPT_VERSION,
     });
 
-    // 2) 번들 기획 생성 → concept 상태로
+    // 2) 번들 기획 생성(Opus) + 레퍼런스 분석(Sonnet vision)을 병렬로.
+    //    레퍼런스는 콘셉트에 영향 없으므로 독립 — 분석 실패해도 캐러셀 생성은 진행.
     try {
-      const { concept } = await generateBundleConcept({
-        rawContent: input.rawContent,
-        contentMode: input.contentMode ?? "persuasion",
-        toneOverride: input.toneOverride,
-        brandName,
-        brandId: input.brandId,
-        carouselId: carousel.id,
-      });
+      const [{ concept }, designRef] = await Promise.all([
+        generateBundleConcept({
+          rawContent: input.rawContent,
+          contentMode: input.contentMode ?? "persuasion",
+          toneOverride: input.toneOverride,
+          brandName,
+          brandId: input.brandId,
+          carouselId: carousel.id,
+        }),
+        input.referenceImageUrl
+          ? analyzeReferenceDesign(input.referenceImageUrl, {
+              operation: "carousel_ref_analyze",
+              brandId: input.brandId ?? null,
+              metadata: { carouselId: carousel.id },
+            })
+          : Promise.resolve(null),
+      ]);
+      // 레퍼런스 먼저 저장 → updateConcept이 반환하는 행에 reference_json 포함되도록.
+      if (designRef) await setCarouselReference(carousel.id, designRef);
       const updated = await updateConcept(carousel.id, concept, {
         status: "concept",
       });

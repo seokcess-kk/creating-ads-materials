@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import type { DesignReference } from "@/lib/generate/types";
 import type {
   BundleConcept,
   CarouselInput,
   CarouselRow,
   CarouselSlideRow,
   CarouselStatus,
+  SlideDetail,
 } from "./types";
-import type { RenderedSlide } from "./generate";
 
 export async function createCarousel(
   input: CarouselInput,
@@ -22,6 +23,7 @@ export async function createCarousel(
       tone_override: input.toneOverride ?? null,
       content_mode: input.contentMode ?? "persuasion",
       bg_mode: input.bgMode ?? "shared",
+      reference_url: input.referenceImageUrl ?? null,
       status: opts.status,
       prompt_version: opts.promptVersion,
     })
@@ -50,6 +52,19 @@ export async function updateConcept(
     .single();
   if (error) throw error;
   return data as CarouselRow;
+}
+
+/** 레퍼런스 분석 결과(DesignReference)를 저장. 생성 직후 콘셉트와 병렬로 추출. */
+export async function setCarouselReference(
+  carouselId: string,
+  designRef: DesignReference,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("carousels")
+    .update({ reference_json: designRef })
+    .eq("id", carouselId);
+  if (error) throw error;
 }
 
 export async function setCarouselStatus(
@@ -111,10 +126,14 @@ export async function getSlide(slideId: string): Promise<CarouselSlideRow | null
   return (data as CarouselSlideRow | null) ?? null;
 }
 
-/** 슬라이드 일괄 교체(idx UNIQUE이므로 delete 후 insert). */
-export async function replaceSlides(
+/**
+ * 슬라이드 스켈레톤(텍스트만, 이미지 없음) 일괄 삽입.
+ * 상세 카피 확정 직후 호출 → 클라이언트가 폴링으로 골격을 먼저 보고, 이후 이미지가 채워짐.
+ * idx UNIQUE이므로 기존 슬라이드는 delete 후 insert.
+ */
+export async function insertSlideSkeletons(
   carouselId: string,
-  slides: RenderedSlide[],
+  details: SlideDetail[],
 ): Promise<CarouselSlideRow[]> {
   const supabase = await createClient();
   const { error: delErr } = await supabase
@@ -123,17 +142,17 @@ export async function replaceSlides(
     .eq("carousel_id", carouselId);
   if (delErr) throw delErr;
 
-  const rows = slides.map((s) => ({
+  const rows = details.map((d) => ({
     carousel_id: carouselId,
-    idx: s.index,
-    role: s.role,
-    kicker: s.kicker ?? null,
-    headline: s.headline,
-    body: s.body ?? null,
-    visual_json: s.visual ?? {},
-    bg_url: s.bg_url,
-    image_url: s.image_url,
-    image_path: s.image_path,
+    idx: d.index,
+    role: d.role,
+    kicker: d.kicker ?? null,
+    headline: d.headline,
+    body: d.body ?? null,
+    visual_json: d.visual ?? {},
+    bg_url: null,
+    image_url: null,
+    image_path: null,
   }));
   const { data, error } = await supabase
     .from("carousel_slides")
@@ -141,6 +160,19 @@ export async function replaceSlides(
     .select();
   if (error) throw error;
   return (data ?? []) as CarouselSlideRow[];
+}
+
+/** 슬라이드 1장의 배경/합성 결과를 기록(점진 렌더 — 완성되는 대로 호출). */
+export async function setSlideRendered(
+  slideId: string,
+  patch: { bg_url: string | null; image_url: string; image_path: string },
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("carousel_slides")
+    .update(patch)
+    .eq("id", slideId);
+  if (error) throw error;
 }
 
 export async function updateSlideCopy(

@@ -6,11 +6,12 @@ import {
 } from "@/lib/carousel/generate";
 import {
   getCarousel,
-  replaceSlides,
+  insertSlideSkeletons,
   setCarouselBg,
   setCarouselStatus,
 } from "@/lib/carousel/queries";
 import { BundleConceptSchema } from "@/lib/carousel/prompts";
+import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
 
 export const maxDuration = 240;
 
@@ -30,6 +31,12 @@ export async function POST(
     }
     const concept = conceptParsed.data;
 
+    // 저장된 레퍼런스 디자인 요소(있으면 아트디렉터 styleLock에 주입). 없으면 null.
+    const refParsed = DesignReferenceSchema.safeParse(
+      data.carousel.reference_json,
+    );
+    const designRef = refParsed.success ? refParsed.data : null;
+
     await setCarouselStatus(carouselId, "generating");
 
     try {
@@ -47,16 +54,27 @@ export async function POST(
         carouselId,
       });
 
-      const { bgUrl, slides } = await renderCarouselSlides({
+      // 1) 텍스트만 있는 스켈레톤 먼저 기록 → 클라이언트 폴링이 골격을 즉시 본다.
+      const rows = await insertSlideSkeletons(carouselId, details);
+      const rowIdByIndex = new Map(rows.map((r) => [r.idx, r.id]));
+
+      // 2) 배경 생성 + 합성 — 완성되는 슬라이드부터 행을 점진 갱신.
+      const { bgUrl } = await renderCarouselSlides({
         carouselId,
         brandId: data.carousel.brand_id,
         concept,
         details,
         bgMode: data.carousel.bg_mode,
-        sharedBgUrl: data.carousel.bg_url, // 재생성 시 shared 배경 재사용
+        contentMode: data.carousel.content_mode,
+        toneOverride: data.carousel.tone_override,
+        designRef,
+        // 전체 재생성("슬라이드 전체 다시 만들기")은 현재 템플릿·레퍼런스를 반영해야 하므로
+        // shared 배경도 새로 생성한다(기존 bg_url 재사용 금지). 카피만 고치는 경로는
+        // recomposeSlide가 각 슬라이드의 bg_url을 재사용하므로 영향 없음.
+        sharedBgUrl: null,
+        rowIdByIndex,
       });
 
-      const rows = await replaceSlides(carouselId, slides);
       await setCarouselBg(carouselId, bgUrl);
       await setCarouselStatus(carouselId, "ready");
 
