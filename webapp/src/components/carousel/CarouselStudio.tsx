@@ -644,23 +644,32 @@ export function CarouselStudio({
               />
             </Field>
             <Field label="비주얼 템플릿">
-              <select
-                value={concept.template ?? "midnight"}
-                onChange={(e) =>
-                  patchConcept({ template: e.target.value as TemplateId })
-                }
-                disabled={busy}
-                className="flex h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring disabled:opacity-50"
-              >
-                {TEMPLATE_OPTIONS.map((o) => (
-                  <option key={o.v} value={o.v}>
-                    {o.l}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-muted-foreground">
-                AI가 톤에 맞춰 자동 선택했습니다. 바꾸면 배경·색이 함께 바뀝니다(슬라이드 다시 만들기 시 반영).
-              </p>
+              {refUrl ? (
+                // 레퍼런스가 있으면 레퍼런스가 배경·색·폰트를 결정 → 템플릿 선택 비활성(숨김).
+                <p className="text-[11px] text-muted-foreground">
+                  레퍼런스 이미지가 배경·색·폰트를 결정합니다 (템플릿 미적용).
+                </p>
+              ) : (
+                <>
+                  <select
+                    value={concept.template ?? "midnight"}
+                    onChange={(e) =>
+                      patchConcept({ template: e.target.value as TemplateId })
+                    }
+                    disabled={busy}
+                    className="flex h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring disabled:opacity-50"
+                  >
+                    {TEMPLATE_OPTIONS.map((o) => (
+                      <option key={o.v} value={o.v}>
+                        {o.l}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    AI가 톤에 맞춰 자동 선택했습니다. 바꾸면 배경·색이 함께 바뀝니다(슬라이드 다시 만들기 시 반영).
+                  </p>
+                </>
+              )}
             </Field>
           </CardContent>
         </Card>
