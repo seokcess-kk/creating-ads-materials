@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
 interface BrandOption {
@@ -71,6 +72,11 @@ export function CarouselStudio({ brands }: { brands: BrandOption[] }) {
   );
   const [bgMode, setBgMode] = useState<"shared" | "per-slide">("shared");
 
+  // 레퍼런스(선택) — 첨부 시 배경이 그 디자인 룩으로 통일됨(생성 시 서버에서 분석).
+  const [refUrl, setRefUrl] = useState<string | null>(null);
+  const [refUploading, setRefUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
   // 상태
   const [carouselId, setCarouselId] = useState<string | null>(null);
   const [concept, setConcept] = useState<BundleConcept | null>(null);
@@ -78,6 +84,32 @@ export function CarouselStudio({ brands }: { brands: BrandOption[] }) {
   const [busy, setBusy] = useState(false);
 
   const canSubmit = rawContent.trim().length >= 10;
+
+  async function onPickReference(file: File | null) {
+    if (!file) return;
+    setRefUploading(true);
+    try {
+      const signRes = await fetch("/api/generate/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      });
+      const sign = await signRes.json();
+      if (!signRes.ok) throw new Error(sign.error ?? "업로드 준비 실패");
+      const supabase = createClient();
+      const { error } = await supabase.storage
+        .from(sign.bucket)
+        .uploadToSignedUrl(sign.path, sign.token, file);
+      if (error) throw error;
+      setRefUrl(sign.publicUrl);
+      toast.success("레퍼런스 첨부됨 — 배경이 이 디자인 룩으로 통일됩니다");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "업로드 오류");
+    } finally {
+      setRefUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
 
   async function createConcept() {
     if (!canSubmit) {
@@ -95,6 +127,7 @@ export function CarouselStudio({ brands }: { brands: BrandOption[] }) {
           brandId: brandId || null,
           contentMode,
           bgMode,
+          referenceImageUrl: refUrl,
         }),
       });
       const data = await res.json();
@@ -304,6 +337,56 @@ export function CarouselStudio({ brands }: { brands: BrandOption[] }) {
               </div>
             </div>
           </div>
+
+          {/* 레퍼런스 첨부(선택) — 배경 디자인 룩 통일 */}
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs">레퍼런스 이미지 (선택)</Label>
+              {refUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setRefUrl(null)}
+                  disabled={busy}
+                  className="text-[11px] text-muted-foreground underline disabled:opacity-50"
+                >
+                  제거
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={refUploading || busy}
+                  className="text-[11px] text-primary underline disabled:opacity-50"
+                >
+                  {refUploading ? "업로드 중…" : "+ 첨부"}
+                </button>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => onPickReference(e.target.files?.[0] ?? null)}
+              />
+            </div>
+            {refUrl ? (
+              <div className="flex items-center gap-3">
+                <img
+                  src={refUrl}
+                  alt="레퍼런스"
+                  className="h-16 w-16 rounded-md border object-cover"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  팔레트·무드·구도를 추출해 전 슬라이드 배경에 반영합니다.
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                원하는 분위기의 이미지를 첨부하면 배경이 그 룩으로 통일됩니다.
+              </p>
+            )}
+          </div>
+
           <Button onClick={createConcept} disabled={!canSubmit || busy}>
             {busy ? "기획 생성 중…" : "번들 기획 만들기 →"}
           </Button>

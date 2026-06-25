@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import type { DesignReference } from "@/lib/generate/types";
 import type {
   BundleConcept,
   CarouselInput,
@@ -22,6 +23,7 @@ export async function createCarousel(
       tone_override: input.toneOverride ?? null,
       content_mode: input.contentMode ?? "persuasion",
       bg_mode: input.bgMode ?? "shared",
+      reference_url: input.referenceImageUrl ?? null,
       status: opts.status,
       prompt_version: opts.promptVersion,
     })
@@ -50,6 +52,19 @@ export async function updateConcept(
     .single();
   if (error) throw error;
   return data as CarouselRow;
+}
+
+/** 레퍼런스 분석 결과(DesignReference)를 저장. 생성 직후 콘셉트와 병렬로 추출. */
+export async function setCarouselReference(
+  carouselId: string,
+  designRef: DesignReference,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("carousels")
+    .update({ reference_json: designRef })
+    .eq("id", carouselId);
+  if (error) throw error;
 }
 
 export async function setCarouselStatus(

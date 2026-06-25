@@ -11,6 +11,7 @@ import {
   setCarouselStatus,
 } from "@/lib/carousel/queries";
 import { BundleConceptSchema } from "@/lib/carousel/prompts";
+import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
 
 export const maxDuration = 240;
 
@@ -29,6 +30,12 @@ export async function POST(
       throw new ApiError(400, "확정된 기획이 없습니다. 먼저 기획을 생성/확정하세요.");
     }
     const concept = conceptParsed.data;
+
+    // 저장된 레퍼런스 디자인 요소(있으면 아트디렉터 styleLock에 주입). 없으면 null.
+    const refParsed = DesignReferenceSchema.safeParse(
+      data.carousel.reference_json,
+    );
+    const designRef = refParsed.success ? refParsed.data : null;
 
     await setCarouselStatus(carouselId, "generating");
 
@@ -53,6 +60,9 @@ export async function POST(
         concept,
         details,
         bgMode: data.carousel.bg_mode,
+        contentMode: data.carousel.content_mode,
+        toneOverride: data.carousel.tone_override,
+        designRef,
         sharedBgUrl: data.carousel.bg_url, // 재생성 시 shared 배경 재사용
       });
 

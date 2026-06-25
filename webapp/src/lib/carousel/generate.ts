@@ -5,6 +5,7 @@ import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { extractNoticeMeta } from "@/lib/notice/extract";
 import type { NoticeMeta } from "@/lib/notice/types";
+import type { DesignReference } from "@/lib/generate/types";
 import {
   CONCEPT_TOOL_NAME,
   SLIDES_TOOL_NAME,
@@ -23,12 +24,33 @@ import {
   carouselFontSet,
   slideConfig,
 } from "./render";
+import { buildCarouselBackgroundPrompts } from "./art-director";
 import type {
   BundleConcept,
   SlideDetail,
   CarouselBgMode,
   CarouselContentMode,
 } from "./types";
+
+/** 순서 보존 + 동시성 제한 map(이미지 모델 동시 호출 폭주 방지). */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      const i = cursor++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  );
+  return results;
+}
 
 interface ClaudeContext {
   brandId?: string | null;
@@ -153,11 +175,41 @@ export async function renderCarouselSlides(params: {
   concept: BundleConcept;
   details: SlideDetail[];
   bgMode: CarouselBgMode;
+  contentMode: CarouselContentMode;
+  toneOverride?: string | null;
+  /** 레퍼런스 디자인 요소(있으면 배경 styleLock 기반으로 주입) */
+  designRef?: DesignReference | null;
   /** shared 모드에서 기존 배경 재사용(재생성 시) */
   sharedBgUrl?: string | null;
 }): Promise<{ bgUrl: string | null; slides: RenderedSlide[] }> {
   const total = params.details.length;
   const fontSet = carouselFontSet();
+
+  // 배경 생성이 필요할 때만 아트디렉터 호출(shared 재사용 시 생략).
+  const needGen =
+    params.bgMode === "per-slide" ||
+    (params.bgMode === "shared" && !params.sharedBgUrl);
+
+  // 아트디렉터: 콘셉트+슬라이드 → 텍스트 없는 배경 프롬프트(전 슬라이드 1콜, 스타일 통일).
+  // 실패 시 null → render.ts 템플릿 프롬프트로 폴백.
+  const ad = needGen
+    ? await buildCarouselBackgroundPrompts({
+        concept: params.concept,
+        details: params.details,
+        bgMode: params.bgMode,
+        contentMode: params.contentMode,
+        toneOverride: params.toneOverride,
+        designRef: params.designRef,
+        usageContext: {
+          operation: "carousel_art_director",
+          brandId: params.brandId ?? null,
+          metadata: { carouselId: params.carouselId, bgMode: params.bgMode },
+        },
+      })
+    : null;
+  const promptByIndex = new Map<number, string>(
+    (ad?.backgrounds ?? []).map((b) => [b.index, b.prompt]),
+  );
 
   // shared 배경 1장 준비(재사용 또는 신규 생성)
   let sharedBgBuf: Buffer | null = null;
@@ -166,8 +218,9 @@ export async function renderCarouselSlides(params: {
     if (sharedBgUrl) {
       sharedBgBuf = await fetchAsBuffer(sharedBgUrl);
     } else {
+      const sharedPrompt = ad?.backgrounds[0]?.prompt ?? SHARED_BG_PROMPT;
       const bg = await generateImage({
-        prompt: SHARED_BG_PROMPT,
+        prompt: sharedPrompt,
         aspectRatio: "1:1",
         imageSize: "2K",
         usageContext: {
@@ -182,13 +235,16 @@ export async function renderCarouselSlides(params: {
     }
   }
 
-  const slides: RenderedSlide[] = [];
-  for (const detail of params.details) {
+  // 슬라이드 렌더 — per-slide 배경 생성/합성을 동시성 캡(4)으로 병렬화(순서 보존).
+  const slides = await mapWithConcurrency(params.details, 4, async (detail) => {
     let bgBuf: Buffer;
     let slideBgUrl: string | null;
     if (params.bgMode === "per-slide") {
+      const prompt =
+        promptByIndex.get(detail.index) ??
+        perSlideBgPrompt(params.concept, detail);
       const bg = await generateImage({
-        prompt: perSlideBgPrompt(params.concept, detail),
+        prompt,
         aspectRatio: "1:1",
         imageSize: "2K",
         usageContext: {
@@ -222,13 +278,13 @@ export async function renderCarouselSlides(params: {
       composed,
     );
 
-    slides.push({
+    return {
       ...detail,
       bg_url: slideBgUrl,
       image_url: uploaded.url,
       image_path: uploaded.path,
-    });
-  }
+    } satisfies RenderedSlide;
+  });
 
   return { bgUrl: sharedBgUrl, slides };
 }
