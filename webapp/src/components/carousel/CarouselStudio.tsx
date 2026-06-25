@@ -722,7 +722,7 @@ export function CarouselStudio({
               disabled={busy || concept.slidePlan.length >= MAX_SLIDES}
               className="text-xs text-primary underline disabled:opacity-40"
             >
-              + 슬라이드 추가 ({concept.slidePlan.length}/{MAX_SLIDES})
+              + 슬라이드 추가 (현재 {concept.slidePlan.length}장 · 최대 {MAX_SLIDES})
             </button>
           </CardContent>
         </Card>
