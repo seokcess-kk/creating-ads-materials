@@ -83,8 +83,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 const MIN_SLIDES = 4;
-const MAX_SLIDES = 8;
+const MAX_SLIDES = 5; // 광고 캐러셀 UX 권장 상한(인지 부하 최소화)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const SWIPE_THRESHOLD = 40; // px — 라이트박스 좌우 스와이프 인식 최소 이동
 
 /** 슬라이드 계획을 index 1..N 연속 + 역할(첫=hook, 끝=cta, 중간=point)로 정규화. */
 function normalizePlan(items: SlidePlanItem[]): SlidePlanItem[] {
@@ -161,8 +162,15 @@ export function CarouselStudio({
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  // 슬라이드 라이트박스(큰 미리보기 + 이전/다음)
+  // 슬라이드 라이트박스(큰 미리보기 + 이전/다음 + 스와이프)
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const showPrev = () =>
+    setPreviewIdx((i) =>
+      i === null ? i : (i - 1 + slides.length) % slides.length,
+    );
+  const showNext = () =>
+    setPreviewIdx((i) => (i === null ? i : (i + 1) % slides.length));
 
   const canSubmit = rawContent.trim().length >= 10;
 
@@ -784,6 +792,7 @@ export function CarouselStudio({
                       <img
                         src={s.image_url}
                         alt={`슬라이드 ${s.idx}`}
+                        loading="lazy"
                         className="w-32 h-32 rounded-md border object-cover transition-opacity hover:opacity-80"
                       />
                     </button>
@@ -875,6 +884,18 @@ export function CarouselStudio({
           <div
             className="flex max-h-full flex-col items-center gap-3"
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const start = touchStartX.current;
+              touchStartX.current = null;
+              if (start === null || slides.length < 2) return;
+              const dx = (e.changedTouches[0]?.clientX ?? start) - start;
+              if (Math.abs(dx) < SWIPE_THRESHOLD) return;
+              if (dx > 0) showPrev();
+              else showNext();
+            }}
           >
             <img
               src={preview.image_url}
@@ -885,12 +906,7 @@ export function CarouselStudio({
               {slides.length > 1 && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setPreviewIdx(
-                      (i) =>
-                        i === null ? i : (i - 1 + slides.length) % slides.length,
-                    )
-                  }
+                  onClick={showPrev}
                   className="hover:underline"
                 >
                   ← 이전
@@ -902,11 +918,7 @@ export function CarouselStudio({
               {slides.length > 1 && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setPreviewIdx((i) =>
-                      i === null ? i : (i + 1) % slides.length,
-                    )
-                  }
+                  onClick={showNext}
                   className="hover:underline"
                 >
                   다음 →

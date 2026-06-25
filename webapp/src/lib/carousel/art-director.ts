@@ -110,6 +110,9 @@ COHESION:
 TONE:
 - ${toneLine}${over}${refRule}
 
+AVOID BANNER-BLINDNESS:
+- Do NOT look like a generic, obvious advertising banner. Feel native and editorial — like premium, organic feed content, not a hard-sell ad. Use crisp, intentional imagery that fits a real brand's world.
+
 Reflect the carousel's bigIdea/coreMessage in the imagery (mood, metaphor, setting) WITHOUT ever rendering text.
 Output ONLY via the ${TOOL} tool. Prompts must be in English.`;
 }

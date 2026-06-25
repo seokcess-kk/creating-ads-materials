@@ -4,12 +4,15 @@ import type { NoticeMeta } from "@/lib/notice/types";
 import { formatNoticeMeta } from "@/lib/notice/extract";
 import { TEMPLATE_IDS, DEFAULT_TEMPLATE_ID } from "./templates";
 
-export const CAROUSEL_PROMPT_VERSION = "carousel@0.1.0";
+export const CAROUSEL_PROMPT_VERSION = "carousel@0.2.0";
 export const CONCEPT_TOOL_NAME = "record_bundle_concept";
 export const SLIDES_TOOL_NAME = "record_slide_details";
 
 export const MIN_SLIDES = 4;
-export const MAX_SLIDES = 8;
+// 광고 캐러셀 UX 권장: 최대 5장(인지 부하·피로 최소화). 생성 도구·UI 캡으로 사용.
+export const MAX_SLIDES = 5;
+// 구 데이터(최대 8장) 재오픈 호환을 위한 파싱 허용 상한(신규 생성에는 사용 안 함).
+const MAX_SLIDES_PARSE = 8;
 
 // ── 1단계: 번들 기획(콘셉트/서사) ──────────────────────────────
 const SlidePlanItemSchema = z.object({
@@ -25,8 +28,8 @@ export const BundleConceptSchema = z.object({
   target: z.string().max(80),
   tone: z.string().max(60),
   narrativeArc: z.string().max(240),
-  slideCount: z.number().int().min(MIN_SLIDES).max(MAX_SLIDES),
-  slidePlan: z.array(SlidePlanItemSchema).min(MIN_SLIDES).max(MAX_SLIDES),
+  slideCount: z.number().int().min(MIN_SLIDES).max(MAX_SLIDES_PARSE),
+  slidePlan: z.array(SlidePlanItemSchema).min(MIN_SLIDES).max(MAX_SLIDES_PARSE),
   // 비주얼 템플릿(없는 구 데이터는 기본값으로 폴백).
   template: z.enum(TEMPLATE_IDS).default(DEFAULT_TEMPLATE_ID),
 });
@@ -116,7 +119,7 @@ const SlideDetailSchema = z.object({
 });
 
 export const SlideDetailListSchema = z.object({
-  slides: z.array(SlideDetailSchema).min(MIN_SLIDES).max(MAX_SLIDES),
+  slides: z.array(SlideDetailSchema).min(MIN_SLIDES).max(MAX_SLIDES_PARSE),
 });
 
 export const slidesTool: Tool = {
@@ -197,9 +200,12 @@ export function buildConceptSystem(
 - template: 톤·주제에 맞는 비주얼 템플릿 1개 선택. midnight=신뢰·차분 다크블루(정보/공지/B2B), noir=프리미엄·에디토리얼 블랙&골드(럭셔리/브랜딩), vivid=에너지·모던 비비드(프로모션/MZ).
 - slidePlan: 각 슬라이드가 책임질 역할/목적을 '한 줄'씩(상세 카피 금지).
 
-## 원칙
+## 원칙 (광고 캐러셀 UX)
 - 슬라이드 1 = hook, 마지막 = cta, 중간 = point.
+- **첫 슬라이드가 가장 중요**: 대부분 1번만 보고 넘긴다. coreMessage(핵심 메시지·혜택·제품)를 hook이 직접 책임지게 설계해, 1번에서 시선을 멈추고 다음으로 넘기고 싶게 만든다.
+- 슬라이드는 ${MIN_SLIDES}~${MAX_SLIDES}장으로 짧게(많을수록 인지 부하·이탈↑). 슬라이드당 1메시지 원칙.
 - 슬라이드 간 흐름이 끊기지 않도록 서사적으로 연결.
+- 전형적인 '광고 배너' 느낌을 피한다(배너 블라인드): 콘텐츠처럼 자연스럽고 신뢰감 있게.
 - ${toneLine(Boolean(opts.isNotice))}${over}
 
 도구 ${CONCEPT_TOOL_NAME} 로만 기록.`;
@@ -236,8 +242,10 @@ export function buildSlideDetailSystem(
 
 ## 원칙
 - 주어진 기획(bigIdea/coreMessage/narrativeArc/slidePlan)을 충실히 따른다. 슬라이드 수/역할/순서를 지킨다.
-- 각 슬라이드: headline은 짧게(권장 8~16자), body는 1~2줄. 모바일 가독성 우선.
+- **첫 슬라이드(hook)**: 가장 강력하고 구체적인 한 줄로 즉시 시선을 멈추게 한다. 핵심 혜택/메시지를 1번에 담아 다음으로 넘기게 만든다(스크롤 스토퍼).
+- 각 슬라이드: headline은 짧게(권장 8~16자), body는 1~2줄 이내로 간결하게. 정보 과다 금지(슬라이드당 1메시지). 모바일 가독성 우선.
 - 슬라이드 간 흐름이 기획의 서사대로 이어지게.
+- 상투적인 '광고 문구' 티를 피한다(배너 블라인드 방지): 사람이 말하듯 자연스럽게.
 - visual.motif: 그 슬라이드에 어울리는 비주얼 모티프 한 줄.
 - ${toneLine(Boolean(opts.isNotice))}${over}
 
