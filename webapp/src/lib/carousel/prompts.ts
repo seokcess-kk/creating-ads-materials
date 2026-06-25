@@ -156,7 +156,8 @@ export const slidesTool: Tool = {
               properties: {
                 motif: {
                   type: "string",
-                  description: "비주얼 모티프/장면 한 줄(per-slide 배경 생성에 사용)",
+                  description:
+                    "이 슬라이드 메시지에 맞는 구체적이고 주제·제품과 직접 관련된 장면/소재 한 줄(예: 커피 브랜드면 '라떼아트 클로즈업', '따뜻한 카페 창가'). 추상 패턴 말고 실제 관련 요소.",
                 },
                 emphasis: {
                   type: "string",
@@ -246,7 +247,7 @@ export function buildSlideDetailSystem(
 - 각 슬라이드: headline은 짧게(권장 8~16자), body는 1~2줄 이내로 간결하게. 정보 과다 금지(슬라이드당 1메시지). 모바일 가독성 우선.
 - 슬라이드 간 흐름이 기획의 서사대로 이어지게.
 - 상투적인 '광고 문구' 티를 피한다(배너 블라인드 방지): 사람이 말하듯 자연스럽게.
-- visual.motif: 그 슬라이드에 어울리는 비주얼 모티프 한 줄.
+- visual.motif: 그 슬라이드 내용에 맞는 **구체적이고 주제·제품과 직접 관련된** 장면/소재 한 줄(추상 패턴 금지 — 실제 제품·사용 장면·맥락). 슬라이드 간 같은 세계관 유지.
 - ${toneLine(Boolean(opts.isNotice))}${over}
 
 도구 ${SLIDES_TOOL_NAME} 로만 기록.`;

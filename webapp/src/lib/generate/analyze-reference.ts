@@ -14,6 +14,9 @@ export const DesignReferenceSchema = z.object({
   composition: z.string().max(300),
   layout: z.string().max(300),
   typographyVibe: z.string().max(200),
+  fontCategory: z
+    .enum(["sans", "serif", "rounded", "display", "handwriting"])
+    .optional(),
   notes: z.string().max(400).optional(),
 });
 
@@ -27,12 +30,18 @@ const tool: Tool = {
       palette: {
         type: "array",
         items: { type: "string" },
-        description: "주요 색 3~6개(hex 또는 색 이름)",
+        description: "주요 색 3~6개. 가능하면 hex 코드로(예: #1A2B3C). 색 추출에 쓰임.",
       },
       mood: { type: "string", description: "전체 무드/톤 한 줄" },
       composition: { type: "string", description: "구도/시선 흐름/여백 특징" },
       layout: { type: "string", description: "요소 배치/정렬/그리드 특징" },
       typographyVibe: { type: "string", description: "타이포 느낌(있다면)" },
+      fontCategory: {
+        type: "string",
+        enum: ["sans", "serif", "rounded", "display", "handwriting"],
+        description:
+          "타이포 카테고리 1개: sans(고딕/산세리프), serif(명조/세리프), rounded(둥근), display(굵은 제목용), handwriting(손글씨).",
+      },
       notes: { type: "string", description: "재현에 도움되는 기타 메모(선택)" },
     },
     required: ["palette", "mood", "composition", "layout", "typographyVibe"],

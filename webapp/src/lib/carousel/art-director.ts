@@ -79,6 +79,7 @@ function buildSystem(
   isNotice: boolean,
   toneOverride: string | null | undefined,
   hasRef: boolean,
+  textScheme: "light" | "dark",
 ): string {
   const toneLine = isNotice
     ? "Notice/announcement: sober, trustworthy, restrained, institutional. Calm palette. Avoid hype, glow, gradients-as-decoration, or playful elements."
@@ -86,8 +87,12 @@ function buildSystem(
   const over = toneOverride?.trim()
     ? `\n- Tone override (highest priority): ${toneOverride.trim()}`
     : "";
+  const readabilityRule =
+    textScheme === "dark"
+      ? "Keep the reserved text zone BRIGHT, LIGHT and airy so DARK overlay text stays readable there; overall palette stays light/clean — no dark or busy patches where the text sits."
+      : "Keep the reserved text zone DEEP and DARK enough that WHITE/light overlay text stays readable there — no bright or washed-out patches where the text sits.";
   const refRule = hasRef
-    ? `\n\nDESIGN REFERENCE (provided in the brief):\n- Treat the reference's palette / mood / composition / layout as a strong influence on the styleLock so the carousel feels designed after it.\n- Still obey every HARD RULE (textless, negative space, deep/dark enough for white text). Adapt the reference's look into clean textless backgrounds; do not copy any text or logos it may contain.`
+    ? `\n\nDESIGN REFERENCE (provided in the brief):\n- Follow the reference's palette / mood / composition / layout CLOSELY as the foundation of the styleLock, so the carousel feels designed after it.\n- Still obey every HARD RULE (textless, reserved readable text zone). Do not copy any text or logos the reference may contain.`
     : "";
   return `You are an expert advertising ART DIRECTOR and prompt engineer for the "gpt-image" text-to-image model, specializing in BACKGROUNDS for Korean Instagram card-news carousels (1:1, 1080x1080).
 
@@ -97,10 +102,14 @@ You receive a carousel plan (concept + per-slide roles/motifs) and produce:
 
 HARD RULES for every background prompt:
 - The image MUST contain NO text, letters, numbers, words, or logos of any kind.
-- Leave generous, calm NEGATIVE SPACE (especially the center and lower area) with good contrast, sized for Korean copy to be overlaid LATER. Do not fill the frame with busy detail.
-- Keep backgrounds DEEP and DARK enough that WHITE overlay text stays readable — avoid bright or washed-out areas, especially in the center and lower third where the text sits.
+- Reserve ONE clean, low-detail area (center or lower third) for the Korean copy overlaid LATER — keep that zone calm and uncluttered even if the rest of the frame carries subject imagery.
+- ${readabilityRule}
 - 1:1 square framing. No people holding/wearing readable text; no objects with readable text.
 - Advertising-grade: intentional focal idea, clean professional finish. Not flashy clip-art.
+
+SUBJECT MATTER (make it relatable):
+- Depict concrete, on-topic imagery tied to the carousel's product/topic and each slide's motif (e.g., a coffee brand → an espresso pour, latte art, a warm cafe scene; a gym → training, equipment). Relevant, tangible subject matter beats abstract gradients.
+- Keep the subject world cohesive across slides; vary the scene per slide's motif.
 
 COHESION:
 - Every background must obey the same styleLock (same palette / lighting / treatment).
@@ -132,7 +141,7 @@ function buildBrief(
     ? `\n# TEMPLATE STYLE (use as the base palette/mood of the styleLock)\n${params.templateStyle}\n`
     : "";
   const refLine = params.designRef
-    ? `\n# DESIGN REFERENCE (strong influence on the styleLock — adapt within the template's deep/dark regime)\n${formatDesignReference(params.designRef)}\n`
+    ? `\n# DESIGN REFERENCE (follow this closely as the styleLock foundation — palette/mood/composition)\n${formatDesignReference(params.designRef)}\n`
     : "";
   const slideLines = params.details
     .map((d) => {
@@ -182,6 +191,8 @@ export async function buildCarouselBackgroundPrompts(params: {
   designRef?: DesignReference | null;
   /** 선택된 템플릿의 배경 스타일 가이드(styleLock 기반) */
   templateStyle?: string | null;
+  /** 오버레이 텍스트 색 계열 — 배경의 텍스트 영역 명도를 맞추기 위해 */
+  textScheme?: "light" | "dark";
   usageContext?: UsageContext;
 }): Promise<CarouselBgPrompts | null> {
   try {
@@ -190,7 +201,12 @@ export async function buildCarouselBackgroundPrompts(params: {
     const resp = await callClaude({
       model: "sonnet",
       maxTokens: Math.min(4000, 1000 + count * 400),
-      system: buildSystem(isNotice, params.toneOverride, Boolean(params.designRef)),
+      system: buildSystem(
+        isNotice,
+        params.toneOverride,
+        Boolean(params.designRef),
+        params.textScheme ?? "light",
+      ),
       usageContext: params.usageContext,
       messages: [
         {

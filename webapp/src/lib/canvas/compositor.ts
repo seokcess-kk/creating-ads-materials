@@ -50,6 +50,9 @@ export interface ComposeConfig {
     // 전체 캔버스에 깔리는 은은한 어둠(0~255). AI 생성 배경의 밝은 영역에서도
     // 오버레이 텍스트 가독성을 보장하기 위한 단일 이미지용 옵션.
     scrim?: number;
+    // 그라데이션/스크림 색조. "dark"(기본, 검정) = 밝은 텍스트용,
+    // "light"(흰색) = 어두운 텍스트용(밝은 레퍼런스 배경에서 가독성 확보).
+    tint?: "dark" | "light";
   };
   brand?: {
     text: string;
@@ -165,19 +168,21 @@ function addGradientOverlay(
   h: number,
   direction: "top" | "bottom",
   opacity: number,
+  tint: "dark" | "light" = "dark",
 ) {
   const alpha = opacity / 255;
+  const rgb = tint === "light" ? "255, 255, 255" : "0, 0, 0";
   if (direction === "top") {
     const g = ctx.createLinearGradient(0, 0, 0, h / 3);
-    g.addColorStop(0, `rgba(0, 0, 0, ${alpha})`);
-    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    g.addColorStop(0, `rgba(${rgb}, ${alpha})`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h / 3);
   } else {
     const startY = (h * 2) / 3;
     const g = ctx.createLinearGradient(0, startY, 0, h);
-    g.addColorStop(0, "rgba(0, 0, 0, 0)");
-    g.addColorStop(1, `rgba(0, 0, 0, ${alpha})`);
+    g.addColorStop(0, `rgba(${rgb}, 0)`);
+    g.addColorStop(1, `rgba(${rgb}, ${alpha})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, startY, w, h - startY);
   }
@@ -244,10 +249,12 @@ export async function renderComposite(
   ctx.drawImage(bgImage, 0, 0);
 
   const overlay = config.overlay ?? { top: true, bottom: true };
-  if (overlay.top) addGradientOverlay(ctx, w, h, "top", overlay.topOpacity ?? 180);
-  if (overlay.bottom) addGradientOverlay(ctx, w, h, "bottom", overlay.bottomOpacity ?? 220);
+  const tint = overlay.tint ?? "dark";
+  if (overlay.top) addGradientOverlay(ctx, w, h, "top", overlay.topOpacity ?? 180, tint);
+  if (overlay.bottom) addGradientOverlay(ctx, w, h, "bottom", overlay.bottomOpacity ?? 220, tint);
   if (overlay.scrim) {
-    ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(255, overlay.scrim) / 255})`;
+    const rgb = tint === "light" ? "255, 255, 255" : "0, 0, 0";
+    ctx.fillStyle = `rgba(${rgb}, ${Math.min(255, overlay.scrim) / 255})`;
     ctx.fillRect(0, 0, w, h);
   }
 
