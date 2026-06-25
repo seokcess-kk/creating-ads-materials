@@ -1,4 +1,5 @@
 import type { DesignReference } from "@/lib/generate/types";
+import type { CarouselTemplateId } from "./templates";
 
 export type SlideRole = "hook" | "point" | "cta";
 export type CarouselBgMode = "shared" | "per-slide";
@@ -27,6 +28,7 @@ export interface BundleConcept {
   tone: string;
   narrativeArc: string;
   slideCount: number;
+  template: CarouselTemplateId;
   slidePlan: SlidePlanItem[];
 }
 

@@ -25,6 +25,7 @@ import {
   slideConfig,
 } from "./render";
 import { buildCarouselBackgroundPrompts } from "./art-director";
+import { getTemplate } from "./templates";
 import type {
   BundleConcept,
   SlideDetail,
@@ -184,6 +185,7 @@ export async function renderCarouselSlides(params: {
 }): Promise<{ bgUrl: string | null; slides: RenderedSlide[] }> {
   const total = params.details.length;
   const fontSet = carouselFontSet();
+  const template = getTemplate(params.concept.template);
 
   // 배경 생성이 필요할 때만 아트디렉터 호출(shared 재사용 시 생략).
   const needGen =
@@ -200,6 +202,7 @@ export async function renderCarouselSlides(params: {
         contentMode: params.contentMode,
         toneOverride: params.toneOverride,
         designRef: params.designRef,
+        templateStyle: template.bgStyle,
         usageContext: {
           operation: "carousel_art_director",
           brandId: params.brandId ?? null,
@@ -269,7 +272,7 @@ export async function renderCarouselSlides(params: {
       backgroundImageUrl: "",
       output: { bucket: "", path: "" },
       fontSet,
-      ...slideConfig(detail, total),
+      ...slideConfig(detail, total, template),
     };
     const composed = await renderComposite(bgBuf, config);
     const uploaded = await uploadBuffer(
@@ -294,6 +297,7 @@ export async function recomposeSlide(params: {
   carouselId: string;
   bgUrl: string;
   total: number;
+  templateId?: string | null;
   slide: Pick<SlideDetail, "index" | "role" | "kicker" | "headline" | "body">;
 }): Promise<{ image_url: string; image_path: string }> {
   const bgBuf = await fetchAsBuffer(params.bgUrl);
@@ -301,7 +305,7 @@ export async function recomposeSlide(params: {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },
     fontSet: carouselFontSet(),
-    ...slideConfig(params.slide, params.total),
+    ...slideConfig(params.slide, params.total, getTemplate(params.templateId)),
   };
   const composed = await renderComposite(bgBuf, config);
   const uploaded = await uploadBuffer(

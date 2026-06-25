@@ -27,7 +27,12 @@ export function serverError(e: unknown) {
   return NextResponse.json({ error: msg }, { status: 500 });
 }
 
-export async function parseJson<T>(request: Request, schema: z.ZodType<T>): Promise<T> {
+// z.infer<S> = 파싱 후(output) 타입 — .default()/.transform()이 있는 스키마도 정확히 추론.
+// (z.ZodType<T>는 Output=Input을 가정해 default가 있는 필드를 optional(input)로 잘못 추론함)
+export async function parseJson<S extends z.ZodTypeAny>(
+  request: Request,
+  schema: S,
+): Promise<z.infer<S>> {
   const raw = await request.json();
   const result = schema.safeParse(raw);
   if (!result.success) {

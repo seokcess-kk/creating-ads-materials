@@ -6,6 +6,7 @@ import {
   updateSlideCopy,
   updateSlideImage,
 } from "@/lib/carousel/queries";
+import { BundleConceptSchema } from "@/lib/carousel/prompts";
 
 export const maxDuration = 120;
 
@@ -39,10 +40,18 @@ export async function PATCH(
       return ok({ slide: updated });
     }
 
+    const conceptParsed = BundleConceptSchema.safeParse(
+      data.carousel.concept_json,
+    );
+    const templateId = conceptParsed.success
+      ? conceptParsed.data.template
+      : null;
+
     const { image_url, image_path } = await recomposeSlide({
       carouselId,
       bgUrl,
       total: data.slides.length,
+      templateId,
       slide: {
         index: updated.idx,
         role: updated.role,

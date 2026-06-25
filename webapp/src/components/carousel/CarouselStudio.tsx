@@ -21,6 +21,13 @@ interface SlidePlanItem {
   role: "hook" | "point" | "cta";
   purpose: string;
 }
+type TemplateId = "midnight" | "noir" | "vivid";
+const TEMPLATE_OPTIONS: { v: TemplateId; l: string }[] = [
+  { v: "midnight", l: "미드나잇 — 차분한 다크블루" },
+  { v: "noir", l: "느와르 — 프리미엄 블랙&골드" },
+  { v: "vivid", l: "비비드 — 에너지 컬러(좌측 정렬)" },
+];
+
 interface BundleConcept {
   title: string;
   bigIdea: string;
@@ -29,6 +36,7 @@ interface BundleConcept {
   tone: string;
   narrativeArc: string;
   slideCount: number;
+  template: TemplateId;
   slidePlan: SlidePlanItem[];
 }
 interface SlideRow {
@@ -452,6 +460,25 @@ export function CarouselStudio({ brands }: { brands: BrandOption[] }) {
                 rows={2}
                 disabled={busy}
               />
+            </Field>
+            <Field label="비주얼 템플릿">
+              <select
+                value={concept.template ?? "midnight"}
+                onChange={(e) =>
+                  patchConcept({ template: e.target.value as TemplateId })
+                }
+                disabled={busy}
+                className="flex h-8 w-full rounded-lg border border-border bg-background px-2.5 text-sm outline-none focus-visible:border-ring disabled:opacity-50"
+              >
+                {TEMPLATE_OPTIONS.map((o) => (
+                  <option key={o.v} value={o.v}>
+                    {o.l}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">
+                AI가 톤에 맞춰 자동 선택했습니다. 바꾸면 배경·색이 함께 바뀝니다(슬라이드 다시 만들기 시 반영).
+              </p>
             </Field>
           </CardContent>
         </Card>
