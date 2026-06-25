@@ -150,7 +150,7 @@ export function BrandInfoEditButton({ brand }: { brand: Brand }) {
           >
             취소
           </Button>
-          <Button onClick={save} disabled={saving}>
+          <Button onClick={save} disabled={saving} pending={saving}>
             {saving ? "저장 중..." : "저장"}
           </Button>
         </DialogFooter>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { DownloadButton } from "@/components/common/DownloadButton";
+import { GenerationProgress } from "@/components/common/GenerationProgress";
+import { useNotifications } from "@/components/notifications/NotificationContext";
 
 interface BrandOption {
   id: string;
@@ -54,23 +58,6 @@ const ASPECTS: Array<{ value: "1:1" | "4:5" | "9:16" | "16:9"; label: string }> 
   { value: "9:16", label: "스토리 9:16" },
   { value: "16:9", label: "가로 16:9" },
 ];
-
-async function downloadImage(url: string, filename: string) {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, "_blank");
-  }
-}
 
 // 응답을 JSON으로 안전하게 파싱. 비-JSON(타임아웃 시 플랫폼이 내는 "An error o..." 평문/HTML 등)이면
 // 'Unexpected token' 대신 사람이 읽을 수 있는 메시지로 변환한다. 응답 실패(!ok)도 함께 처리.
@@ -121,9 +108,12 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [copyOptions, setCopyOptions] = useState<CopyOption[]>([]);
 
   const [generating, setGenerating] = useState(false);
+  const [genCount, setGenCount] = useState(3); // 생성 시작 시점의 후보 수(스켈레톤 슬롯 수)
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [variants, setVariants] = useState<ResultVariant[]>([]);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
+
+  const { startOp, completeOp, failOp } = useNotifications();
 
   // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음). 카피는 후보별(variant.copy)로 보관.
   const [reBusy, setReBusy] = useState(false);
@@ -226,8 +216,21 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       return;
     }
     setGenerating(true);
+    setGenCount(count);
     setVariants([]);
     setGenerationId(null);
+    const opId = startOp({
+      kind: "visual",
+      title: "이미지 생성",
+      subtitle: `${count}장 · ${aspectRatio}${bakeText ? " · 텍스트 베이킹" : ""}`,
+      estimatedSeconds: bakeText ? 55 : 40,
+      steps: [
+        { label: "프롬프트·브랜드 구성", atSec: 0 },
+        { label: "이미지 생성", atSec: 6 },
+        { label: "한글 텍스트 합성", atSec: bakeText ? 40 : 28 },
+      ],
+      celebrate: false, // 결과가 화면에 바로 뜨므로 완료 배너는 생략(진행바만 추적)
+    });
     try {
       const res = await fetch("/api/generate/image", {
         method: "POST",
@@ -260,11 +263,16 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       );
       setGenerationId(data.generationId ?? null);
       const failed = (data.failures ?? []).length;
+      completeOp(opId, {
+        subtitle: `${data.variants.length}장 생성됨${failed ? ` · ${failed}장 실패` : ""}`,
+      });
       toast.success(
         `이미지 ${data.variants.length}장 생성됨${failed ? ` (${failed}장 실패)` : ""}`,
       );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
@@ -464,9 +472,14 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 type="button"
                 onClick={autoCopy}
                 disabled={!canSubmit || copyLoading || generating}
-                className="text-[11px] text-primary underline disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[11px] text-primary transition-transform hover:underline active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {copyLoading ? "작성 중…" : "✨ 카피 자동 작성"}
+                {copyLoading ? (
+                  <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  <SparklesIcon className="size-3" aria-hidden />
+                )}
+                {copyLoading ? "작성 중…" : "카피 자동 작성"}
               </button>
             </div>
             {copyOptions.length > 0 && (
@@ -604,23 +617,45 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
             </label>
           )}
 
-          <Button onClick={generate} disabled={!canSubmit || generating}>
-            {generating ? "생성 중… (~40초)" : "이미지 생성 →"}
+          <Button onClick={generate} disabled={!canSubmit} pending={generating}>
+            {generating ? "생성 중…" : "이미지 생성 →"}
           </Button>
         </CardContent>
       </Card>
 
-      {variants.length > 0 && (
+      {(generating || variants.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               생성 결과
-              <Badge variant="secondary">{variants.length}장</Badge>
+              {generating ? (
+                <Badge variant="outline" className="gap-1">
+                  <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                  생성 중
+                </Badge>
+              ) : (
+                <Badge variant="secondary">{variants.length}장</Badge>
+              )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {generating && (
+              <GenerationProgress
+                estimatedSeconds={bakeText ? 55 : 40}
+                label={`이미지 ${genCount}장 만드는 중…`}
+              />
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {variants.map((v, i) => (
+              {generating &&
+                Array.from({ length: genCount }).map((_, i) => (
+                  <div
+                    key={`skeleton-${i}`}
+                    className="aspect-square animate-pulse rounded-md border border-border bg-muted"
+                    aria-hidden
+                  />
+                ))}
+              {!generating &&
+                variants.map((v, i) => (
                 <div key={v.label} className="space-y-1.5">
                   <button
                     type="button"
@@ -650,13 +685,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     >
                       {v.selected ? "✓ 선택됨" : "선택"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadImage(v.url, `ad_${v.label}.png`)}
-                      className="shrink-0 text-xs text-primary underline"
-                    >
-                      다운로드
-                    </button>
+                    <DownloadButton
+                      url={v.url}
+                      filename={`ad_${v.label}.png`}
+                      className="shrink-0 text-xs text-primary hover:underline"
+                    />
                   </div>
                 </div>
               ))}
@@ -710,13 +743,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               >
                 {preview.selected ? "✓ 선택됨" : "선택"}
               </button>
-              <button
-                type="button"
-                onClick={() => downloadImage(preview.url, `ad_${preview.label}.png`)}
-                className="rounded-md border border-white/40 px-2 py-1 text-xs hover:bg-white/10"
-              >
-                다운로드
-              </button>
+              <DownloadButton
+                url={preview.url}
+                filename={`ad_${preview.label}.png`}
+                className="rounded-md border border-white/40 px-2 py-1 text-xs text-white hover:bg-white/10"
+              />
             </div>
 
             {preview.recomposable && previewIdx !== null && (
@@ -758,8 +789,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       preview.copy.cta.trim()
                     )
                   }
-                  className="rounded-md border border-white/40 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/40 px-3 py-1.5 text-xs text-white transition-transform hover:bg-white/10 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                 >
+                  {reBusy && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
                   {reBusy ? "재합성 중…" : "재합성 →"}
                 </button>
               </div>

@@ -191,7 +191,12 @@ export default function NewBrandPage() {
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading}>
                 취소
               </Button>
-              <Button type="submit" className="flex-1" disabled={loading}>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={loading}
+                pending={loading}
+              >
                 {loading ? "생성 중..." : "등록하고 메모리 설정"}
               </Button>
             </div>
