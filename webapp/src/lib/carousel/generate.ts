@@ -253,8 +253,8 @@ export async function renderCarouselSlides(params: {
     }
   }
 
-  // 슬라이드 렌더(동시성 캡4). 각 슬라이드 완성 즉시 DB 갱신 → 폴링이 하나씩 채움.
-  await mapWithConcurrency(params.details, 4, async (detail) => {
+  // 슬라이드 렌더(동시성 캡5 — ≤5장이면 한 웨이브). 완성 즉시 DB 갱신 → 폴링이 하나씩 채움.
+  await mapWithConcurrency(params.details, 5, async (detail) => {
     const rowId = params.rowIdByIndex.get(detail.index);
 
     if (isFull) {
@@ -269,7 +269,7 @@ export async function renderCarouselSlides(params: {
       const img = await generateImage({
         prompt,
         aspectRatio: "1:1",
-        imageSize: "2K",
+        imageSize: "1K", // gpt-image-2 medium 품질 — high 대비 2~3배 빠름(1024px, 1080 인스타에 충분)
         usageContext: {
           operation: "carousel_slide_full",
           brandId: params.brandId ?? null,
@@ -416,7 +416,7 @@ export async function regenerateFullSlide(params: {
   const img = await generateImage({
     prompt,
     aspectRatio: "1:1",
-    imageSize: "2K",
+    imageSize: "1K", // full 단건 재생성도 medium 품질(생성 때와 동일)
     usageContext: {
       operation: "carousel_slide_full",
       brandId: params.brandId ?? null,
