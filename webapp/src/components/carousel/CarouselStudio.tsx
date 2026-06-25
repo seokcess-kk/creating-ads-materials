@@ -272,6 +272,7 @@ export function CarouselStudio({
     if (!carouselId || !concept) return;
     setBusy(true);
     setGenerating(true);
+    let polling = false; // finally에서 끄려면 try 바깥 스코프여야 함
     try {
       // 1) 편집한 기획 저장
       const saveRes = await fetch(`/api/carousels/${carouselId}`, {
@@ -287,7 +288,7 @@ export function CarouselStudio({
       setStep("slides");
       toast.info("슬라이드 생성 중… 완성되는 대로 채워집니다");
 
-      let polling = true;
+      polling = true;
       const pollLoop = (async () => {
         while (polling) {
           await sleep(2500);
@@ -318,6 +319,7 @@ export function CarouselStudio({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
     } finally {
+      polling = false; // POST가 reject돼도 폴링 루프를 반드시 종료
       setGenerating(false);
       setBusy(false);
     }
@@ -400,12 +402,14 @@ export function CarouselStudio({
   // ── 상단: 최근 캐러셀 + 새로 만들기 ───────────────────────────
   const topBar = (recent.length > 0 || carouselId) && (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-      <Link
+      {/* 풀 내비게이션(plain <a>) — replaceState로 ?id가 붙은 상태에서도 key 충돌 없이
+          항상 새 폼으로 리셋되도록 소프트 내비게이션을 피한다. */}
+      <a
         href="/carousel"
         className="rounded-lg border border-border px-2 py-1 text-muted-foreground hover:text-foreground"
       >
         + 새 캐러셀
-      </Link>
+      </a>
       {recent.slice(0, 6).map((r) => (
         <Link
           key={r.id}

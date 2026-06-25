@@ -68,7 +68,10 @@ export async function POST(
         contentMode: data.carousel.content_mode,
         toneOverride: data.carousel.tone_override,
         designRef,
-        sharedBgUrl: data.carousel.bg_url, // 재생성 시 shared 배경 재사용
+        // 전체 재생성("슬라이드 전체 다시 만들기")은 현재 템플릿·레퍼런스를 반영해야 하므로
+        // shared 배경도 새로 생성한다(기존 bg_url 재사용 금지). 카피만 고치는 경로는
+        // recomposeSlide가 각 슬라이드의 bg_url을 재사용하므로 영향 없음.
+        sharedBgUrl: null,
         rowIdByIndex,
       });
 
