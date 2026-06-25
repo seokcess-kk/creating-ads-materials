@@ -18,14 +18,10 @@ import {
   conceptTool,
   slidesTool,
 } from "./prompts";
-import {
-  SHARED_BG_PROMPT,
-  perSlideBgPrompt,
-  carouselFontSet,
-  slideConfig,
-} from "./render";
+import { SHARED_BG_PROMPT, perSlideBgPrompt, slideConfig } from "./render";
 import { buildCarouselBackgroundPrompts } from "./art-director";
 import { getTemplate } from "./templates";
+import { resolveStyle } from "./style";
 import { setSlideRendered } from "./queries";
 import type {
   BundleConcept,
@@ -184,8 +180,10 @@ export async function renderCarouselSlides(params: {
   rowIdByIndex: Map<number, string>;
 }): Promise<{ bgUrl: string | null }> {
   const total = params.details.length;
-  const fontSet = carouselFontSet();
   const template = getTemplate(params.concept.template);
+  // 레퍼런스 있으면 레퍼런스가 색·폰트 주도, 없으면 템플릿.
+  const style = resolveStyle({ designRef: params.designRef, template });
+  const fontSet = style.fontSet;
 
   // 배경 생성이 필요할 때만 아트디렉터 호출(shared 재사용 시 생략).
   const needGen =
@@ -202,7 +200,9 @@ export async function renderCarouselSlides(params: {
         contentMode: params.contentMode,
         toneOverride: params.toneOverride,
         designRef: params.designRef,
-        templateStyle: template.bgStyle,
+        // 레퍼런스가 있으면 레퍼런스가 팔레트를 주도(템플릿 bgStyle은 레퍼런스 없을 때만).
+        templateStyle: params.designRef ? null : template.bgStyle,
+        textScheme: style.textScheme,
         usageContext: {
           operation: "carousel_art_director",
           brandId: params.brandId ?? null,
@@ -273,7 +273,7 @@ export async function renderCarouselSlides(params: {
       backgroundImageUrl: "",
       output: { bucket: "", path: "" },
       fontSet,
-      ...slideConfig(detail, total, template),
+      ...slideConfig(detail, total, style),
     };
     const composed = await renderComposite(bgBuf, config);
     const uploaded = await uploadBuffer(
@@ -301,14 +301,20 @@ export async function recomposeSlide(params: {
   bgUrl: string;
   total: number;
   templateId?: string | null;
+  /** 레퍼런스 디자인 요소(있으면 색·폰트를 주도 — 생성 때와 동일 스타일 재현) */
+  designRef?: DesignReference | null;
   slide: Pick<SlideDetail, "index" | "role" | "kicker" | "headline" | "body">;
 }): Promise<{ image_url: string; image_path: string }> {
   const bgBuf = await fetchAsBuffer(params.bgUrl);
+  const style = resolveStyle({
+    designRef: params.designRef,
+    template: getTemplate(params.templateId),
+  });
   const config: ComposeConfig = {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },
-    fontSet: carouselFontSet(),
-    ...slideConfig(params.slide, params.total, getTemplate(params.templateId)),
+    fontSet: style.fontSet,
+    ...slideConfig(params.slide, params.total, style),
   };
   const composed = await renderComposite(bgBuf, config);
   const uploaded = await uploadBuffer(

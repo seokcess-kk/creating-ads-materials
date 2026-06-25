@@ -7,6 +7,7 @@ import {
   updateSlideImage,
 } from "@/lib/carousel/queries";
 import { BundleConceptSchema } from "@/lib/carousel/prompts";
+import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
 
 export const maxDuration = 120;
 
@@ -46,12 +47,17 @@ export async function PATCH(
     const templateId = conceptParsed.success
       ? conceptParsed.data.template
       : null;
+    const refParsed = DesignReferenceSchema.safeParse(
+      data.carousel.reference_json,
+    );
+    const designRef = refParsed.success ? refParsed.data : null;
 
     const { image_url, image_path } = await recomposeSlide({
       carouselId,
       bgUrl,
       total: data.slides.length,
       templateId,
+      designRef,
       slide: {
         index: updated.idx,
         role: updated.role,

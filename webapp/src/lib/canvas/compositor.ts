@@ -50,6 +50,9 @@ export interface ComposeConfig {
     // 전체 캔버스에 깔리는 은은한 어둠(0~255). AI 생성 배경의 밝은 영역에서도
     // 오버레이 텍스트 가독성을 보장하기 위한 단일 이미지용 옵션.
     scrim?: number;
+    // 그라데이션/스크림 색조. "dark"(기본, 검정) = 밝은 텍스트용,
+    // "light"(흰색) = 어두운 텍스트용(밝은 레퍼런스 배경에서 가독성 확보).
+    tint?: "dark" | "light";
   };
   brand?: {
     text: string;
@@ -82,8 +85,9 @@ export interface ComposeConfig {
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
-    // 어두운 외곽선으로 임의 배경 위 가독성 강화(단일 이미지용).
+    // 외곽선으로 임의 배경 위 가독성 강화. strokeColor 미지정 시 어두운 외곽선(밝은 글자용).
     stroke?: boolean;
+    strokeColor?: string;
   };
   subCopy?: {
     text: string;
@@ -95,6 +99,7 @@ export interface ComposeConfig {
     maxLines?: number;
     maxWidthRatio?: number;
     stroke?: boolean;
+    strokeColor?: string;
   };
   cta?: {
     text: string;
@@ -165,19 +170,21 @@ function addGradientOverlay(
   h: number,
   direction: "top" | "bottom",
   opacity: number,
+  tint: "dark" | "light" = "dark",
 ) {
   const alpha = opacity / 255;
+  const rgb = tint === "light" ? "255, 255, 255" : "0, 0, 0";
   if (direction === "top") {
     const g = ctx.createLinearGradient(0, 0, 0, h / 3);
-    g.addColorStop(0, `rgba(0, 0, 0, ${alpha})`);
-    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    g.addColorStop(0, `rgba(${rgb}, ${alpha})`);
+    g.addColorStop(1, `rgba(${rgb}, 0)`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h / 3);
   } else {
     const startY = (h * 2) / 3;
     const g = ctx.createLinearGradient(0, startY, 0, h);
-    g.addColorStop(0, "rgba(0, 0, 0, 0)");
-    g.addColorStop(1, `rgba(0, 0, 0, ${alpha})`);
+    g.addColorStop(0, `rgba(${rgb}, 0)`);
+    g.addColorStop(1, `rgba(${rgb}, ${alpha})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, startY, w, h - startY);
   }
@@ -244,10 +251,12 @@ export async function renderComposite(
   ctx.drawImage(bgImage, 0, 0);
 
   const overlay = config.overlay ?? { top: true, bottom: true };
-  if (overlay.top) addGradientOverlay(ctx, w, h, "top", overlay.topOpacity ?? 180);
-  if (overlay.bottom) addGradientOverlay(ctx, w, h, "bottom", overlay.bottomOpacity ?? 220);
+  const tint = overlay.tint ?? "dark";
+  if (overlay.top) addGradientOverlay(ctx, w, h, "top", overlay.topOpacity ?? 180, tint);
+  if (overlay.bottom) addGradientOverlay(ctx, w, h, "bottom", overlay.bottomOpacity ?? 220, tint);
   if (overlay.scrim) {
-    ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(255, overlay.scrim) / 255})`;
+    const rgb = tint === "light" ? "255, 255, 255" : "0, 0, 0";
+    ctx.fillStyle = `rgba(${rgb}, ${Math.min(255, overlay.scrim) / 255})`;
     ctx.fillRect(0, 0, w, h);
   }
 
@@ -347,7 +356,10 @@ export async function renderComposite(
       ? fontSize * 1.3
       : h * (config.mainCopy.lineSpacingRatio ?? 0.075);
     const mainStroke = config.mainCopy.stroke
-      ? { color: "rgba(0, 0, 0, 0.5)", width: Math.max(2, fontSize * 0.08) }
+      ? {
+          color: config.mainCopy.strokeColor ?? "rgba(0, 0, 0, 0.5)",
+          width: Math.max(2, fontSize * 0.08),
+        }
       : undefined;
 
     for (let i = 0; i < lines.length; i++) {
@@ -385,7 +397,10 @@ export async function renderComposite(
     const yStart = h * (config.subCopy.yRatio ?? 0.8);
     const lineSpacing = fontSize * 1.3;
     const subStroke = config.subCopy.stroke
-      ? { color: "rgba(0, 0, 0, 0.45)", width: Math.max(1.5, fontSize * 0.07) }
+      ? {
+          color: config.subCopy.strokeColor ?? "rgba(0, 0, 0, 0.45)",
+          width: Math.max(1.5, fontSize * 0.07),
+        }
       : undefined;
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;

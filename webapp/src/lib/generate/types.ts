@@ -7,6 +7,14 @@ export type VariantMode = SingleRenderMode | "edit";
 /** 레퍼런스 활용 방식: style = 디자인 요소만 차용(새 이미지) / base = 레퍼런스 자체를 변형 */
 export type ReferenceMode = "style" | "base";
 
+/** 레퍼런스 타이포 카테고리 — 설치 폰트 매핑용(실제 폰트 파일은 추출 불가). */
+export type ReferenceFontCategory =
+  | "sans"
+  | "serif"
+  | "rounded"
+  | "display"
+  | "handwriting";
+
 /** 레퍼런스 비전 분석 결과 — 디자인 요소 추출. */
 export interface DesignReference {
   palette: string[];
@@ -14,6 +22,8 @@ export interface DesignReference {
   composition: string;
   layout: string;
   typographyVibe: string;
+  /** 타이포 카테고리(선택) — 캐러셀이 설치 폰트로 매핑할 때 사용. */
+  fontCategory?: ReferenceFontCategory;
   notes?: string;
 }
 
