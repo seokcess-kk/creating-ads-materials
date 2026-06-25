@@ -23,6 +23,7 @@ export async function createCarousel(
       tone_override: input.toneOverride ?? null,
       content_mode: input.contentMode ?? "persuasion",
       bg_mode: input.bgMode ?? "shared",
+      render_mode: input.renderMode ?? "full",
       reference_url: input.referenceImageUrl ?? null,
       status: opts.status,
       prompt_version: opts.promptVersion,

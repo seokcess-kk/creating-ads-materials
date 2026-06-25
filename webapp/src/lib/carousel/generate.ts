@@ -18,7 +18,12 @@ import {
   conceptTool,
   slidesTool,
 } from "./prompts";
-import { SHARED_BG_PROMPT, perSlideBgPrompt, slideConfig } from "./render";
+import {
+  SHARED_BG_PROMPT,
+  perSlideBgPrompt,
+  fullSlideFallbackPrompt,
+  slideConfig,
+} from "./render";
 import { buildCarouselBackgroundPrompts } from "./art-director";
 import { getTemplate } from "./templates";
 import { resolveStyle } from "./style";
@@ -28,6 +33,7 @@ import type {
   SlideDetail,
   CarouselBgMode,
   CarouselContentMode,
+  CarouselRenderMode,
 } from "./types";
 
 /** 순서 보존 + 동시성 제한 map(이미지 모델 동시 호출 폭주 방지). */
@@ -171,6 +177,7 @@ export async function renderCarouselSlides(params: {
   details: SlideDetail[];
   bgMode: CarouselBgMode;
   contentMode: CarouselContentMode;
+  renderMode: CarouselRenderMode;
   toneOverride?: string | null;
   /** 레퍼런스 디자인 요소(있으면 배경 styleLock 기반으로 주입) */
   designRef?: DesignReference | null;
@@ -180,18 +187,19 @@ export async function renderCarouselSlides(params: {
   rowIdByIndex: Map<number, string>;
 }): Promise<{ bgUrl: string | null }> {
   const total = params.details.length;
+  const isFull = params.renderMode === "full";
   const template = getTemplate(params.concept.template);
-  // 레퍼런스 있으면 레퍼런스가 색·폰트 주도, 없으면 템플릿.
+  // 레퍼런스 있으면 레퍼런스가 색·폰트 주도, 없으면 템플릿(overlay 전용).
   const style = resolveStyle({ designRef: params.designRef, template });
   const fontSet = style.fontSet;
 
-  // 배경 생성이 필요할 때만 아트디렉터 호출(shared 재사용 시 생략).
+  // full=항상 슬라이드별 프롬프트 필요. overlay=per-slide거나 shared 신규일 때만.
   const needGen =
+    isFull ||
     params.bgMode === "per-slide" ||
     (params.bgMode === "shared" && !params.sharedBgUrl);
 
-  // 아트디렉터: 콘셉트+슬라이드 → 텍스트 없는 배경 프롬프트(전 슬라이드 1콜, 스타일 통일).
-  // 실패 시 null → render.ts 템플릿 프롬프트로 폴백.
+  // 아트디렉터: full=텍스트까지 구운 슬라이드 프롬프트, overlay=텍스트 없는 배경. 실패 시 폴백.
   const ad = needGen
     ? await buildCarouselBackgroundPrompts({
         concept: params.concept,
@@ -203,21 +211,28 @@ export async function renderCarouselSlides(params: {
         // 레퍼런스가 있으면 레퍼런스가 팔레트를 주도(템플릿 bgStyle은 레퍼런스 없을 때만).
         templateStyle: params.designRef ? null : template.bgStyle,
         textScheme: style.textScheme,
+        renderMode: params.renderMode,
         usageContext: {
-          operation: "carousel_art_director",
+          operation: isFull ? "carousel_slide_full" : "carousel_art_director",
           brandId: params.brandId ?? null,
-          metadata: { carouselId: params.carouselId, bgMode: params.bgMode },
+          metadata: {
+            carouselId: params.carouselId,
+            bgMode: params.bgMode,
+            renderMode: params.renderMode,
+          },
         },
       })
     : null;
   const promptByIndex = new Map<number, string>(
     (ad?.backgrounds ?? []).map((b) => [b.index, b.prompt]),
   );
+  // full 폴백 프롬프트엔 공유 design system이 없어 슬라이드가 겉돈다 → styleLock 주입.
+  const styleLock = ad?.styleLock?.trim() ?? "";
 
-  // shared 배경 1장 준비(재사용 또는 신규 생성)
+  // shared 배경(overlay 전용) — full 모드는 슬라이드별 완성형이라 공통 배경 없음.
   let sharedBgBuf: Buffer | null = null;
   let sharedBgUrl: string | null = params.sharedBgUrl ?? null;
-  if (params.bgMode === "shared") {
+  if (!isFull && params.bgMode === "shared") {
     if (sharedBgUrl) {
       sharedBgBuf = await fetchAsBuffer(sharedBgUrl);
     } else {
@@ -238,9 +253,46 @@ export async function renderCarouselSlides(params: {
     }
   }
 
-  // 슬라이드 렌더 — per-slide 배경 생성/합성을 동시성 캡(4)으로 병렬화.
-  // 각 슬라이드가 끝나는 즉시 DB 행을 갱신 → 폴링 클라이언트가 하나씩 채워 본다.
+  // 슬라이드 렌더(동시성 캡4). 각 슬라이드 완성 즉시 DB 갱신 → 폴링이 하나씩 채움.
   await mapWithConcurrency(params.details, 4, async (detail) => {
+    const rowId = params.rowIdByIndex.get(detail.index);
+
+    if (isFull) {
+      // 모델이 텍스트까지 구운 완성형 슬라이드 — 컴포지터 오버레이 없음.
+      let prompt = promptByIndex.get(detail.index);
+      if (!prompt) {
+        prompt = fullSlideFallbackPrompt(params.concept, detail);
+        if (styleLock) {
+          prompt += ` Shared design system across all slides (match exactly): ${styleLock}.`;
+        }
+      }
+      const img = await generateImage({
+        prompt,
+        aspectRatio: "1:1",
+        imageSize: "2K",
+        usageContext: {
+          operation: "carousel_slide_full",
+          brandId: params.brandId ?? null,
+          metadata: { carouselId: params.carouselId, idx: detail.index },
+        },
+      });
+      const buf = Buffer.from(img.base64, "base64");
+      const uploaded = await uploadBuffer(
+        params.carouselId,
+        `slide_${String(detail.index).padStart(2, "0")}`,
+        buf,
+      );
+      if (rowId) {
+        await setSlideRendered(rowId, {
+          bg_url: null, // full은 재사용 배경 없음 → 편집 시 재생성
+          image_url: uploaded.url,
+          image_path: uploaded.path,
+        });
+      }
+      return;
+    }
+
+    // overlay: 텍스트 없는 배경 + 컴포지터 한글 오버레이
     let bgBuf: Buffer;
     let slideBgUrl: string | null;
     if (params.bgMode === "per-slide") {
@@ -282,7 +334,6 @@ export async function renderCarouselSlides(params: {
       composed,
     );
 
-    const rowId = params.rowIdByIndex.get(detail.index);
     if (rowId) {
       await setSlideRendered(rowId, {
         bg_url: slideBgUrl,
@@ -292,7 +343,7 @@ export async function renderCarouselSlides(params: {
     }
   });
 
-  return { bgUrl: sharedBgUrl };
+  return { bgUrl: isFull ? null : sharedBgUrl };
 }
 
 /** 카피 편집 후 단건 재합성(LLM 호출 없음 — 기존 배경 재사용). */
@@ -321,6 +372,61 @@ export async function recomposeSlide(params: {
     params.carouselId,
     `slide_${String(params.slide.index).padStart(2, "0")}_${Date.now().toString(36)}`,
     composed,
+  );
+  return { image_url: uploaded.url, image_path: uploaded.path };
+}
+
+/**
+ * full 모드 단건 재생성 — 카피 편집 후 그 슬라이드를 텍스트까지 다시 굽는다(이미지 모델 1회 호출).
+ * overlay의 recomposeSlide와 달리 배경 재사용이 불가능하므로 슬라이드 전체를 재생성.
+ */
+export async function regenerateFullSlide(params: {
+  carouselId: string;
+  concept: BundleConcept | null;
+  contentMode: CarouselContentMode;
+  toneOverride?: string | null;
+  designRef?: DesignReference | null;
+  brandId?: string | null;
+  slide: SlideDetail;
+}): Promise<{ image_url: string; image_path: string }> {
+  let prompt: string | null = null;
+  if (params.concept) {
+    const ad = await buildCarouselBackgroundPrompts({
+      concept: params.concept,
+      details: [params.slide],
+      bgMode: "per-slide",
+      contentMode: params.contentMode,
+      toneOverride: params.toneOverride,
+      designRef: params.designRef,
+      templateStyle: null,
+      renderMode: "full",
+      usageContext: {
+        operation: "carousel_slide_full_regen",
+        brandId: params.brandId ?? null,
+        metadata: { carouselId: params.carouselId, idx: params.slide.index },
+      },
+    });
+    prompt =
+      ad?.backgrounds.find((b) => b.index === params.slide.index)?.prompt ??
+      ad?.backgrounds[0]?.prompt ??
+      null;
+  }
+  if (!prompt) prompt = fullSlideFallbackPrompt(params.concept, params.slide);
+
+  const img = await generateImage({
+    prompt,
+    aspectRatio: "1:1",
+    imageSize: "2K",
+    usageContext: {
+      operation: "carousel_slide_full",
+      brandId: params.brandId ?? null,
+      metadata: { carouselId: params.carouselId, idx: params.slide.index },
+    },
+  });
+  const uploaded = await uploadBuffer(
+    params.carouselId,
+    `slide_${String(params.slide.index).padStart(2, "0")}_${Date.now().toString(36)}`,
+    Buffer.from(img.base64, "base64"),
   );
   return { image_url: uploaded.url, image_path: uploaded.path };
 }

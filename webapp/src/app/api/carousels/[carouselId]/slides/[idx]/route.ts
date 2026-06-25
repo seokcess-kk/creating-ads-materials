@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
-import { recomposeSlide } from "@/lib/carousel/generate";
+import { recomposeSlide, regenerateFullSlide } from "@/lib/carousel/generate";
 import {
   getCarousel,
   updateSlideCopy,
@@ -8,8 +8,9 @@ import {
 } from "@/lib/carousel/queries";
 import { BundleConceptSchema } from "@/lib/carousel/prompts";
 import { DesignReferenceSchema } from "@/lib/generate/analyze-reference";
+import type { SlideVisual } from "@/lib/carousel/types";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 const PatchSchema = z.object({
   kicker: z.string().max(24).nullable().optional(),
@@ -17,7 +18,7 @@ const PatchSchema = z.object({
   body: z.string().max(90).nullable().optional(),
 });
 
-/** 카피 인라인 편집 → 기존 배경으로 재합성(LLM 호출 없음). */
+/** 카피 인라인 편집 → 재합성. overlay=기존 배경 재사용(LLM 없음), full=슬라이드 재생성(이미지 모델 1회). */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ carouselId: string; idx: string }> },
@@ -35,23 +36,49 @@ export async function PATCH(
 
     const updated = await updateSlideCopy(slide.id, patch);
 
-    const bgUrl = updated.bg_url ?? data.carousel.bg_url;
-    if (!bgUrl) {
-      // 배경이 없으면 카피만 저장(재합성 불가)
-      return ok({ slide: updated });
-    }
-
     const conceptParsed = BundleConceptSchema.safeParse(
       data.carousel.concept_json,
     );
-    const templateId = conceptParsed.success
-      ? conceptParsed.data.template
-      : null;
     const refParsed = DesignReferenceSchema.safeParse(
       data.carousel.reference_json,
     );
     const designRef = refParsed.success ? refParsed.data : null;
 
+    // full 모드: 카피를 반영해 슬라이드를 다시 굽는다(배경 재사용 불가).
+    if (data.carousel.render_mode === "full") {
+      const vj = updated.visual_json as Partial<SlideVisual>;
+      const visual: SlideVisual | undefined = vj.motif
+        ? { motif: vj.motif, emphasis: vj.emphasis ?? "keyword" }
+        : undefined;
+      const { image_url, image_path } = await regenerateFullSlide({
+        carouselId,
+        concept: conceptParsed.success ? conceptParsed.data : null,
+        contentMode: data.carousel.content_mode,
+        toneOverride: data.carousel.tone_override,
+        designRef,
+        brandId: data.carousel.brand_id,
+        slide: {
+          index: updated.idx,
+          role: updated.role,
+          kicker: updated.kicker ?? undefined,
+          headline: updated.headline,
+          body: updated.body ?? undefined,
+          visual,
+        },
+      });
+      const finalRow = await updateSlideImage(slide.id, { image_url, image_path });
+      return ok({ slide: finalRow });
+    }
+
+    // overlay 모드: 기존 배경으로 재합성(LLM 호출 없음).
+    const bgUrl = updated.bg_url ?? data.carousel.bg_url;
+    if (!bgUrl) {
+      // 배경이 없으면 카피만 저장(재합성 불가)
+      return ok({ slide: updated });
+    }
+    const templateId = conceptParsed.success
+      ? conceptParsed.data.template
+      : null;
     const { image_url, image_path } = await recomposeSlide({
       carouselId,
       bgUrl,
