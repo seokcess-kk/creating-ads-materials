@@ -85,8 +85,9 @@ export interface ComposeConfig {
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
-    // 어두운 외곽선으로 임의 배경 위 가독성 강화(단일 이미지용).
+    // 외곽선으로 임의 배경 위 가독성 강화. strokeColor 미지정 시 어두운 외곽선(밝은 글자용).
     stroke?: boolean;
+    strokeColor?: string;
   };
   subCopy?: {
     text: string;
@@ -98,6 +99,7 @@ export interface ComposeConfig {
     maxLines?: number;
     maxWidthRatio?: number;
     stroke?: boolean;
+    strokeColor?: string;
   };
   cta?: {
     text: string;
@@ -354,7 +356,10 @@ export async function renderComposite(
       ? fontSize * 1.3
       : h * (config.mainCopy.lineSpacingRatio ?? 0.075);
     const mainStroke = config.mainCopy.stroke
-      ? { color: "rgba(0, 0, 0, 0.5)", width: Math.max(2, fontSize * 0.08) }
+      ? {
+          color: config.mainCopy.strokeColor ?? "rgba(0, 0, 0, 0.5)",
+          width: Math.max(2, fontSize * 0.08),
+        }
       : undefined;
 
     for (let i = 0; i < lines.length; i++) {
@@ -392,7 +397,10 @@ export async function renderComposite(
     const yStart = h * (config.subCopy.yRatio ?? 0.8);
     const lineSpacing = fontSize * 1.3;
     const subStroke = config.subCopy.stroke
-      ? { color: "rgba(0, 0, 0, 0.45)", width: Math.max(1.5, fontSize * 0.07) }
+      ? {
+          color: config.subCopy.strokeColor ?? "rgba(0, 0, 0, 0.45)",
+          width: Math.max(1.5, fontSize * 0.07),
+        }
       : undefined;
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;

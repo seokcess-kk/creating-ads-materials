@@ -30,7 +30,7 @@ const tool: Tool = {
       palette: {
         type: "array",
         items: { type: "string" },
-        description: "주요 색 3~6개. 가능하면 hex 코드로(예: #1A2B3C). 색 추출에 쓰임.",
+        description: "주요 색 3~6개. 반드시 hex 코드로(예: #1A2B3C). 색 추출·스킴 판정에 직접 쓰이므로 색 이름 금지.",
       },
       mood: { type: "string", description: "전체 무드/톤 한 줄" },
       composition: { type: "string", description: "구도/시선 흐름/여백 특징" },

@@ -16,10 +16,13 @@ export interface CarouselStyle {
     ctaBg: string;
     ctaText: string;
   };
-  overlay: { topOpacity: number; bottomOpacity: number; tint: "dark" | "light" };
+  overlay: { topOpacity: number; bottomOpacity: number };
   align: "center" | "left";
   fontSet: ComposeFontSet;
-  /** 오버레이 텍스트 색 계열. light=밝은 글자(어두운 배경), dark=어두운 글자(밝은 배경). */
+  /**
+   * 오버레이 텍스트 색 계열. light=밝은 글자(어두운 배경), dark=어두운 글자(밝은 배경).
+   * 오버레이 tint·stroke 색은 이 값에서 파생(단일 소스 — slideConfig 참고).
+   */
   textScheme: "light" | "dark";
 }
 
@@ -100,7 +103,7 @@ function luminance(r: number, g: number, b: number): number {
 function contrastText(hex: string): string {
   const rgb = hexToRgb(hex);
   if (!rgb) return "#FFFFFF";
-  return luminance(rgb.r, rgb.g, rgb.b) > 0.6 ? "#1A1A1A" : "#FFFFFF";
+  return luminance(rgb.r, rgb.g, rgb.b) > 0.55 ? "#1A1A1A" : "#FFFFFF";
 }
 
 /** 팔레트에서 가장 또렷한(채도 높고 중간 명도) 색을 악센트로. 없으면 기본 블루. */
@@ -138,13 +141,13 @@ export function templateToStyle(template: CarouselTemplate): CarouselStyle {
     overlay: {
       topOpacity: template.overlay.topOpacity,
       bottomOpacity: template.overlay.bottomOpacity,
-      tint: "dark",
     },
     align: template.align,
     fontSet: fontSetForCategory("sans"),
     textScheme: "light",
   };
 }
+// (참고) overlay.tint·stroke 색은 CarouselStyle.textScheme에서 slideConfig가 파생한다.
 
 /** 레퍼런스 디자인 요소 → 스타일(배경 명도로 라이트/다크 스킴, 악센트·폰트 도출). */
 export function deriveReferenceStyle(ref: DesignReference): CarouselStyle {
@@ -162,7 +165,7 @@ export function deriveReferenceStyle(ref: DesignReference): CarouselStyle {
         ctaBg: accent,
         ctaText: contrastText(accent),
       },
-      overlay: { topOpacity: 140, bottomOpacity: 205, tint: "dark" },
+      overlay: { topOpacity: 140, bottomOpacity: 205 },
       align: "center",
       fontSet,
       textScheme: "light",
@@ -178,7 +181,7 @@ export function deriveReferenceStyle(ref: DesignReference): CarouselStyle {
       ctaBg: accent,
       ctaText: contrastText(accent),
     },
-    overlay: { topOpacity: 120, bottomOpacity: 190, tint: "light" },
+    overlay: { topOpacity: 120, bottomOpacity: 190 },
     align: "center",
     fontSet,
     textScheme: "dark",

@@ -35,15 +35,19 @@ export function slideConfig(
 ): Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> {
   const c = style.colors;
   const centered = style.align !== "left";
-  // 밝은 글자(어두운 배경)일 때만 어두운 외곽선이 가독성에 도움. 어두운 글자엔 미적용.
-  const stroke = style.textScheme === "light";
+  // textScheme이 오버레이 tint·stroke의 단일 소스.
+  // 밝은 글자 → 어두운 오버레이 + 어두운 stroke / 어두운 글자 → 밝은 오버레이 + 흰 stroke.
+  // stroke는 오버레이가 닿지 않는 중앙 밴드에서도 글자별 가독성을 보장(항상 적용).
+  const lightText = style.textScheme === "light";
+  const stroke = true;
+  const strokeColor = lightText ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.72)";
   const base: Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> = {
     overlay: {
       top: true,
       topOpacity: style.overlay.topOpacity,
       bottom: true,
       bottomOpacity: style.overlay.bottomOpacity,
-      tint: style.overlay.tint,
+      tint: lightText ? "dark" : "light",
     },
     slogan: {
       text: `${String(slide.index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
@@ -72,6 +76,7 @@ export function slideConfig(
       maxLines: 3,
       maxWidthRatio: 0.84,
       stroke,
+      strokeColor,
     };
     if (slide.body)
       base.subCopy = {
@@ -84,6 +89,7 @@ export function slideConfig(
         maxLines: 2,
         maxWidthRatio: 0.82,
         stroke,
+        strokeColor,
       };
   } else if (slide.role === "cta") {
     base.mainCopy = {
@@ -96,6 +102,7 @@ export function slideConfig(
       maxLines: 3,
       maxWidthRatio: 0.84,
       stroke,
+      strokeColor,
     };
     if (slide.body)
       base.subCopy = {
@@ -108,6 +115,7 @@ export function slideConfig(
         maxLines: 2,
         maxWidthRatio: 0.82,
         stroke,
+        strokeColor,
       };
     base.cta = {
       text: "자세히 보기 ▶",
@@ -129,6 +137,7 @@ export function slideConfig(
       maxLines: 2,
       maxWidthRatio: 0.84,
       stroke,
+      strokeColor,
     };
     if (slide.body)
       base.subCopy = {
@@ -141,6 +150,7 @@ export function slideConfig(
         maxLines: 4,
         maxWidthRatio: 0.82,
         stroke,
+        strokeColor,
       };
   }
   return base;
