@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { LIGHTING_PRESETS, PALETTE_PRESETS, MOOD_PRESETS } from "@/lib/style-presets";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { DownloadButton } from "@/components/common/DownloadButton";
@@ -59,28 +60,6 @@ const ASPECTS: Array<{ value: "1:1" | "4:5" | "9:16" | "16:9"; label: string }> 
   { value: "16:9", label: "가로 16:9" },
 ];
 
-// 구조화 스타일 노브 프리셋(라벨→gpt-image 영어 구문). '자동'은 빈 값(아트디렉터 자율).
-const LIGHTING_PRESETS = [
-  { v: "", l: "자동" },
-  { v: "soft natural daylight", l: "자연광" },
-  { v: "soft golden hour light, gentle rim light", l: "골든아워" },
-  { v: "clean studio softbox lighting, soft shadow", l: "스튜디오" },
-  { v: "dramatic studio rim lighting, deep shadows", l: "드라마틱" },
-];
-const PALETTE_PRESETS = [
-  { v: "", l: "자동" },
-  { v: "limited palette of cream, beige and warm gray only, muted", l: "뉴트럴" },
-  { v: "limited soft pastel palette only", l: "파스텔" },
-  { v: "limited bold saturated palette, high contrast", l: "비비드" },
-  { v: "limited earthy palette of olive, terracotta and sand only", l: "어스톤" },
-];
-const MOOD_PRESETS = [
-  { v: "", l: "자동" },
-  { v: "premium, refined, minimal", l: "프리미엄" },
-  { v: "warm, friendly, inviting", l: "따뜻함" },
-  { v: "modern, clean, confident", l: "모던" },
-  { v: "energetic, playful, vibrant", l: "에너지" },
-];
 const COPY_POS_PRESETS: Array<{ v: "" | "top" | "center" | "bottom"; l: string }> = [
   { v: "", l: "자동" },
   { v: "top", l: "상단" },

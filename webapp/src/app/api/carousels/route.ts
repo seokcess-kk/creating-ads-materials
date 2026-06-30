@@ -23,6 +23,9 @@ const Schema = z.object({
   contentMode: z.enum(["persuasion", "notice"]).optional(),
   bgMode: z.enum(["shared", "per-slide"]).optional(),
   renderMode: z.enum(["full", "overlay"]).optional(),
+  lighting: z.string().max(160).nullable().optional(),
+  palette: z.string().max(160).nullable().optional(),
+  mood: z.string().max(120).nullable().optional(),
   title: z.string().max(120).nullable().optional(),
   referenceImageUrl: z.string().url().max(2000).nullable().optional(),
 });

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { LIGHTING_PRESETS, PALETTE_PRESETS, MOOD_PRESETS } from "@/lib/style-presets";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { DownloadButton } from "@/components/common/DownloadButton";
@@ -135,6 +136,10 @@ export function CarouselStudio({
     // 기본은 overlay(수정 가능한 광고형) — 정확성·편집성 우선. full(AI 일체형)은 옵트인.
     initial?.renderMode ?? "overlay",
   );
+  // 구조화 스타일 노브(프리셋 칩) — 빈 값이면 아트디렉터 자율.
+  const [lighting, setLighting] = useState("");
+  const [palette, setPalette] = useState("");
+  const [mood, setMood] = useState("");
 
   // 레퍼런스(선택) — 첨부 시 배경이 그 디자인 룩으로 통일됨(생성 시 서버에서 분석).
   const [refUrl, setRefUrl] = useState<string | null>(
@@ -246,6 +251,9 @@ export function CarouselStudio({
           contentMode,
           bgMode,
           renderMode,
+          lighting: lighting || null,
+          palette: palette || null,
+          mood: mood || null,
           referenceImageUrl: refUrl,
         }),
       });
@@ -634,6 +642,37 @@ export function CarouselStudio({
               ? "AI 일체형 시안: AI가 배경·레이아웃·한글까지 한 번에 디자인합니다. 짧은 후킹 문구·시안용에 적합하며, 정확한 날짜·금액·연락처나 긴 본문이 있으면 자동으로 '수정 가능한 광고형'으로 생성됩니다."
               : "수정 가능한 광고형(권장): 텍스트 없는 배경에 한글을 또렷하게 얹습니다. 카피 수정·현지화가 즉시·무료로 반영됩니다."}
           </p>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">분위기·조명·색 (선택)</Label>
+            {[
+              { label: "조명", presets: LIGHTING_PRESETS, value: lighting, set: setLighting },
+              { label: "팔레트", presets: PALETTE_PRESETS, value: palette, set: setPalette },
+              { label: "무드", presets: MOOD_PRESETS, value: mood, set: setMood },
+            ].map((row) => (
+              <div key={row.label} className="space-y-1">
+                <Label className="text-[11px]">{row.label}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.presets.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => row.set(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        row.value === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* 레퍼런스 첨부(선택) — 배경 디자인 룩 통일 */}
           <div className="space-y-2 rounded-lg border p-3">

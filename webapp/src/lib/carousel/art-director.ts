@@ -22,6 +22,13 @@ export interface CarouselBgPrompts {
   backgrounds: { index: number; prompt: string }[];
 }
 
+/** 구조화 스타일 노브(선택, 영어 구문) — styleLock에 주입. */
+export type CarouselStyleKnobs = {
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+};
+
 const BgItemSchema = z.object({
   index: z.number().int().min(0),
   prompt: z.string().min(20).max(2000),
@@ -186,6 +193,7 @@ function buildBrief(
     designRef?: DesignReference | null;
     templateStyle?: string | null;
     renderMode?: CarouselRenderMode;
+    styleKnobs?: CarouselStyleKnobs | null;
   },
   count: number,
 ): string {
@@ -196,6 +204,15 @@ function buildBrief(
     : "";
   const refLine = params.designRef
     ? `\n# DESIGN REFERENCE (follow this closely as the styleLock foundation — palette/mood/composition${isFull ? "/typography" : ""})\n${formatDesignReference(params.designRef)}\n`
+    : "";
+  const k = params.styleKnobs;
+  const knobLines = [
+    k?.palette?.trim() ? `palette (use ONLY these named colors): ${k.palette.trim()}` : null,
+    k?.lighting?.trim() ? `lighting: ${k.lighting.trim()}` : null,
+    k?.mood?.trim() ? `mood: ${k.mood.trim()}` : null,
+  ].filter(Boolean);
+  const knobBlock = knobLines.length
+    ? `\n# USER STYLE DIRECTION (fold these into the styleLock)\n${knobLines.join("\n")}\n`
     : "";
 
   const slideLines = params.details
@@ -227,7 +244,7 @@ function buildBrief(
   if (isFull) {
     return `mode: full — produce ONE complete designed-slide prompt per slide index below, using that exact index. Each prompt RENDERS that slide's exact Korean text.
 slides requested: ${count}
-${tplLine}${refLine}
+${tplLine}${refLine}${knobBlock}
 # CAROUSEL CONCEPT (ground the imagery in this product/topic)
 bigIdea: ${c.bigIdea}
 coreMessage: ${c.coreMessage}
@@ -248,7 +265,7 @@ Produce styleLock + ${count} slide prompt(s) via ${TOOL}.`;
 
   return `${modeLine}
 backgrounds requested: ${count}
-${tplLine}${refLine}
+${tplLine}${refLine}${knobBlock}
 # CAROUSEL CONCEPT
 bigIdea: ${c.bigIdea}
 coreMessage: ${c.coreMessage}
@@ -275,6 +292,8 @@ export async function buildCarouselBackgroundPrompts(params: {
   designRef?: DesignReference | null;
   /** 선택된 템플릿의 배경 스타일 가이드(styleLock 기반) */
   templateStyle?: string | null;
+  /** 사용자 구조화 스타일 노브(선택) — styleLock에 주입 */
+  styleKnobs?: CarouselStyleKnobs | null;
   /** 오버레이 텍스트 색 계열 — 배경의 텍스트 영역 명도를 맞추기 위해 */
   textScheme?: "light" | "dark";
   /** full = 텍스트까지 구운 완성형 슬라이드 프롬프트 / overlay(기본) = 텍스트 없는 배경 */

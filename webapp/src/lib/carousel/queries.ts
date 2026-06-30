@@ -26,6 +26,9 @@ export async function createCarousel(
       bg_mode: input.bgMode ?? "shared",
       // 기본은 overlay(수정 가능한 광고형) — 정확성·편집성 우선. full(AI 일체형)은 옵트인.
       render_mode: input.renderMode ?? "overlay",
+      style_lighting: input.lighting ?? null,
+      style_palette: input.palette ?? null,
+      style_mood: input.mood ?? null,
       reference_url: input.referenceImageUrl ?? null,
       status: opts.status,
       prompt_version: opts.promptVersion,

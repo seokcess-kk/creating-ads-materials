@@ -25,7 +25,7 @@ import {
   fullSlideFallbackPrompt,
   slideConfig,
 } from "./render";
-import { buildCarouselBackgroundPrompts } from "./art-director";
+import { buildCarouselBackgroundPrompts, type CarouselStyleKnobs } from "./art-director";
 import { getTemplate } from "./templates";
 import { resolveStyle } from "./style";
 import { setSlideRendered } from "./queries";
@@ -199,6 +199,8 @@ export async function renderCarouselSlides(params: {
   contentMode: CarouselContentMode;
   renderMode: CarouselRenderMode;
   toneOverride?: string | null;
+  /** 사용자 구조화 스타일 노브(선택) — 아트디렉터 styleLock에 주입 */
+  styleKnobs?: CarouselStyleKnobs | null;
   /** 레퍼런스 디자인 요소(있으면 배경 styleLock 기반으로 주입) */
   designRef?: DesignReference | null;
   /** shared 모드에서 기존 배경 재사용(재생성 시) */
@@ -230,6 +232,7 @@ export async function renderCarouselSlides(params: {
         designRef: params.designRef,
         // 레퍼런스가 있으면 레퍼런스가 팔레트를 주도(템플릿 bgStyle은 레퍼런스 없을 때만).
         templateStyle: params.designRef ? null : template.bgStyle,
+        styleKnobs: params.styleKnobs,
         textScheme: style.textScheme,
         renderMode: params.renderMode,
         usageContext: {
@@ -405,6 +408,7 @@ export async function regenerateFullSlide(params: {
   concept: BundleConcept | null;
   contentMode: CarouselContentMode;
   toneOverride?: string | null;
+  styleKnobs?: CarouselStyleKnobs | null;
   designRef?: DesignReference | null;
   brandId?: string | null;
   slide: SlideDetail;
@@ -419,6 +423,7 @@ export async function regenerateFullSlide(params: {
       toneOverride: params.toneOverride,
       designRef: params.designRef,
       templateStyle: null,
+      styleKnobs: params.styleKnobs,
       renderMode: "full",
       usageContext: {
         operation: "carousel_slide_full_regen",
