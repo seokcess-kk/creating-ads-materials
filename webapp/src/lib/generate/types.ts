@@ -7,6 +7,9 @@ export type VariantMode = SingleRenderMode | "edit";
 /** 레퍼런스 활용 방식: style = 디자인 요소만 차용(새 이미지) / base = 레퍼런스 자체를 변형 */
 export type ReferenceMode = "style" | "base";
 
+/** 카피(텍스트)가 들어갈 세로 위치 — overlay 컴포지터 텍스트존 + 프롬프트 여백 위치를 함께 결정. */
+export type CopyPosition = "top" | "center" | "bottom";
+
 /** 레퍼런스 타이포 카테고리 — 설치 폰트 매핑용(실제 폰트 파일은 추출 불가). */
 export type ReferenceFontCategory =
   | "sans"
@@ -52,6 +55,12 @@ export interface SingleImageInput {
   sub?: string | null;
   cta?: string | null;
   tone?: string | null;
+  /** 구조화 스타일 노브(선택) — UI 프리셋 칩에서 영어 구문으로 매핑되어 들어온다. */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+  /** 카피 세로 위치(선택) — overlay에서 텍스트존·여백 위치를 결정. */
+  copyPosition?: CopyPosition | null;
   aspectRatio?: AspectRatio;
   referenceImageUrl?: string | null;
   referenceMode?: ReferenceMode;

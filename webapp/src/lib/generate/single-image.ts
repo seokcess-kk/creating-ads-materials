@@ -30,6 +30,7 @@ import type {
   SingleRenderMode,
   ReferenceMode,
   DesignReference,
+  CopyPosition,
 } from "./types";
 
 export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.3.0";
@@ -136,6 +137,10 @@ export async function generateSingleImageVariants(
     concept: input.concept ?? null,
     copy: { headline: input.headline, sub: input.sub, cta: input.cta },
     tone: input.tone,
+    lighting: input.lighting ?? null,
+    palette: input.palette ?? null,
+    mood: input.mood ?? null,
+    copyPosition: input.copyPosition ?? null,
     brandHint: brand.promptHint || null,
     designRef,
     aspectRatio,
@@ -158,6 +163,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -170,6 +179,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -179,6 +192,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -251,6 +268,7 @@ export async function generateSingleImageVariants(
           cta: input.cta,
           logo: logoForCompositor(placement),
           brandColor: brand.ctaColor,
+          copyPosition: input.copyPosition,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -270,6 +288,7 @@ export async function generateSingleImageVariants(
           logoPosition: placement?.position ?? null,
           logoBacking: placement?.backingColor ?? null,
           brandColor: brand.ctaColor,
+          copyPosition: input.copyPosition ?? null,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -375,6 +394,7 @@ export async function recomposeVariant(
       logoPosition?: SingleAdLogo["position"];
       logoBacking?: string | null;
       brandColor?: string | null;
+      copyPosition?: CopyPosition | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -390,6 +410,8 @@ export async function recomposeVariant(
         }
       : null,
     brandColor: compose.brandColor ?? null,
+    // 생성 시 카피 위치를 그대로 재현(텍스트존 일치).
+    copyPosition: compose.copyPosition ?? null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).

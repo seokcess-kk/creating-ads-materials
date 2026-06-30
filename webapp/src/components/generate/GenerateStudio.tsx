@@ -59,6 +59,35 @@ const ASPECTS: Array<{ value: "1:1" | "4:5" | "9:16" | "16:9"; label: string }> 
   { value: "16:9", label: "가로 16:9" },
 ];
 
+// 구조화 스타일 노브 프리셋(라벨→gpt-image 영어 구문). '자동'은 빈 값(아트디렉터 자율).
+const LIGHTING_PRESETS = [
+  { v: "", l: "자동" },
+  { v: "soft natural daylight", l: "자연광" },
+  { v: "soft golden hour light, gentle rim light", l: "골든아워" },
+  { v: "clean studio softbox lighting, soft shadow", l: "스튜디오" },
+  { v: "dramatic studio rim lighting, deep shadows", l: "드라마틱" },
+];
+const PALETTE_PRESETS = [
+  { v: "", l: "자동" },
+  { v: "limited palette of cream, beige and warm gray only, muted", l: "뉴트럴" },
+  { v: "limited soft pastel palette only", l: "파스텔" },
+  { v: "limited bold saturated palette, high contrast", l: "비비드" },
+  { v: "limited earthy palette of olive, terracotta and sand only", l: "어스톤" },
+];
+const MOOD_PRESETS = [
+  { v: "", l: "자동" },
+  { v: "premium, refined, minimal", l: "프리미엄" },
+  { v: "warm, friendly, inviting", l: "따뜻함" },
+  { v: "modern, clean, confident", l: "모던" },
+  { v: "energetic, playful, vibrant", l: "에너지" },
+];
+const COPY_POS_PRESETS: Array<{ v: "" | "top" | "center" | "bottom"; l: string }> = [
+  { v: "", l: "자동" },
+  { v: "top", l: "상단" },
+  { v: "center", l: "중앙" },
+  { v: "bottom", l: "하단" },
+];
+
 // 응답을 JSON으로 안전하게 파싱. 비-JSON(타임아웃 시 플랫폼이 내는 "An error o..." 평문/HTML 등)이면
 // 'Unexpected token' 대신 사람이 읽을 수 있는 메시지로 변환한다. 응답 실패(!ok)도 함께 처리.
 async function readJson(res: Response, failMsg: string) {
@@ -93,6 +122,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [brandId, setBrandId] = useState<string>("");
   const [bakeText, setBakeText] = useState(false);
   const [count, setCount] = useState(3);
+  // 구조화 스타일 노브(프리셋 칩) — 빈 값이면 아트디렉터 자율.
+  const [lighting, setLighting] = useState("");
+  const [palette, setPalette] = useState("");
+  const [mood, setMood] = useState("");
+  const [copyPosition, setCopyPosition] = useState<"" | "top" | "center" | "bottom">("");
 
   // 레퍼런스
   const [refUrl, setRefUrl] = useState<string | null>(null);
@@ -242,6 +276,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           sub: sub.trim() || null,
           cta: cta.trim() || null,
           tone: tone.trim() || null,
+          lighting: lighting || null,
+          palette: palette || null,
+          mood: mood || null,
+          copyPosition: copyPosition || null,
           aspectRatio,
           referenceImageUrl: refUrl,
           referenceMode: refUrl ? refMode : undefined,
@@ -603,6 +641,60 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">분위기·조명·색 (선택)</Label>
+            {[
+              { label: "조명", presets: LIGHTING_PRESETS, value: lighting, set: setLighting },
+              { label: "팔레트", presets: PALETTE_PRESETS, value: palette, set: setPalette },
+              { label: "무드", presets: MOOD_PRESETS, value: mood, set: setMood },
+            ].map((row) => (
+              <div key={row.label} className="space-y-1">
+                <Label className="text-[11px]">{row.label}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.presets.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => row.set(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        row.value === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!bakeText && (
+              <div className="space-y-1">
+                <Label className="text-[11px]">카피 위치</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {COPY_POS_PRESETS.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => setCopyPosition(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        copyPosition === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {hasText && (

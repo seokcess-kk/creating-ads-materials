@@ -3,7 +3,7 @@ import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import type { UsageContext } from "@/lib/usage/record";
 import type { AspectRatio } from "@/lib/engines";
-import type { DesignReference, SingleRenderMode } from "./types";
+import type { CopyPosition, DesignReference, SingleRenderMode } from "./types";
 import { formatDesignReference } from "./analyze-reference";
 
 const TOOL = "record_image_prompts";
@@ -17,6 +17,12 @@ export interface CreativeBrief {
   /** 소재에 얹힐 카피(구도가 텍스트를 위한 여백을 확보하도록 전달) */
   copy?: { headline?: string | null; sub?: string | null; cta?: string | null };
   tone?: string | null;
+  /** 구조화 스타일 노브(선택, 영어 구문) — 8슬롯의 팔레트·조명·무드를 직접 지정. */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+  /** 카피 여백 위치(선택) — overlay에서 어느 쪽을 비울지 모델에 전달. */
+  copyPosition?: CopyPosition | null;
   brandHint?: string | null;
   designRef?: DesignReference | null;
   aspectRatio: AspectRatio;
@@ -102,6 +108,10 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
   lines.push(`key message to communicate (lead with this): ${brief.keyMessage.trim()}`);
   if (brief.concept?.trim()) lines.push(`visual direction / scene (optional): ${brief.concept.trim()}`);
   if (brief.tone?.trim()) lines.push(`tone: ${brief.tone.trim()}`);
+  if (brief.palette?.trim())
+    lines.push(`color palette (use ONLY these named colors): ${brief.palette.trim()}`);
+  if (brief.lighting?.trim()) lines.push(`lighting: ${brief.lighting.trim()}`);
+  if (brief.mood?.trim()) lines.push(`mood: ${brief.mood.trim()}`);
   if (brief.brandHint?.trim()) lines.push(`brand cues: ${brief.brandHint.trim()}`);
   if (brief.designRef) lines.push(`design reference (mimic this style): ${formatDesignReference(brief.designRef)}`);
 
@@ -113,8 +123,14 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
       c.cta ? `cta "${c.cta}"` : null,
     ].filter(Boolean);
     if (brief.mode === "overlay") {
+      const zone =
+        brief.copyPosition === "top"
+          ? "the upper area"
+          : brief.copyPosition === "bottom"
+            ? "the lower third"
+            : "the center-to-lower area";
       lines.push(
-        `copy that will be overlaid LATER (do NOT draw it; reserve space for it): ${copyParts.join(", ")}`,
+        `copy that will be overlaid LATER (do NOT draw it; reserve a clean, low-detail band at ${zone} with strong even contrast for it): ${copyParts.join(", ")}`,
       );
     } else {
       lines.push(`Korean text to render in the image: ${copyParts.join(", ")}`);

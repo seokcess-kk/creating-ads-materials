@@ -1,5 +1,14 @@
 import type { BrandIdentity } from "@/lib/memory/types";
-import type { SingleRenderMode } from "./types";
+import type { CopyPosition, SingleRenderMode } from "./types";
+
+/** 카피가 들어갈 여백을 가리키는 영어 구문(프롬프트용). */
+function copyZone(pos?: CopyPosition | null): string {
+  return pos === "top"
+    ? "the upper area"
+    : pos === "bottom"
+      ? "the lower third"
+      : "the center-to-lower area";
+}
 
 /**
  * 단일 이미지 생성에 주입되는 선택적 브랜드 컨텍스트.
@@ -64,6 +73,12 @@ interface BasePromptInput {
   styleHint?: string | null;
   /** 레퍼런스에서 추출한 디자인 디스크립터(이미 문자열로 직렬화됨) */
   designRef?: string | null;
+  /** 구조화 스타일 노브(선택, 영어 구문) */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+  /** 카피 여백 위치(선택, overlay) */
+  copyPosition?: CopyPosition | null;
 }
 
 interface TextPromptInput extends BasePromptInput {
@@ -79,8 +94,14 @@ export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
     `Communicates: ${input.keyMessage}.`,
     input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
-    "Keep the hero subject and busy detail in the upper portion; reserve a clean, low-detail band across the center and lower third (good, even contrast) for Korean copy overlaid later.",
-    "Soft professional lighting with a clear focal point; a limited, cohesive color palette.",
+    `Keep the hero subject and busy detail away from the copy zone; reserve a clean, low-detail band at ${copyZone(input.copyPosition)} (good, even contrast) for Korean copy overlaid later.`,
+    input.lighting?.trim()
+      ? `Lighting: ${input.lighting.trim()}.`
+      : "Soft professional lighting with a clear focal point.",
+    input.palette?.trim()
+      ? `Color palette (use only these): ${input.palette.trim()}.`
+      : "A limited, cohesive color palette.",
+    input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
@@ -100,7 +121,13 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
     `Communicates: ${input.keyMessage}.`,
     input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
-    "Soft professional lighting, clear focal point, a limited cohesive color palette.",
+    input.lighting?.trim()
+      ? `Lighting: ${input.lighting.trim()}.`
+      : "Soft professional lighting, clear focal point.",
+    input.palette?.trim()
+      ? `Color palette (use only these): ${input.palette.trim()}.`
+      : "A limited cohesive color palette.",
+    input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
     textLines.length
       ? `Render the following Korean text with PERFECT, correct modern Hangul — make the headline dominant and large, any sub a clearly smaller subtitle: ${textLines.join(
           ", ",
@@ -123,8 +150,11 @@ export function buildEditPrompt(input: TextPromptInput & { mode: SingleRenderMod
       `Suit an advertisement about: ${input.keyMessage}.`,
       input.concept?.trim() ? `Direction: ${input.concept.trim()}.` : null,
       input.styleHint ? `Style: ${input.styleHint}.` : null,
+      input.lighting?.trim() ? `Lighting: ${input.lighting.trim()}.` : null,
+      input.palette?.trim() ? `Color palette (use only these): ${input.palette.trim()}.` : null,
+      input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
       input.tone ? `Mood / tone: ${input.tone}.` : null,
-      "Keep the core subject recognizable. Leave a calm area for overlaid text.",
+      `Keep the core subject recognizable. Leave a calm, low-detail band at ${copyZone(input.copyPosition)} for overlaid text.`,
     ]);
   }
   return buildFullImagePrompt(input);
