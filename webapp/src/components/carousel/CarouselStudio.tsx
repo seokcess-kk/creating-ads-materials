@@ -408,7 +408,7 @@ export function CarouselStudio({
       ? startOp({
           kind: "compose",
           title: `슬라이드 ${slide.idx} 재생성`,
-          subtitle: "AI 일체형 — 카피 반영해 다시 그리는 중",
+          subtitle: "AI 일체형 — 디자인 유지하며 글자만 교체 중",
           estimatedSeconds: 30,
           celebrate: false,
         })
@@ -1030,7 +1030,7 @@ export function CarouselStudio({
                         {savingIdx === s.idx
                           ? "재합성 중…"
                           : renderMode === "full"
-                            ? "카피 반영(재생성·~30초)"
+                            ? "카피 반영(디자인 유지)"
                             : "수정 반영(재합성)"}
                       </Button>
                     </div>

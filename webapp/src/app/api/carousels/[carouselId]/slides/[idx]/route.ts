@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { ApiError, ok, parseJson, serverError } from "@/lib/api-utils";
-import { recomposeSlide, regenerateFullSlide } from "@/lib/carousel/generate";
+import {
+  recomposeSlide,
+  regenerateFullSlide,
+  editFullSlideCopy,
+} from "@/lib/carousel/generate";
 import {
   getCarousel,
   updateSlideCopy,
@@ -44,35 +48,52 @@ export async function PATCH(
     );
     const designRef = refParsed.success ? refParsed.data : null;
 
-    // full 모드: 카피를 반영해 슬라이드를 다시 굽는다(배경 재사용 불가).
+    // full 모드: 가능하면 이전 슬라이드를 base로 글자만 교체(editImage — 디자인 보존).
+    // 소스 미확보/편집 실패 시에만 통째 재생성(regenerateFullSlide)으로 폴백.
     if (data.carousel.render_mode === "full") {
-      const vj = updated.visual_json as Partial<SlideVisual>;
-      const visual: SlideVisual | undefined = vj.motif
-        ? { motif: vj.motif, emphasis: vj.emphasis ?? "keyword" }
-        : undefined;
-      const { image_url, image_path } = await regenerateFullSlide({
-        carouselId,
-        concept: conceptParsed.success ? conceptParsed.data : null,
-        contentMode: data.carousel.content_mode,
-        toneOverride: data.carousel.tone_override,
-        styleKnobs: {
-          lighting: data.carousel.style_lighting,
-          palette: data.carousel.style_palette,
-          mood: data.carousel.style_mood,
-        },
-        designRef,
-        brandId: data.carousel.brand_id,
-        total: data.slides.length,
-        slide: {
-          index: updated.idx,
-          role: updated.role,
-          kicker: updated.kicker ?? undefined,
-          headline: updated.headline,
-          body: updated.body ?? undefined,
-          visual,
-        },
-      });
-      const finalRow = await updateSlideImage(slide.id, { image_url, image_path });
+      const concept = conceptParsed.success ? conceptParsed.data : null;
+      let result = slide.image_url
+        ? await editFullSlideCopy({
+            carouselId,
+            sourceImageUrl: slide.image_url,
+            prev: { kicker: slide.kicker, headline: slide.headline, body: slide.body },
+            next: { kicker: updated.kicker, headline: updated.headline, body: updated.body },
+            designRef,
+            concept,
+            brandId: data.carousel.brand_id,
+            total: data.slides.length,
+            slideIndex: updated.idx,
+          }).catch(() => null)
+        : null;
+      if (!result) {
+        const vj = updated.visual_json as Partial<SlideVisual>;
+        const visual: SlideVisual | undefined = vj.motif
+          ? { motif: vj.motif, emphasis: vj.emphasis ?? "keyword" }
+          : undefined;
+        result = await regenerateFullSlide({
+          carouselId,
+          concept,
+          contentMode: data.carousel.content_mode,
+          toneOverride: data.carousel.tone_override,
+          styleKnobs: {
+            lighting: data.carousel.style_lighting,
+            palette: data.carousel.style_palette,
+            mood: data.carousel.style_mood,
+          },
+          designRef,
+          brandId: data.carousel.brand_id,
+          total: data.slides.length,
+          slide: {
+            index: updated.idx,
+            role: updated.role,
+            kicker: updated.kicker ?? undefined,
+            headline: updated.headline,
+            body: updated.body ?? undefined,
+            visual,
+          },
+        });
+      }
+      const finalRow = await updateSlideImage(slide.id, result);
       return ok({ slide: finalRow });
     }
 

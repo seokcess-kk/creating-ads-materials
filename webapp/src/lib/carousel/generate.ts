@@ -1,8 +1,8 @@
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
-import { generateImage } from "@/lib/engines";
+import { generateImage, editImage } from "@/lib/engines";
 import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
-import { fetchAsBuffer } from "@/lib/utils/image-fetch";
+import { fetchAsBuffer, fetchAsBase64 } from "@/lib/utils/image-fetch";
 import { extractNoticeMeta } from "@/lib/notice/extract";
 import type { NoticeMeta } from "@/lib/notice/types";
 import type { DesignReference } from "@/lib/generate/types";
@@ -468,6 +468,71 @@ export async function regenerateFullSlide(params: {
     params.carouselId,
     `slide_${String(params.slide.index).padStart(2, "0")}_${Date.now().toString(36)}`,
     composedBuf,
+  );
+  return { image_url: uploaded.url, image_path: uploaded.path };
+}
+
+type SlideCopy = { kicker?: string | null; headline: string; body?: string | null };
+
+/** 변경된 필드만 "교체/삭제/추가" 영어 편집 지시문으로(가이드: 바꿀 것 하나 + 나머지 유지). */
+function buildSlideCopyEditInstruction(prev: SlideCopy, next: SlideCopy): string {
+  const norm = (s?: string | null) => (s ?? "").trim();
+  const parts: string[] = [];
+  const add = (label: string, o: string, n: string) => {
+    if (o === n) return;
+    if (o && n) parts.push(`replace the ${label} "${o}" with "${n}"`);
+    else if (o && !n) parts.push(`remove the ${label} "${o}"`);
+    else if (!o && n) parts.push(`add the ${label} "${n}" matching the existing typographic style`);
+  };
+  add("kicker label", norm(prev.kicker), norm(next.kicker));
+  add("headline", norm(prev.headline), norm(next.headline));
+  add("body text", norm(prev.body), norm(next.body));
+  const changes = parts.length ? parts.join("; ") : "make no textual change";
+  return `Edit this finished Korean Instagram card-news slide: ${changes}. Render any Korean with PERFECT, correct modern Hangul, matching the existing fonts and sizes. Keep the layout, colors, fonts, illustration, background, composition and spacing EXACTLY the same — change nothing else.`;
+}
+
+/**
+ * full 모드 단건 카피 편집 — 이전에 구운 슬라이드를 base로 editImage("문구만 교체, 나머지 유지").
+ * regenerateFullSlide(통째 재생성)와 달리 디자인을 보존한 채 글자만 바꾼다. 페이지번호는 재합성.
+ * 소스 미확보/편집 실패 시 null(호출자가 regenerateFullSlide로 폴백).
+ */
+export async function editFullSlideCopy(params: {
+  carouselId: string;
+  sourceImageUrl: string;
+  prev: SlideCopy;
+  next: SlideCopy;
+  designRef?: DesignReference | null;
+  concept: BundleConcept | null;
+  brandId?: string | null;
+  total: number;
+  slideIndex: number;
+}): Promise<{ image_url: string; image_path: string } | null> {
+  const base = await fetchAsBase64(params.sourceImageUrl).catch(() => null);
+  if (!base) return null;
+  const img = await editImage({
+    prompt: buildSlideCopyEditInstruction(params.prev, params.next),
+    baseImage: base,
+    aspectRatio: "1:1",
+    imageSize: "2K", // 편집은 최종물 → 고품질
+    usageContext: {
+      operation: "carousel_slide_full_edit",
+      brandId: params.brandId ?? null,
+      metadata: { carouselId: params.carouselId, idx: params.slideIndex },
+    },
+  });
+  // 디자인은 base로 보존됨 — 페이지 번호만 깨끗이 재합성(생성 때와 동일 스타일).
+  const style = resolveStyle({
+    designRef: params.designRef ?? null,
+    template: getTemplate(params.concept?.template),
+  });
+  const composed = await renderComposite(
+    Buffer.from(img.base64, "base64"),
+    fullSlideOverlayConfig(params.slideIndex, params.total, style),
+  );
+  const uploaded = await uploadBuffer(
+    params.carouselId,
+    `slide_${String(params.slideIndex).padStart(2, "0")}_${Date.now().toString(36)}`,
+    composed,
   );
   return { image_url: uploaded.url, image_path: uploaded.path };
 }
