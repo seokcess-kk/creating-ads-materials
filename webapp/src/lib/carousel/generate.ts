@@ -536,3 +536,83 @@ export async function editFullSlideCopy(params: {
   );
   return { image_url: uploaded.url, image_path: uploaded.path };
 }
+
+/**
+ * full(베이킹) 슬라이드를 overlay로 변환 — 텍스트 없는 배경을 생성하고 컴포지터로 한글을 얹는다.
+ * 편집으로 정확 데이터(날짜·금액·연락처)가 들어왔을 때 호출: 모델이 글자를 굽지 않으므로
+ * 숫자·날짜가 100% 정확하고, bg_url이 생겨 이후 편집은 recomposeSlide(모델 호출 없음)로 처리된다.
+ * 스타일(팔레트·폰트·무드)은 styleLock/템플릿으로 유지하나, 텍스트는 벡터 폰트라 비주얼 결은 달라질 수 있다.
+ */
+export async function convertFullSlideToOverlay(params: {
+  carouselId: string;
+  concept: BundleConcept | null;
+  contentMode: CarouselContentMode;
+  toneOverride?: string | null;
+  styleKnobs?: CarouselStyleKnobs | null;
+  designRef?: DesignReference | null;
+  brandId?: string | null;
+  slide: SlideDetail;
+  total: number;
+}): Promise<{ bg_url: string; image_url: string; image_path: string }> {
+  const template = getTemplate(params.concept?.template);
+  const style = resolveStyle({ designRef: params.designRef ?? null, template });
+
+  // 텍스트 없는 배경 프롬프트(스타일 일관) — 아트디렉터(overlay) 우선, 실패 시 폴백.
+  let bgPrompt: string | null = null;
+  if (params.concept) {
+    const ad = await buildCarouselBackgroundPrompts({
+      concept: params.concept,
+      details: [params.slide],
+      bgMode: "per-slide",
+      contentMode: params.contentMode,
+      toneOverride: params.toneOverride,
+      designRef: params.designRef,
+      templateStyle: params.designRef ? null : template.bgStyle,
+      styleKnobs: params.styleKnobs,
+      textScheme: style.textScheme,
+      renderMode: "overlay",
+      usageContext: {
+        operation: "carousel_slide_to_overlay",
+        brandId: params.brandId ?? null,
+        metadata: { carouselId: params.carouselId, idx: params.slide.index },
+      },
+    });
+    bgPrompt =
+      ad?.backgrounds.find((b) => b.index === params.slide.index)?.prompt ??
+      ad?.backgrounds[0]?.prompt ??
+      null;
+  }
+  if (!bgPrompt) bgPrompt = perSlideBgPrompt(params.concept, params.slide);
+
+  const bg = await generateImage({
+    prompt: bgPrompt,
+    aspectRatio: "1:1",
+    imageSize: "2K",
+    usageContext: {
+      operation: "carousel_bg_slide",
+      brandId: params.brandId ?? null,
+      metadata: { carouselId: params.carouselId, idx: params.slide.index },
+    },
+  });
+  const bgBuf = Buffer.from(bg.base64, "base64");
+  const stamp = Date.now().toString(36);
+  const bgUploaded = await uploadBuffer(
+    params.carouselId,
+    `bg_${String(params.slide.index).padStart(2, "0")}_${stamp}`,
+    bgBuf,
+  );
+
+  const config: ComposeConfig = {
+    backgroundImageUrl: "",
+    output: { bucket: "", path: "" },
+    fontSet: style.fontSet,
+    ...slideConfig(params.slide, params.total, style),
+  };
+  const composed = await renderComposite(bgBuf, config);
+  const uploaded = await uploadBuffer(
+    params.carouselId,
+    `slide_${String(params.slide.index).padStart(2, "0")}_${stamp}`,
+    composed,
+  );
+  return { bg_url: bgUploaded.url, image_url: uploaded.url, image_path: uploaded.path };
+}
