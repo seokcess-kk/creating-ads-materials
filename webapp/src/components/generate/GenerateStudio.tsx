@@ -67,6 +67,18 @@ const COPY_POS_PRESETS: Array<{ v: "" | "top" | "center" | "bottom"; l: string }
   { v: "bottom", l: "하단" },
 ];
 
+// 선택 이미지 편집 op(결과 이미지를 base로 editImage — "바꿀 것 하나 + 나머지 유지").
+type EditOp = "localize" | "recolor" | "background" | "add" | "remove";
+const EDIT_OPS: { v: EditOp; l: string }[] = [
+  { v: "localize", l: "문구 교체/번역" },
+  { v: "background", l: "배경만 변경" },
+  { v: "recolor", l: "색만 변경" },
+  { v: "add", l: "요소 추가" },
+  { v: "remove", l: "요소 제거" },
+];
+const EDIT_INPUT_CLS =
+  "h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50";
+
 // 응답을 JSON으로 안전하게 파싱. 비-JSON(타임아웃 시 플랫폼이 내는 "An error o..." 평문/HTML 등)이면
 // 'Unexpected token' 대신 사람이 읽을 수 있는 메시지로 변환한다. 응답 실패(!ok)도 함께 처리.
 async function readJson(res: Response, failMsg: string) {
@@ -130,6 +142,13 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
 
   // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음). 카피는 후보별(variant.copy)로 보관.
   const [reBusy, setReBusy] = useState(false);
+
+  // 선택 이미지 편집(editImage 기반) — 디자인 보존하며 한 곳만 변경.
+  const [editOp, setEditOp] = useState<"" | EditOp>("");
+  const [editFields, setEditFields] = useState({
+    from: "", to: "", target: "", color: "", scene: "", element: "", position: "",
+  });
+  const [editBusy, setEditBusy] = useState(false);
 
   const canSubmit = keyMessage.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
@@ -345,6 +364,51 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       toast.error(e instanceof Error ? e.message : "오류");
     } finally {
       setReBusy(false);
+    }
+  }
+
+  const setEF = (k: keyof typeof editFields, val: string) =>
+    setEditFields((p) => ({ ...p, [k]: val }));
+
+  // op별 필수 입력 충족 여부.
+  const editReady =
+    editOp === "localize"
+      ? Boolean(editFields.from.trim() && editFields.to.trim())
+      : editOp === "background"
+        ? Boolean(editFields.scene.trim())
+        : editOp === "recolor"
+          ? Boolean(editFields.color.trim())
+          : editOp === "add"
+            ? Boolean(editFields.element.trim())
+            : editOp === "remove"
+              ? Boolean(editFields.target.trim())
+              : false;
+
+  // 선택 이미지 편집 — 결과 이미지를 base로 editImage("바꿀 것 하나 + 나머지 유지"). 새 후보로 추가.
+  async function applyEdit(v: ResultVariant) {
+    if (!generationId) {
+      toast.error("저장된 생성이 없어 편집할 수 없어요");
+      return;
+    }
+    if (!editOp || !editReady) return;
+    setEditBusy(true);
+    try {
+      const res = await fetch(`/api/generate/image/${generationId}/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceUrl: v.url, op: editOp, ...editFields, aspectRatio }),
+      });
+      const data = await readJson(res, "편집 실패");
+      const nv = data.variant as Omit<ResultVariant, "copy">;
+      const newIdx = variants.length;
+      setVariants((prev) => [...prev, { ...nv, copy: { headline: "", sub: "", cta: "" } }]);
+      setPreviewIdx(newIdx);
+      setEditOp("");
+      toast.success("편집본이 추가되었습니다");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -865,6 +929,71 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                   {reBusy && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
                   {reBusy ? "재합성 중…" : "재합성 →"}
                 </button>
+              </div>
+            )}
+
+            {previewIdx !== null && generationId && (
+              <div className="w-full max-w-md space-y-2 rounded-lg border border-white/20 bg-white/5 p-3">
+                <div className="text-[11px] text-white/70">
+                  이 이미지 편집 — 디자인은 그대로 두고 한 곳만 바꿔요(문구·배경·색…)
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {EDIT_OPS.map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      disabled={editBusy}
+                      onClick={() => setEditOp(editOp === o.v ? "" : o.v)}
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-50",
+                        editOp === o.v
+                          ? "border-white bg-white/15 text-white"
+                          : "border-white/30 text-white/70 hover:bg-white/10",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+                {editOp && (
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {editOp === "localize" && (
+                      <>
+                        <input value={editFields.from} onChange={(e) => setEF("from", e.target.value)} placeholder="바꿀 문구(원본)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.to} onChange={(e) => setEF("to", e.target.value)} placeholder="새 문구" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "background" && (
+                      <input value={editFields.scene} onChange={(e) => setEF("scene", e.target.value)} placeholder="새 배경(예: 따뜻한 카페 창가)" disabled={editBusy} className={cn(EDIT_INPUT_CLS, "sm:col-span-2")} />
+                    )}
+                    {editOp === "recolor" && (
+                      <>
+                        <input value={editFields.target} onChange={(e) => setEF("target", e.target.value)} placeholder="대상(예: 배경·버튼)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.color} onChange={(e) => setEF("color", e.target.value)} placeholder="색(예: 딥네이비)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "add" && (
+                      <>
+                        <input value={editFields.element} onChange={(e) => setEF("element", e.target.value)} placeholder="추가할 요소" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.position} onChange={(e) => setEF("position", e.target.value)} placeholder="위치(예: 왼쪽 아래)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "remove" && (
+                      <input value={editFields.target} onChange={(e) => setEF("target", e.target.value)} placeholder="제거할 요소" disabled={editBusy} className={cn(EDIT_INPUT_CLS, "sm:col-span-2")} />
+                    )}
+                  </div>
+                )}
+                {editOp && (
+                  <button
+                    type="button"
+                    onClick={() => applyEdit(preview)}
+                    disabled={editBusy || !editReady}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-white/40 px-3 py-1.5 text-xs text-white transition-transform hover:bg-white/10 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                  >
+                    {editBusy && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
+                    {editBusy ? "편집 중…(~20초)" : "편집 적용 →"}
+                  </button>
+                )}
               </div>
             )}
           </div>
