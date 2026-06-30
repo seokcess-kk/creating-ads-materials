@@ -132,7 +132,8 @@ export function CarouselStudio({
     initial?.bgMode ?? "shared",
   );
   const [renderMode, setRenderMode] = useState<"full" | "overlay">(
-    initial?.renderMode ?? "full",
+    // 기본은 overlay(수정 가능한 광고형) — 정확성·편집성 우선. full(AI 일체형)은 옵트인.
+    initial?.renderMode ?? "overlay",
   );
 
   // 레퍼런스(선택) — 첨부 시 배경이 그 디자인 룩으로 통일됨(생성 시 서버에서 분석).
@@ -314,7 +315,7 @@ export function CarouselStudio({
       kind: "compose",
       title: "슬라이드 생성",
       subtitle: `${concept.slidePlan.length}장 · ${
-        renderMode === "full" ? "완성형" : "배경+자막"
+        renderMode === "full" ? "AI 일체형" : "광고형"
       }`,
       estimatedSeconds: slideEst,
       steps: [
@@ -367,6 +368,15 @@ export function CarouselStudio({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "슬라이드 생성 실패");
       if (Array.isArray(data.slides)) setSlides(data.slides as SlideRow[]);
+      // 서버가 텍스트 안전 게이트로 모드를 강등(full→overlay)했을 수 있음 → 로컬 상태 동기화
+      // (슬라이드 편집 경로가 로컬 renderMode로 분기하므로 일관성 필요) + 사용자에게 안내.
+      const effMode = data.carousel?.render_mode as "full" | "overlay" | undefined;
+      if (effMode && effMode !== renderMode) {
+        setRenderMode(effMode);
+        if (effMode === "overlay" && renderMode === "full") {
+          toast.info("정확한 정보·수치가 있어 '수정 가능한 광고형'으로 생성했어요");
+        }
+      }
       completeOp(opId, { subtitle: `${data.slides?.length ?? ""}장 완성` });
       toast.success(`슬라이드 ${data.slides?.length ?? ""}장 생성됨`);
     } catch (e) {
@@ -390,7 +400,7 @@ export function CarouselStudio({
       ? startOp({
           kind: "compose",
           title: `슬라이드 ${slide.idx} 재생성`,
-          subtitle: "완성형 — 카피 반영해 다시 그리는 중",
+          subtitle: "AI 일체형 — 카피 반영해 다시 그리는 중",
           estimatedSeconds: 30,
           celebrate: false,
         })
@@ -572,8 +582,8 @@ export function CarouselStudio({
               <Label className="text-xs">슬라이드 형식</Label>
               <div className="flex gap-1.5">
                 {[
-                  { v: "full", l: "완성형(AI 디자인)" },
-                  { v: "overlay", l: "배경+자막" },
+                  { v: "overlay", l: "수정 가능한 광고형" },
+                  { v: "full", l: "AI 일체형 시안" },
                 ].map((o) => (
                   <button
                     key={o.v}
@@ -621,8 +631,8 @@ export function CarouselStudio({
           </div>
           <p className="text-[11px] text-muted-foreground">
             {renderMode === "full"
-              ? "완성형: AI가 배경·레이아웃·한글 텍스트를 한 번에 디자인합니다(품질↑). 카피 수정 시 해당 슬라이드를 다시 생성합니다."
-              : "배경+자막: 텍스트 없는 배경에 한글을 얹습니다. 카피 수정이 즉시·무료로 반영됩니다."}
+              ? "AI 일체형 시안: AI가 배경·레이아웃·한글까지 한 번에 디자인합니다. 짧은 후킹 문구·시안용에 적합하며, 정확한 날짜·금액·연락처나 긴 본문이 있으면 자동으로 '수정 가능한 광고형'으로 생성됩니다."
+              : "수정 가능한 광고형(권장): 텍스트 없는 배경에 한글을 또렷하게 얹습니다. 카피 수정·현지화가 즉시·무료로 반영됩니다."}
           </p>
 
           {/* 레퍼런스 첨부(선택) — 배경 디자인 룩 통일 */}

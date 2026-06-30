@@ -3,6 +3,7 @@ import type { DesignReference } from "@/lib/generate/types";
 import type {
   BundleConcept,
   CarouselInput,
+  CarouselRenderMode,
   CarouselRow,
   CarouselSlideRow,
   CarouselStatus,
@@ -23,7 +24,8 @@ export async function createCarousel(
       tone_override: input.toneOverride ?? null,
       content_mode: input.contentMode ?? "persuasion",
       bg_mode: input.bgMode ?? "shared",
-      render_mode: input.renderMode ?? "full",
+      // 기본은 overlay(수정 가능한 광고형) — 정확성·편집성 우선. full(AI 일체형)은 옵트인.
+      render_mode: input.renderMode ?? "overlay",
       reference_url: input.referenceImageUrl ?? null,
       status: opts.status,
       prompt_version: opts.promptVersion,
@@ -89,6 +91,19 @@ export async function setCarouselBg(
   const { error } = await supabase
     .from("carousels")
     .update({ bg_url: bgUrl })
+    .eq("id", carouselId);
+  if (error) throw error;
+}
+
+/** 유효 렌더 모드를 영속화(텍스트 안전 게이트가 full→overlay로 강등한 결과를 DB·UI·편집과 일치). */
+export async function setCarouselRenderMode(
+  carouselId: string,
+  renderMode: CarouselRenderMode,
+): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("carousels")
+    .update({ render_mode: renderMode })
     .eq("id", carouselId);
   if (error) throw error;
 }

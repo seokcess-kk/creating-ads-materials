@@ -22,6 +22,7 @@ import {
 } from "./prompt";
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
+import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import type {
   SingleImageInput,
   SingleImageResult,
@@ -44,7 +45,11 @@ const STYLE_HINTS = [
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
   if (!hasText) return "full"; // 텍스트 없으면 순수 비주얼
-  return input.renderMode === "full" ? "full" : "overlay";
+  if (input.renderMode !== "full") return "overlay";
+  // 'AI 일체형'(full) 요청이라도 정확한 날짜·금액·연락처나 긴 본문이 있으면 후합성으로 안전 강등
+  // (모델이 구운 정확 데이터는 오타·날조 위험 + 수정 불가). 가이드: 정확 데이터는 굽지 말 것.
+  if (anyNeedsOverlay(input.headline, input.sub, input.cta)) return "overlay";
+  return "full";
 }
 
 /** 로고만 오버레이(어둠 처리 없이). full/edit 모드에서 베이킹된 이미지 위에 로고 1개를 얹는다. */

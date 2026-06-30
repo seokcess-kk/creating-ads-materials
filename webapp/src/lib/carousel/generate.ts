@@ -6,6 +6,7 @@ import { fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { extractNoticeMeta } from "@/lib/notice/extract";
 import type { NoticeMeta } from "@/lib/notice/types";
 import type { DesignReference } from "@/lib/generate/types";
+import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import {
   CONCEPT_TOOL_NAME,
   SLIDES_TOOL_NAME,
@@ -59,6 +60,25 @@ async function mapWithConcurrency<T, R>(
 interface ClaudeContext {
   brandId?: string | null;
   carouselId?: string | null;
+}
+
+/**
+ * 유효 렌더 모드 해결 — 사용자가 'full'(AI 일체형 시안)을 골랐어도, 공지·정보형이거나 슬라이드
+ * 카피에 정확한 날짜·금액·퍼센트·연락처나 긴 본문이 있으면 'overlay'(후합성)로 강등한다.
+ * 정확 데이터를 모델에 구우면 오타·날조 위험이 크고 수정·현지화도 불가하기 때문(가이드 근거).
+ * 'overlay' 선택은 그대로 둔다. 슬라이드 단위가 아닌 번들 단위로 일관 적용(세트감 유지).
+ */
+export function resolveCarouselRenderMode(
+  requested: CarouselRenderMode,
+  contentMode: CarouselContentMode,
+  details: SlideDetail[],
+): CarouselRenderMode {
+  if (requested !== "full") return requested;
+  if (contentMode === "notice") return "overlay";
+  const hasCritical = details.some((d) =>
+    anyNeedsOverlay(d.headline, d.body, d.kicker),
+  );
+  return hasCritical ? "overlay" : "full";
 }
 
 async function maybeExtractNotice(

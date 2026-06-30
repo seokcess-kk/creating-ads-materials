@@ -222,7 +222,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     const opId = startOp({
       kind: "visual",
       title: "이미지 생성",
-      subtitle: `${count}장 · ${aspectRatio}${bakeText ? " · 텍스트 베이킹" : ""}`,
+      subtitle: `${count}장 · ${aspectRatio}${bakeText ? " · AI 일체형" : ""}`,
       estimatedSeconds: bakeText ? 55 : 40,
       steps: [
         { label: "프롬프트·브랜드 구성", atSec: 0 },
@@ -613,7 +613,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 onChange={(e) => setBakeText(e.target.checked)}
                 disabled={generating}
               />
-              AI가 텍스트도 직접 그리기 (끄면 한글 텍스트를 안정적으로 오버레이)
+              AI 일체형 시안 — 글자까지 AI가 그림 (정확한 숫자·날짜·연락처는 자동으로 또렷하게 오버레이)
             </label>
           )}
 
