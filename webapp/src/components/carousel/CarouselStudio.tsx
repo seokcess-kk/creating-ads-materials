@@ -946,6 +946,12 @@ export function CarouselStudio({
           </div>
         </div>
 
+        {renderMode === "full" && slides.length > 0 && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+            ⚠ AI가 슬라이드 글자를 직접 그렸어요 — 확대해 철자를 확인하세요. 정확한 정보·수치는 ‘수정 가능한 광고형’을 권장합니다.
+          </p>
+        )}
+
         {generating && (
           <GenerationProgress
             estimatedSeconds={renderMode === "full" ? 70 : 35}

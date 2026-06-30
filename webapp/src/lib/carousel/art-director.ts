@@ -138,6 +138,7 @@ HARD RULES (Korean text rendering is the #1 priority):
 - On-topic, concrete subject imagery tied to the product/topic and each slide's motif (coffee brand → espresso/latte/cafe; gym → training). Relevant beats abstract.
 - 1:1 framing. NO brand logo or wordmark (composited separately). Advertising-grade, premium, clean.
 - Do NOT draw page numbers, pagination dots, or a slide counter — leave a small clean margin at the very bottom; the page number is composited separately.
+- Any chart, graph or infographic is DECORATIVE only — its numbers and axes are NOT real data; never invent precise statistics, and for real figures leave a clean area for composited numbers.
 - If text might garble, prefer fewer words, larger — legibility over density.
 
 TONE:
@@ -165,6 +166,7 @@ HARD RULES for every background prompt:
 - Reserve ONE clean, low-detail area (center or lower third) for the Korean copy overlaid LATER — keep that zone calm and uncluttered even if the rest of the frame carries subject imagery.
 - ${readabilityRule}
 - 1:1 square framing. No people holding/wearing readable text; no objects with readable text.
+- Any chart, graph or infographic is DECORATIVE only — its numbers/axes are not real data; keep it abstract (real figures are overlaid later).
 - Advertising-grade: intentional focal idea, clean professional finish. Not flashy clip-art.
 
 SUBJECT MATTER (make it relatable):

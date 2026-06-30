@@ -42,6 +42,8 @@ export interface SingleAdLayoutInput {
   brandColor?: string | null;
   /** 카피 세로 위치(없으면 center) */
   copyPosition?: CopyPosition | null;
+  /** 폰트 세트 오버라이드(레퍼런스 타이포 매핑). 없으면 Pretendard. */
+  fontSet?: ComposeFontSet | null;
 }
 
 // 텍스트 오버레이 레이아웃 → ComposeConfig. backgroundImageUrl/output은 renderComposite가 무시(호환용 빈값).
@@ -50,7 +52,7 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
   const config: ComposeConfig = {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },
-    fontSet: singleAdFontSet(),
+    fontSet: input.fontSet ?? singleAdFontSet(),
     // AI 배경은 어디든 밝을 수 있어 상/하 그라데이션 + 은은한 전체 스크림으로
     // 임의 배경에서도 텍스트 가독성을 확보한다(히어로 텍스트는 외곽선 추가).
     overlay: { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },

@@ -780,6 +780,18 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 label={`이미지 ${genCount}장 만드는 중…`}
               />
             )}
+            {!generating && variants.length > 0 && (
+              <div className="space-y-1.5">
+                {bakeText && (
+                  <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    ⚠ AI가 글자를 직접 그렸어요 — 확대해 철자·줄바꿈을 확인하세요. 정확한 숫자·날짜는 ‘AI 일체형’을 끄거나 ‘이 이미지 편집’으로 고치는 걸 권장합니다.
+                  </p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  비율({aspectRatio})은 유도값이에요 — 정확한 픽셀 규격은 크롭/확장으로 맞추세요.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {generating &&
                 Array.from({ length: genCount }).map((_, i) => (

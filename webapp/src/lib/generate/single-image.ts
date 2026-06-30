@@ -12,6 +12,8 @@ import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { getVariant, updateVariantImage } from "./queries";
 import { singleAdConfig, fullHybridConfig, type SingleAdLogo } from "./render";
+// 레퍼런스 타이포 → 설치 한글 폰트 매핑(캐러셀 인프라 재사용 — 단일 overlay에도 적용).
+import { fontSetForCategory } from "@/lib/carousel/style";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
@@ -31,6 +33,7 @@ import type {
   ReferenceMode,
   DesignReference,
   CopyPosition,
+  ReferenceFontCategory,
 } from "./types";
 
 export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.3.0";
@@ -251,6 +254,8 @@ export async function generateSingleImageVariants(
           logo: logoForCompositor(placement),
           brandColor: brand.ctaColor,
           copyPosition: input.copyPosition,
+          // 레퍼런스 타이포 카테고리가 있으면 그 폰트로(없으면 Pretendard).
+          fontSet: designRef?.fontCategory ? fontSetForCategory(designRef.fontCategory) : null,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -271,6 +276,7 @@ export async function generateSingleImageVariants(
           logoBacking: placement?.backingColor ?? null,
           brandColor: brand.ctaColor,
           copyPosition: input.copyPosition ?? null,
+          fontCategory: designRef?.fontCategory ?? null,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -383,6 +389,7 @@ export async function recomposeVariant(
       logoBacking?: string | null;
       brandColor?: string | null;
       copyPosition?: CopyPosition | null;
+      fontCategory?: ReferenceFontCategory | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -400,6 +407,8 @@ export async function recomposeVariant(
     brandColor: compose.brandColor ?? null,
     // 생성 시 카피 위치를 그대로 재현(텍스트존 일치).
     copyPosition: compose.copyPosition ?? null,
+    // 생성 시 폰트(레퍼런스 타이포)도 그대로 재현.
+    fontSet: compose.fontCategory ? fontSetForCategory(compose.fontCategory) : null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).
