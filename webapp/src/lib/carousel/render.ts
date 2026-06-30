@@ -3,7 +3,7 @@ import type { CarouselStyle } from "./style";
 import type { BundleConcept, SlideDetail } from "./types";
 
 // 공통(shared) 배경 폴백 — 텍스트·로고 없음. 아트디렉터 실패 시에만 사용.
-export const SHARED_BG_PROMPT = `Design a CLEAN, TEXTLESS BACKGROUND for a Korean informational card-news carousel (1:1, 1080x1080). Output must contain NO text, letters, numbers, or logo. Calm, modern, trustworthy: deep navy-to-charcoal soft gradient with subtle geometric lines, generous quiet center area for overlaid Korean text. Sober and clean, not flashy. No people, no objects.`;
+export const SHARED_BG_PROMPT = `Design a CLEAN, TEXTLESS BACKGROUND for a Korean informational card-news carousel (1:1, 1080x1080). Output must contain NO text, letters, numbers, or logo. Calm, modern, trustworthy: deep navy-to-charcoal soft gradient with subtle geometric lines and soft directional lighting, generous quiet center area for overlaid Korean text. Sober and clean, not flashy. No people, no objects.`;
 
 // per-slide 배경 폴백 — 슬라이드 모티프 반영 + 공통 스타일 프리픽스로 일관성 유지.
 export function perSlideBgPrompt(
@@ -11,7 +11,7 @@ export function perSlideBgPrompt(
   slide: SlideDetail,
 ): string {
   const styleLock =
-    "Consistent carousel style: deep navy-to-charcoal soft gradient palette, calm modern tone, subtle geometric accents, generous quiet area for overlaid Korean text.";
+    "Consistent carousel style: deep navy-to-charcoal soft gradient palette, soft directional lighting, calm modern tone, subtle geometric accents, generous quiet area for overlaid Korean text.";
   const motif = slide.visual?.motif?.trim();
   const idea = concept?.bigIdea?.trim();
   return [
@@ -41,6 +41,7 @@ export function fullSlideFallbackPrompt(
     slide.body ? `supporting body text "${slide.body}"` : null,
     idea ? `Theme: ${idea}.` : null,
     motif ? `Scene/subject: ${motif}.` : null,
+    "Cohesive limited color palette and soft directional lighting.",
     "Strong typographic hierarchy, real editorial grid, generous whitespace, high text contrast, premium advertising quality. No logos or wordmarks.",
   ]
     .filter(Boolean)

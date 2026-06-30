@@ -75,16 +75,16 @@ interface TextPromptInput extends BasePromptInput {
 /** 텍스트 없는 깨끗한 광고 배경(오버레이용). 한글은 컴포지터가 얹는다. */
 export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
   return joinSentences([
-    "Design a CLEAN, TEXTLESS BACKGROUND for a Korean social media advertisement.",
-    "The image MUST contain NO text, letters, numbers, words, or logos of any kind.",
-    `Suit an advertisement about: ${input.keyMessage}.`,
-    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
+    "High-quality, professional Korean social-media advertisement background, CLEAN and TEXTLESS.",
+    `Communicates: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
+    "Keep the hero subject and busy detail in the upper portion; reserve a clean, low-detail band across the center and lower third (good, even contrast) for Korean copy overlaid later.",
+    "Soft professional lighting with a clear focal point; a limited, cohesive color palette.",
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
-    "Leave a calm, uncluttered area with good contrast for overlaid text.",
-    "High-quality, professional advertising photography or illustration.",
+    "Exclusions: no text, no letters, no numbers, no logos, no watermark, no UI elements.",
   ]);
 }
 
@@ -96,20 +96,21 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
   if (input.cta) textLines.push(`call-to-action button "${input.cta}"`);
 
   return joinSentences([
-    "Create a polished, professional Korean social media advertisement image.",
-    `The ad communicates: ${input.keyMessage}.`,
-    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
+    "Polished, professional Korean social-media advertisement design, clean modern advertising style.",
+    `Communicates: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
+    "Soft professional lighting, clear focal point, a limited cohesive color palette.",
     textLines.length
-      ? `Render the following Korean text clearly, legibly, and with PERFECT, correct Hangul spelling: ${textLines.join(
+      ? `Render the following Korean text with PERFECT, correct modern Hangul — make the headline dominant and large, any sub a clearly smaller subtitle: ${textLines.join(
           ", ",
-        )}. Do not distort or invent Korean characters.`
+        )}. Use only these exact strings; do not distort, invent, or add characters.`
       : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
     "Do NOT draw any brand logo or wordmark (the logo is added separately afterwards).",
-    "Strong visual hierarchy, advertising-grade composition.",
+    "Strong visual hierarchy, generous whitespace, advertising-grade composition.",
   ]);
 }
 
