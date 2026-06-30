@@ -59,6 +59,10 @@ export interface CarouselRow {
   content_mode: CarouselContentMode;
   bg_mode: CarouselBgMode;
   render_mode: CarouselRenderMode;
+  /** 구조화 스타일 노브(선택, 영어 구문) — 030 마이그레이션. */
+  style_lighting: string | null;
+  style_palette: string | null;
+  style_mood: string | null;
   bg_url: string | null;
   reference_url: string | null;
   reference_json: DesignReference | Record<string, never>;
@@ -95,6 +99,10 @@ export interface CarouselInput {
   bgMode?: CarouselBgMode;
   renderMode?: CarouselRenderMode;
   title?: string | null;
+  /** 구조화 스타일 노브(선택, 영어 구문) — UI 프리셋 칩. */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
   /** 레퍼런스 이미지 공개 URL(선택) — 디자인 요소 추출 후 배경 styleLock에 반영 */
   referenceImageUrl?: string | null;
 }

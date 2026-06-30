@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Loader2Icon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { LIGHTING_PRESETS, PALETTE_PRESETS, MOOD_PRESETS } from "@/lib/style-presets";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { DownloadButton } from "@/components/common/DownloadButton";
+import { GenerationProgress } from "@/components/common/GenerationProgress";
+import { useNotifications } from "@/components/notifications/NotificationContext";
 
 interface BrandOption {
   id: string;
@@ -98,23 +103,6 @@ function normalizePlan(items: SlidePlanItem[]): SlidePlanItem[] {
   }));
 }
 
-async function downloadUrl(url: string, filename: string) {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, "_blank");
-  }
-}
-
 export function CarouselStudio({
   brands,
   recent = [],
@@ -145,8 +133,13 @@ export function CarouselStudio({
     initial?.bgMode ?? "shared",
   );
   const [renderMode, setRenderMode] = useState<"full" | "overlay">(
-    initial?.renderMode ?? "full",
+    // 기본은 overlay(수정 가능한 광고형) — 정확성·편집성 우선. full(AI 일체형)은 옵트인.
+    initial?.renderMode ?? "overlay",
   );
+  // 구조화 스타일 노브(프리셋 칩) — 빈 값이면 아트디렉터 자율.
+  const [lighting, setLighting] = useState("");
+  const [palette, setPalette] = useState("");
+  const [mood, setMood] = useState("");
 
   // 레퍼런스(선택) — 첨부 시 배경이 그 디자인 룩으로 통일됨(생성 시 서버에서 분석).
   const [refUrl, setRefUrl] = useState<string | null>(
@@ -165,6 +158,13 @@ export function CarouselStudio({
   const [slides, setSlides] = useState<SlideRow[]>(initial?.slides ?? []);
   const [busy, setBusy] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [savingIdx, setSavingIdx] = useState<number | null>(null); // 재합성 중인 슬라이드
+  // busy는 모든 입력을 잠그는 공용 플래그, pendingAction은 어느 버튼에 스피너를 띄울지 구분.
+  const [pendingAction, setPendingAction] = useState<
+    null | "concept" | "regenerate" | "slides"
+  >(null);
+
+  const { startOp, completeOp, failOp } = useNotifications();
 
   // 슬라이드 라이트박스(큰 미리보기 + 이전/다음 + 스와이프)
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
@@ -227,6 +227,19 @@ export function CarouselStudio({
       return;
     }
     setBusy(true);
+    setPendingAction("concept");
+    const opId = startOp({
+      kind: "strategy",
+      title: "번들 기획 생성",
+      subtitle: "콘셉트 · 서사 · 슬라이드 구성",
+      estimatedSeconds: 15,
+      steps: [
+        { label: "원문 분석", atSec: 0 },
+        { label: "콘셉트·서사 도출", atSec: 4 },
+        { label: "슬라이드 구성 설계", atSec: 11 },
+      ],
+      celebrate: false,
+    });
     try {
       const res = await fetch("/api/carousels", {
         method: "POST",
@@ -238,6 +251,9 @@ export function CarouselStudio({
           contentMode,
           bgMode,
           renderMode,
+          lighting: lighting || null,
+          palette: palette || null,
+          mood: mood || null,
           referenceImageUrl: refUrl,
         }),
       });
@@ -253,17 +269,29 @@ export function CarouselStudio({
       if (typeof window !== "undefined") {
         window.history.replaceState(null, "", `/carousel?id=${data.carousel.id}`);
       }
+      completeOp(opId, { subtitle: "기획 완료 — 검토 후 슬라이드를 만드세요" });
       toast.success("번들 기획 생성됨 — 검토 후 슬라이드를 만드세요");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
   async function regenerateConcept() {
     if (!carouselId) return;
     setBusy(true);
+    setPendingAction("regenerate");
+    const opId = startOp({
+      kind: "strategy",
+      title: "기획 다시 생성",
+      subtitle: "콘셉트·서사 재도출",
+      estimatedSeconds: 14,
+      celebrate: false,
+    });
     try {
       const res = await fetch(`/api/carousels/${carouselId}`, {
         method: "PATCH",
@@ -273,11 +301,15 @@ export function CarouselStudio({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "재생성 실패");
       setConcept(data.carousel.concept_json as BundleConcept);
+      completeOp(opId, { subtitle: "기획을 다시 생성했습니다" });
       toast.success("기획을 다시 생성했습니다");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
@@ -285,6 +317,22 @@ export function CarouselStudio({
     if (!carouselId || !concept) return;
     setBusy(true);
     setGenerating(true);
+    setPendingAction("slides");
+    const slideEst = renderMode === "full" ? 70 : 35;
+    const opId = startOp({
+      kind: "compose",
+      title: "슬라이드 생성",
+      subtitle: `${concept.slidePlan.length}장 · ${
+        renderMode === "full" ? "AI 일체형" : "광고형"
+      }`,
+      estimatedSeconds: slideEst,
+      steps: [
+        { label: "기획 저장", atSec: 0 },
+        { label: "슬라이드 배경·디자인 생성", atSec: 4 },
+        { label: "마무리·정리", atSec: Math.round(slideEst * 0.85) },
+      ],
+      celebrate: false,
+    });
     let polling = false; // finally에서 끄려면 try 바깥 스코프여야 함
     try {
       // 1) 편집한 기획 저장
@@ -328,22 +376,43 @@ export function CarouselStudio({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "슬라이드 생성 실패");
       if (Array.isArray(data.slides)) setSlides(data.slides as SlideRow[]);
+      // 서버가 텍스트 안전 게이트로 모드를 강등(full→overlay)했을 수 있음 → 로컬 상태 동기화
+      // (슬라이드 편집 경로가 로컬 renderMode로 분기하므로 일관성 필요) + 사용자에게 안내.
+      const effMode = data.carousel?.render_mode as "full" | "overlay" | undefined;
+      if (effMode && effMode !== renderMode) {
+        setRenderMode(effMode);
+        if (effMode === "overlay" && renderMode === "full") {
+          toast.info("정확한 정보·수치가 있어 '수정 가능한 광고형'으로 생성했어요");
+        }
+      }
+      completeOp(opId, { subtitle: `${data.slides?.length ?? ""}장 완성` });
       toast.success(`슬라이드 ${data.slides?.length ?? ""}장 생성됨`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       polling = false; // POST가 reject돼도 폴링 루프를 반드시 종료
       setGenerating(false);
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
   async function saveSlide(slide: SlideRow) {
     if (!carouselId) return;
     setBusy(true);
-    if (renderMode === "full") {
-      toast.info("슬라이드 재생성 중… (완성형은 카피 수정 시 다시 그립니다, ~30초)");
-    }
+    setSavingIdx(slide.idx);
+    const isFull = renderMode === "full";
+    const opId = isFull
+      ? startOp({
+          kind: "compose",
+          title: `슬라이드 ${slide.idx} 재생성`,
+          subtitle: "AI 일체형 — 카피 반영해 다시 그리는 중",
+          estimatedSeconds: 30,
+          celebrate: false,
+        })
+      : null;
     try {
       const res = await fetch(
         `/api/carousels/${carouselId}/slides/${slide.idx}`,
@@ -362,11 +431,15 @@ export function CarouselStudio({
       setSlides((prev) =>
         prev.map((s) => (s.id === slide.id ? (data.slide as SlideRow) : s)),
       );
+      if (opId) completeOp(opId, { subtitle: `슬라이드 ${slide.idx} 재합성 완료` });
       toast.success(`슬라이드 ${slide.idx} 재합성됨`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      if (opId) failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
+      setSavingIdx(null);
     }
   }
 
@@ -517,8 +590,8 @@ export function CarouselStudio({
               <Label className="text-xs">슬라이드 형식</Label>
               <div className="flex gap-1.5">
                 {[
-                  { v: "full", l: "완성형(AI 디자인)" },
-                  { v: "overlay", l: "배경+자막" },
+                  { v: "overlay", l: "수정 가능한 광고형" },
+                  { v: "full", l: "AI 일체형 시안" },
                 ].map((o) => (
                   <button
                     key={o.v}
@@ -566,9 +639,40 @@ export function CarouselStudio({
           </div>
           <p className="text-[11px] text-muted-foreground">
             {renderMode === "full"
-              ? "완성형: AI가 배경·레이아웃·한글 텍스트를 한 번에 디자인합니다(품질↑). 카피 수정 시 해당 슬라이드를 다시 생성합니다."
-              : "배경+자막: 텍스트 없는 배경에 한글을 얹습니다. 카피 수정이 즉시·무료로 반영됩니다."}
+              ? "AI 일체형 시안: AI가 배경·레이아웃·한글까지 한 번에 디자인합니다. 짧은 후킹 문구·시안용에 적합하며, 정확한 날짜·금액·연락처나 긴 본문이 있으면 자동으로 '수정 가능한 광고형'으로 생성됩니다."
+              : "수정 가능한 광고형(권장): 텍스트 없는 배경에 한글을 또렷하게 얹습니다. 카피 수정·현지화가 즉시·무료로 반영됩니다."}
           </p>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">분위기·조명·색 (선택)</Label>
+            {[
+              { label: "조명", presets: LIGHTING_PRESETS, value: lighting, set: setLighting },
+              { label: "팔레트", presets: PALETTE_PRESETS, value: palette, set: setPalette },
+              { label: "무드", presets: MOOD_PRESETS, value: mood, set: setMood },
+            ].map((row) => (
+              <div key={row.label} className="space-y-1">
+                <Label className="text-[11px]">{row.label}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.presets.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => row.set(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        row.value === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* 레퍼런스 첨부(선택) — 배경 디자인 룩 통일 */}
           <div className="space-y-2 rounded-lg border p-3">
@@ -619,8 +723,12 @@ export function CarouselStudio({
             )}
           </div>
 
-          <Button onClick={createConcept} disabled={!canSubmit || busy}>
-            {busy ? "기획 생성 중…" : "번들 기획 만들기 →"}
+          <Button
+            onClick={createConcept}
+            disabled={!canSubmit || busy}
+            pending={pendingAction === "concept"}
+          >
+            {pendingAction === "concept" ? "기획 생성 중…" : "번들 기획 만들기 →"}
           </Button>
         </CardContent>
       </Card>
@@ -776,27 +884,44 @@ export function CarouselStudio({
         </Card>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={buildSlides} disabled={busy}>
-            {busy ? "처리 중…" : "이 기획으로 슬라이드 만들기 →"}
+          <Button
+            onClick={buildSlides}
+            disabled={busy}
+            pending={pendingAction === "slides"}
+          >
+            {pendingAction === "slides" ? "처리 중…" : "이 기획으로 슬라이드 만들기 →"}
           </Button>
-          <Button variant="outline" onClick={regenerateConcept} disabled={busy}>
-            AI로 다시 기획
+          <Button
+            variant="outline"
+            onClick={regenerateConcept}
+            disabled={busy}
+            pending={pendingAction === "regenerate"}
+          >
+            {pendingAction === "regenerate" ? "다시 기획 중…" : "AI로 다시 기획"}
           </Button>
         </div>
       </div>
     );
   } else {
+    const doneCount = slides.filter((s) => s.image_url).length;
+    // 생성 중에는 기대 슬라이드 수만큼 슬롯을 만들어 "채워지는" 진행감을 준다.
+    const expectedCount = generating
+      ? Math.max(slides.length, concept?.slidePlan.length ?? slides.length)
+      : slides.length;
+    const slots: (SlideRow | null)[] = Array.from(
+      { length: expectedCount },
+      (_, i) => slides[i] ?? null,
+    );
     content = (
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Badge variant="secondary">2단계 · 슬라이드 {slides.length}장</Badge>
             {generating && (
-              <span className="text-xs text-muted-foreground">
-                {slides.length === 0
-                  ? "기획을 슬라이드로 펼치는 중…"
-                  : `생성 중 · ${slides.filter((s) => s.image_url).length}/${slides.length} 완성`}
-              </span>
+              <Badge variant="outline" className="gap-1">
+                <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                생성 중
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -808,100 +933,135 @@ export function CarouselStudio({
             >
               ← 기획 수정
             </button>
-            {carouselId && (
-              <button
-                type="button"
-                onClick={() =>
-                  downloadUrl(
-                    `/api/carousels/${carouselId}/download`,
-                    `carousel_${carouselId}.zip`,
-                  )
-                }
-                className="text-xs text-primary underline"
+            {carouselId && !generating && (
+              <DownloadButton
+                url={`/api/carousels/${carouselId}/download`}
+                filename={`carousel_${carouselId}.zip`}
+                className="text-xs text-primary hover:underline"
+                successToast="zip 저장됨"
               >
                 전체 zip 다운로드
-              </button>
+              </DownloadButton>
             )}
           </div>
         </div>
 
+        {renderMode === "full" && slides.length > 0 && !generating && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+            ⚠ AI가 슬라이드 글자를 직접 그렸어요 — 확대해 철자를 확인하세요. 정확한 정보·수치는 ‘수정 가능한 광고형’을 권장합니다.
+          </p>
+        )}
+
+        {generating && (
+          <GenerationProgress
+            estimatedSeconds={renderMode === "full" ? 70 : 35}
+            label={
+              slides.length === 0
+                ? "기획을 슬라이드로 펼치는 중…"
+                : "슬라이드 생성 중…"
+            }
+            done={doneCount}
+            total={expectedCount}
+          />
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {slides.map((s, i) => (
-            <Card key={s.id}>
-              <CardContent className="space-y-2 pt-4">
-                <div className="flex items-start gap-3">
-                  {s.image_url ? (
-                    <button
-                      type="button"
-                      onClick={() => setPreviewIdx(i)}
-                      className="shrink-0"
-                      title="크게 보기"
-                    >
-                      <img
-                        src={s.image_url}
-                        alt={`슬라이드 ${s.idx}`}
-                        loading="lazy"
-                        className="w-32 h-32 rounded-md border object-cover transition-opacity hover:opacity-80"
+          {slots.map((s, i) =>
+            s ? (
+              <Card key={s.id}>
+                <CardContent className="space-y-2 pt-4">
+                  <div className="flex items-start gap-3">
+                    {s.image_url ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewIdx(i)}
+                        className="shrink-0 overflow-hidden rounded-md transition-transform active:scale-95"
+                        title="크게 보기"
+                      >
+                        <img
+                          src={s.image_url}
+                          alt={`슬라이드 ${s.idx}`}
+                          loading="lazy"
+                          className="w-32 h-32 rounded-md border object-cover transition-opacity hover:opacity-80"
+                        />
+                      </button>
+                    ) : (
+                      <div className="flex h-32 w-32 shrink-0 animate-pulse items-center justify-center rounded-md border bg-muted text-[10px] text-muted-foreground">
+                        합성 중…
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[10px]">
+                          {s.idx} · {s.role}
+                        </Badge>
+                        {s.image_url && (
+                          <DownloadButton
+                            url={s.image_url}
+                            filename={`slide_${String(s.idx).padStart(2, "0")}.png`}
+                            className="text-[11px] text-primary hover:underline"
+                          />
+                        )}
+                      </div>
+                      <Input
+                        value={s.headline}
+                        onChange={(e) =>
+                          patchSlide(s.id, { headline: e.target.value })
+                        }
+                        disabled={busy}
+                        className="h-7 text-xs"
+                        placeholder="헤드라인"
                       />
-                    </button>
-                  ) : (
-                    <div className="flex h-32 w-32 shrink-0 animate-pulse items-center justify-center rounded-md border bg-muted text-[10px] text-muted-foreground">
-                      합성 중…
+                      <Textarea
+                        value={s.body ?? ""}
+                        onChange={(e) => patchSlide(s.id, { body: e.target.value })}
+                        disabled={busy}
+                        rows={2}
+                        placeholder="본문 (선택)"
+                        className="text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => saveSlide(s)}
+                        disabled={busy}
+                        pending={savingIdx === s.idx}
+                      >
+                        {savingIdx === s.idx
+                          ? "재합성 중…"
+                          : renderMode === "full"
+                            ? "카피 반영(재생성·~30초)"
+                            : "수정 반영(재합성)"}
+                      </Button>
                     </div>
-                  )}
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-[10px]">
-                        {s.idx} · {s.role}
-                      </Badge>
-                      {s.image_url && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            downloadUrl(
-                              s.image_url as string,
-                              `slide_${String(s.idx).padStart(2, "0")}.png`,
-                            )
-                          }
-                          className="text-[11px] text-primary underline"
-                        >
-                          다운로드
-                        </button>
-                      )}
-                    </div>
-                    <Input
-                      value={s.headline}
-                      onChange={(e) =>
-                        patchSlide(s.id, { headline: e.target.value })
-                      }
-                      disabled={busy}
-                      className="h-7 text-xs"
-                      placeholder="헤드라인"
-                    />
-                    <Textarea
-                      value={s.body ?? ""}
-                      onChange={(e) => patchSlide(s.id, { body: e.target.value })}
-                      disabled={busy}
-                      rows={2}
-                      placeholder="본문 (선택)"
-                      className="text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => saveSlide(s)}
-                      disabled={busy}
-                    >
-                      {renderMode === "full" ? "카피 반영(재생성·~30초)" : "수정 반영(재합성)"}
-                    </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card key={`slot-${i}`} aria-hidden>
+                <CardContent className="space-y-2 pt-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-32 w-32 shrink-0 animate-pulse items-center justify-center rounded-md border bg-muted text-[10px] text-muted-foreground">
+                      대기 중…
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-2 pt-1">
+                      <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+                      <div className="h-7 w-full animate-pulse rounded bg-muted" />
+                      <div className="h-10 w-full animate-pulse rounded bg-muted" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ),
+          )}
         </div>
 
-        <Button variant="outline" onClick={buildSlides} disabled={busy}>
+        <Button
+          variant="outline"
+          onClick={buildSlides}
+          disabled={busy}
+          pending={generating}
+        >
           슬라이드 전체 다시 만들기
         </Button>
       </div>
@@ -972,18 +1132,11 @@ export function CarouselStudio({
                   다음 →
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() =>
-                  downloadUrl(
-                    preview.image_url as string,
-                    `slide_${String(preview.idx).padStart(2, "0")}.png`,
-                  )
-                }
-                className="rounded-md border border-white/40 px-2 py-1 text-xs hover:bg-white/10"
-              >
-                다운로드
-              </button>
+              <DownloadButton
+                url={preview.image_url as string}
+                filename={`slide_${String(preview.idx).padStart(2, "0")}.png`}
+                className="rounded-md border border-white/40 px-2 py-1 text-xs text-white hover:bg-white/10"
+              />
             </div>
           </div>
         </div>

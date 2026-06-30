@@ -6,6 +6,7 @@ import { fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { extractNoticeMeta } from "@/lib/notice/extract";
 import type { NoticeMeta } from "@/lib/notice/types";
 import type { DesignReference } from "@/lib/generate/types";
+import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import {
   CONCEPT_TOOL_NAME,
   SLIDES_TOOL_NAME,
@@ -22,9 +23,10 @@ import {
   SHARED_BG_PROMPT,
   perSlideBgPrompt,
   fullSlideFallbackPrompt,
+  fullSlideOverlayConfig,
   slideConfig,
 } from "./render";
-import { buildCarouselBackgroundPrompts } from "./art-director";
+import { buildCarouselBackgroundPrompts, type CarouselStyleKnobs } from "./art-director";
 import { getTemplate } from "./templates";
 import { resolveStyle } from "./style";
 import { setSlideRendered } from "./queries";
@@ -59,6 +61,25 @@ async function mapWithConcurrency<T, R>(
 interface ClaudeContext {
   brandId?: string | null;
   carouselId?: string | null;
+}
+
+/**
+ * 유효 렌더 모드 해결 — 사용자가 'full'(AI 일체형 시안)을 골랐어도, 공지·정보형이거나 슬라이드
+ * 카피에 정확한 날짜·금액·퍼센트·연락처나 긴 본문이 있으면 'overlay'(후합성)로 강등한다.
+ * 정확 데이터를 모델에 구우면 오타·날조 위험이 크고 수정·현지화도 불가하기 때문(가이드 근거).
+ * 'overlay' 선택은 그대로 둔다. 슬라이드 단위가 아닌 번들 단위로 일관 적용(세트감 유지).
+ */
+export function resolveCarouselRenderMode(
+  requested: CarouselRenderMode,
+  contentMode: CarouselContentMode,
+  details: SlideDetail[],
+): CarouselRenderMode {
+  if (requested !== "full") return requested;
+  if (contentMode === "notice") return "overlay";
+  const hasCritical = details.some((d) =>
+    anyNeedsOverlay(d.headline, d.body, d.kicker),
+  );
+  return hasCritical ? "overlay" : "full";
 }
 
 async function maybeExtractNotice(
@@ -179,6 +200,8 @@ export async function renderCarouselSlides(params: {
   contentMode: CarouselContentMode;
   renderMode: CarouselRenderMode;
   toneOverride?: string | null;
+  /** 사용자 구조화 스타일 노브(선택) — 아트디렉터 styleLock에 주입 */
+  styleKnobs?: CarouselStyleKnobs | null;
   /** 레퍼런스 디자인 요소(있으면 배경 styleLock 기반으로 주입) */
   designRef?: DesignReference | null;
   /** shared 모드에서 기존 배경 재사용(재생성 시) */
@@ -210,6 +233,7 @@ export async function renderCarouselSlides(params: {
         designRef: params.designRef,
         // 레퍼런스가 있으면 레퍼런스가 팔레트를 주도(템플릿 bgStyle은 레퍼런스 없을 때만).
         templateStyle: params.designRef ? null : template.bgStyle,
+        styleKnobs: params.styleKnobs,
         textScheme: style.textScheme,
         renderMode: params.renderMode,
         usageContext: {
@@ -276,11 +300,15 @@ export async function renderCarouselSlides(params: {
           metadata: { carouselId: params.carouselId, idx: detail.index },
         },
       });
-      const buf = Buffer.from(img.base64, "base64");
+      // full도 페이지 번호는 굽지 않고 후합성(숫자 가독성·일관). 스크림 없이 슬로건만.
+      const composedBuf = await renderComposite(
+        Buffer.from(img.base64, "base64"),
+        fullSlideOverlayConfig(detail.index, total, style),
+      );
       const uploaded = await uploadBuffer(
         params.carouselId,
         `slide_${String(detail.index).padStart(2, "0")}`,
-        buf,
+        composedBuf,
       );
       if (rowId) {
         await setSlideRendered(rowId, {
@@ -385,9 +413,12 @@ export async function regenerateFullSlide(params: {
   concept: BundleConcept | null;
   contentMode: CarouselContentMode;
   toneOverride?: string | null;
+  styleKnobs?: CarouselStyleKnobs | null;
   designRef?: DesignReference | null;
   brandId?: string | null;
   slide: SlideDetail;
+  /** 슬라이드 총 개수 — 페이지 번호 후합성용. */
+  total: number;
 }): Promise<{ image_url: string; image_path: string }> {
   let prompt: string | null = null;
   if (params.concept) {
@@ -399,6 +430,7 @@ export async function regenerateFullSlide(params: {
       toneOverride: params.toneOverride,
       designRef: params.designRef,
       templateStyle: null,
+      styleKnobs: params.styleKnobs,
       renderMode: "full",
       usageContext: {
         operation: "carousel_slide_full_regen",
@@ -423,10 +455,19 @@ export async function regenerateFullSlide(params: {
       metadata: { carouselId: params.carouselId, idx: params.slide.index },
     },
   });
+  // full도 페이지 번호는 후합성(굽지 않음). 생성 때와 동일 스타일로 슬로건만.
+  const style = resolveStyle({
+    designRef: params.designRef ?? null,
+    template: getTemplate(params.concept?.template),
+  });
+  const composedBuf = await renderComposite(
+    Buffer.from(img.base64, "base64"),
+    fullSlideOverlayConfig(params.slide.index, params.total, style),
+  );
   const uploaded = await uploadBuffer(
     params.carouselId,
     `slide_${String(params.slide.index).padStart(2, "0")}_${Date.now().toString(36)}`,
-    Buffer.from(img.base64, "base64"),
+    composedBuf,
   );
   return { image_url: uploaded.url, image_path: uploaded.path };
 }

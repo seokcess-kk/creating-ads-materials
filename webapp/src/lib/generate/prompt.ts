@@ -1,5 +1,14 @@
 import type { BrandIdentity } from "@/lib/memory/types";
-import type { SingleRenderMode } from "./types";
+import type { CopyPosition, SingleRenderMode } from "./types";
+
+/** 카피가 들어갈 여백을 가리키는 영어 구문(프롬프트용). */
+function copyZone(pos?: CopyPosition | null): string {
+  return pos === "top"
+    ? "the upper area"
+    : pos === "bottom"
+      ? "the lower third"
+      : "the center-to-lower area";
+}
 
 /**
  * 단일 이미지 생성에 주입되는 선택적 브랜드 컨텍스트.
@@ -64,6 +73,12 @@ interface BasePromptInput {
   styleHint?: string | null;
   /** 레퍼런스에서 추출한 디자인 디스크립터(이미 문자열로 직렬화됨) */
   designRef?: string | null;
+  /** 구조화 스타일 노브(선택, 영어 구문) */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+  /** 카피 여백 위치(선택, overlay) */
+  copyPosition?: CopyPosition | null;
 }
 
 interface TextPromptInput extends BasePromptInput {
@@ -75,16 +90,22 @@ interface TextPromptInput extends BasePromptInput {
 /** 텍스트 없는 깨끗한 광고 배경(오버레이용). 한글은 컴포지터가 얹는다. */
 export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
   return joinSentences([
-    "Design a CLEAN, TEXTLESS BACKGROUND for a Korean social media advertisement.",
-    "The image MUST contain NO text, letters, numbers, words, or logos of any kind.",
-    `Suit an advertisement about: ${input.keyMessage}.`,
-    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
+    "High-quality, professional Korean social-media advertisement background, CLEAN and TEXTLESS.",
+    `Communicates: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
+    `Keep the hero subject and busy detail away from the copy zone; reserve a clean, low-detail band at ${copyZone(input.copyPosition)} (good, even contrast) for Korean copy overlaid later.`,
+    input.lighting?.trim()
+      ? `Lighting: ${input.lighting.trim()}.`
+      : "Soft professional lighting with a clear focal point.",
+    input.palette?.trim()
+      ? `Color palette (use only these): ${input.palette.trim()}.`
+      : "A limited, cohesive color palette.",
+    input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
-    "Leave a calm, uncluttered area with good contrast for overlaid text.",
-    "High-quality, professional advertising photography or illustration.",
+    "Exclusions: no text, no letters, no numbers, no logos, no watermark, no UI elements.",
   ]);
 }
 
@@ -93,23 +114,33 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
   const textLines: string[] = [];
   if (input.headline) textLines.push(`headline "${input.headline}"`);
   if (input.sub) textLines.push(`subtext "${input.sub}"`);
-  if (input.cta) textLines.push(`call-to-action button "${input.cta}"`);
+  // CTA는 굽지 않는다(컴포지터가 또렷한 브랜드 버튼으로 후합성 — 가이드: 슬로건/버튼은 굽지 말 것).
 
   return joinSentences([
-    "Create a polished, professional Korean social media advertisement image.",
-    `The ad communicates: ${input.keyMessage}.`,
-    input.concept?.trim() ? `Scene / subject: ${input.concept.trim()}.` : null,
+    "Polished, professional Korean social-media advertisement design, clean modern advertising style.",
+    `Communicates: ${input.keyMessage}.`,
+    input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
     input.styleHint ? `Style: ${input.styleHint}.` : null,
+    input.lighting?.trim()
+      ? `Lighting: ${input.lighting.trim()}.`
+      : "Soft professional lighting, clear focal point.",
+    input.palette?.trim()
+      ? `Color palette (use only these): ${input.palette.trim()}.`
+      : "A limited cohesive color palette.",
+    input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
     textLines.length
-      ? `Render the following Korean text clearly, legibly, and with PERFECT, correct Hangul spelling: ${textLines.join(
+      ? `Render the following Korean text with PERFECT, correct modern Hangul — make the headline dominant and large, any sub a clearly smaller subtitle: ${textLines.join(
           ", ",
-        )}. Do not distort or invent Korean characters.`
+        )}. Use only these exact strings; do not distort, invent, or add characters.`
       : null,
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
+    input.cta
+      ? "Reserve a clean, calm band near the bottom for a call-to-action button added separately — do NOT draw a button or its text."
+      : null,
     "Do NOT draw any brand logo or wordmark (the logo is added separately afterwards).",
-    "Strong visual hierarchy, advertising-grade composition.",
+    "Strong visual hierarchy, generous whitespace, advertising-grade composition.",
   ]);
 }
 
@@ -122,8 +153,11 @@ export function buildEditPrompt(input: TextPromptInput & { mode: SingleRenderMod
       `Suit an advertisement about: ${input.keyMessage}.`,
       input.concept?.trim() ? `Direction: ${input.concept.trim()}.` : null,
       input.styleHint ? `Style: ${input.styleHint}.` : null,
+      input.lighting?.trim() ? `Lighting: ${input.lighting.trim()}.` : null,
+      input.palette?.trim() ? `Color palette (use only these): ${input.palette.trim()}.` : null,
+      input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
       input.tone ? `Mood / tone: ${input.tone}.` : null,
-      "Keep the core subject recognizable. Leave a calm area for overlaid text.",
+      `Keep the core subject recognizable. Leave a calm, low-detail band at ${copyZone(input.copyPosition)} for overlaid text.`,
     ]);
   }
   return buildFullImagePrompt(input);

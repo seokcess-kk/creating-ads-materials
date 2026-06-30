@@ -3,7 +3,7 @@ import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import type { UsageContext } from "@/lib/usage/record";
 import type { AspectRatio } from "@/lib/engines";
-import type { DesignReference, SingleRenderMode } from "./types";
+import type { CopyPosition, DesignReference, SingleRenderMode } from "./types";
 import { formatDesignReference } from "./analyze-reference";
 
 const TOOL = "record_image_prompts";
@@ -17,6 +17,12 @@ export interface CreativeBrief {
   /** 소재에 얹힐 카피(구도가 텍스트를 위한 여백을 확보하도록 전달) */
   copy?: { headline?: string | null; sub?: string | null; cta?: string | null };
   tone?: string | null;
+  /** 구조화 스타일 노브(선택, 영어 구문) — 8슬롯의 팔레트·조명·무드를 직접 지정. */
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+  /** 카피 여백 위치(선택) — overlay에서 어느 쪽을 비울지 모델에 전달. */
+  copyPosition?: CopyPosition | null;
   brandHint?: string | null;
   designRef?: DesignReference | null;
   aspectRatio: AspectRatio;
@@ -67,15 +73,23 @@ function buildSystem(): string {
   return `You are an expert advertising ART DIRECTOR and prompt engineer for the "gpt-image" text-to-image model.
 You receive a creative brief (the user's intent + context) and produce DISTINCT, production-grade English image prompts — one per requested variant. Each variant must be a genuinely different creative direction (composition, angle, framing, focal idea), not a reworded duplicate.
 
-WRITE PROMPTS THAT MAKE EFFECTIVE ADS:
-- Lead with the subject and the single idea the ad must communicate, then describe setting, lighting, mood, color, composition, and camera/lens feel concretely.
-- Advertising-grade quality: intentional focal point, clear visual hierarchy, clean professional finish.
-- Respect the brand cues and the design reference (palette/mood/composition/layout) when provided.
-- Match the tone. Match the aspect ratio's framing.
+STRUCTURE EVERY PROMPT IN THIS SLOT ORDER (a proven recipe):
+1) MEDIUM/STYLE FIRST — pin the medium up front so the look is stable (e.g., "High-end studio product photography", "Flat vector illustration", "Editorial 3D render", "Cinematic lifestyle photo"). Never open with the bare subject.
+2) HERO SUBJECT + the single idea the ad must communicate, immediately after the medium.
+3) COMPOSITION & BACKGROUND — placement + a controlled background (e.g., "centered on a plain seamless studio background with a soft shadow", "subject on the right third").
+4) LIMITED COLOR PALETTE — name 2-3 specific colors and add "only" (e.g., "limited palette of warm sand, olive green and cream only, muted"). Never "nice colors". If a design reference carries hex codes, translate them into 2-3 dominant color NAMES.
+5) LIGHTING — always state it (e.g., "soft golden hour light, gentle rim light", "dramatic studio rim lighting"); unlit scenes look flat and cheap.
+6) MOOD — one or two atmosphere words (e.g., "premium, refined, minimal").
+7) RESERVED TEXT SPACE — per TEXT HANDLING below.
+8) EXCLUSIONS — end with what to avoid (e.g., "no extra text, no logos, no clutter, no extra props").
+
+PHOTOGRAPHIC creatives (product, food, person, lifestyle): add camera vocabulary — lens & aperture + shallow depth of field (50mm f/1.8 for products, 85mm f/1.8 for a person), "photorealistic, high detail". For a physical product, pin its exact form, material and finish (e.g., "sleek matte black case", "frosted glass bottle with a gold cap") so the model never invents a generic or trademark-like product; keep any on-product label area blank.
+
+KEEP IT FOCUSED — one clear focal subject, a few elements, generous empty space; simpler reads stronger. Each variant is a genuinely different direction (composition, angle, framing), not a reworded duplicate. Advertising-grade: intentional focal point, clear hierarchy, clean finish. Respect brand cues and the design reference (palette/mood/composition/layout) when provided. Match the tone, and match the aspect ratio with composition vocabulary (1:1 balanced square; 4:5 / 9:16 vertical, tall composition with the hero up top and copy space below; 16:9 wide widescreen). If a chart, graph, infographic or data visualization appears, render it as DECORATIVE only — its numbers, axes and proportions are NOT real data; for accurate figures leave a clean area (real numbers are composited precisely later).
 
 TEXT HANDLING (critical):
-- If mode = "overlay": the image MUST be a CLEAN, TEXTLESS background — NO letters, numbers, words, or logos. Deliberately leave calm, uncluttered NEGATIVE SPACE with good contrast where the Korean copy will be overlaid later (size the empty area to fit the given copy length and placement).
-- If mode = "full": render the given Korean text in the image clearly with PERFECT, correct Hangul; do not distort or invent characters. Strong typographic hierarchy.
+- If mode = "overlay": the image MUST be a CLEAN, TEXTLESS background — NO letters, numbers, words, or logos. Keep the hero subject and all busy detail in the UPPER portion, and reserve a clean, low-detail band across the CENTER and LOWER THIRD (free of faces or focal objects) with strong, even contrast for the Korean copy overlaid later. For tall 9:16 / 4:5, reserve the lower half; for 1:1, the center-to-lower band.
+- If mode = "full": render the given Korean text with PERFECT, correct modern Hangul — use ONLY the exact strings provided; never distort, invent, translate, or add characters/captions. Make the headline DOMINANT and large and any sub a clearly smaller subtitle (never a paragraph wall); if text risks garbling, use fewer, larger words. Leave generous whitespace so the type breathes.
 
 INPUT IMAGES (when provided):
 - If a base reference photo is provided (isEdit), write a TRANSFORMATION instruction: preserve its core subject, restyle it into the ad direction.
@@ -94,6 +108,10 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
   lines.push(`key message to communicate (lead with this): ${brief.keyMessage.trim()}`);
   if (brief.concept?.trim()) lines.push(`visual direction / scene (optional): ${brief.concept.trim()}`);
   if (brief.tone?.trim()) lines.push(`tone: ${brief.tone.trim()}`);
+  if (brief.palette?.trim())
+    lines.push(`color palette (use ONLY these named colors): ${brief.palette.trim()}`);
+  if (brief.lighting?.trim()) lines.push(`lighting: ${brief.lighting.trim()}`);
+  if (brief.mood?.trim()) lines.push(`mood: ${brief.mood.trim()}`);
   if (brief.brandHint?.trim()) lines.push(`brand cues: ${brief.brandHint.trim()}`);
   if (brief.designRef) lines.push(`design reference (mimic this style): ${formatDesignReference(brief.designRef)}`);
 
@@ -105,11 +123,29 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
       c.cta ? `cta "${c.cta}"` : null,
     ].filter(Boolean);
     if (brief.mode === "overlay") {
+      const zone =
+        brief.copyPosition === "top"
+          ? "the upper area"
+          : brief.copyPosition === "bottom"
+            ? "the lower third"
+            : "the center-to-lower area";
       lines.push(
-        `copy that will be overlaid LATER (do NOT draw it; reserve space for it): ${copyParts.join(", ")}`,
+        `copy that will be overlaid LATER (do NOT draw it; reserve a clean, low-detail band at ${zone} with strong even contrast for it): ${copyParts.join(", ")}`,
       );
     } else {
-      lines.push(`Korean text to render in the image: ${copyParts.join(", ")}`);
+      // full: 헤드라인/서브만 굽고, CTA는 굽지 않고 후합성(또렷한 브랜드 버튼).
+      const renderParts = [
+        c.headline ? `headline "${c.headline}"` : null,
+        c.sub ? `sub "${c.sub}"` : null,
+      ].filter(Boolean);
+      if (renderParts.length)
+        lines.push(
+          `Korean text to render in the image (headline dominant and large, sub a smaller subtitle): ${renderParts.join(", ")}`,
+        );
+      if (c.cta)
+        lines.push(
+          `reserve a clean, calm band near the bottom for a call-to-action button added separately — do NOT draw the button or its text "${c.cta}"`,
+        );
     }
   }
   return lines.join("\n");

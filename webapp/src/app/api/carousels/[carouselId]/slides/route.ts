@@ -3,11 +3,13 @@ import { getBrand } from "@/lib/memory";
 import {
   generateSlideDetails,
   renderCarouselSlides,
+  resolveCarouselRenderMode,
 } from "@/lib/carousel/generate";
 import {
   getCarousel,
   insertSlideSkeletons,
   setCarouselBg,
+  setCarouselRenderMode,
   setCarouselStatus,
 } from "@/lib/carousel/queries";
 import { BundleConceptSchema } from "@/lib/carousel/prompts";
@@ -54,6 +56,17 @@ export async function POST(
         carouselId,
       });
 
+      // 텍스트 안전 게이트: 공지·정보형이거나 정확한 수치·날짜·연락처·긴 본문이 있으면
+      // full(AI 일체형)을 overlay(후합성)로 강등하고 그 결과를 영속화한다(DB·UI·편집 일관).
+      const effectiveRenderMode = resolveCarouselRenderMode(
+        data.carousel.render_mode,
+        data.carousel.content_mode,
+        details,
+      );
+      if (effectiveRenderMode !== data.carousel.render_mode) {
+        await setCarouselRenderMode(carouselId, effectiveRenderMode);
+      }
+
       // 1) 텍스트만 있는 스켈레톤 먼저 기록 → 클라이언트 폴링이 골격을 즉시 본다.
       const rows = await insertSlideSkeletons(carouselId, details);
       const rowIdByIndex = new Map(rows.map((r) => [r.idx, r.id]));
@@ -66,8 +79,13 @@ export async function POST(
         details,
         bgMode: data.carousel.bg_mode,
         contentMode: data.carousel.content_mode,
-        renderMode: data.carousel.render_mode,
+        renderMode: effectiveRenderMode,
         toneOverride: data.carousel.tone_override,
+        styleKnobs: {
+          lighting: data.carousel.style_lighting,
+          palette: data.carousel.style_palette,
+          mood: data.carousel.style_mood,
+        },
         designRef,
         // 전체 재생성("슬라이드 전체 다시 만들기")은 현재 템플릿·레퍼런스를 반영해야 하므로
         // shared 배경도 새로 생성한다(기존 bg_url 재사용 금지). 카피만 고치는 경로는

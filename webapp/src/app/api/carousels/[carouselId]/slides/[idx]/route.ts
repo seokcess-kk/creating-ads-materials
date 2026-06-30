@@ -55,8 +55,14 @@ export async function PATCH(
         concept: conceptParsed.success ? conceptParsed.data : null,
         contentMode: data.carousel.content_mode,
         toneOverride: data.carousel.tone_override,
+        styleKnobs: {
+          lighting: data.carousel.style_lighting,
+          palette: data.carousel.style_palette,
+          mood: data.carousel.style_mood,
+        },
         designRef,
         brandId: data.carousel.brand_id,
+        total: data.slides.length,
         slide: {
           index: updated.idx,
           role: updated.role,

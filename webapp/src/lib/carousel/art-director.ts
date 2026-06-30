@@ -22,6 +22,13 @@ export interface CarouselBgPrompts {
   backgrounds: { index: number; prompt: string }[];
 }
 
+/** 구조화 스타일 노브(선택, 영어 구문) — styleLock에 주입. */
+export type CarouselStyleKnobs = {
+  lighting?: string | null;
+  palette?: string | null;
+  mood?: string | null;
+};
+
 const BgItemSchema = z.object({
   index: z.number().int().min(0),
   prompt: z.string().min(20).max(2000),
@@ -119,16 +126,19 @@ function buildSystem(
     return `You are an expert advertising ART DIRECTOR + prompt engineer for the "gpt-image" text-to-image model. You design COMPLETE Korean Instagram card-news slides (1:1, 1080x1080) — background, layout, AND typeset Korean text together, like a real graphic designer.
 
 You produce:
-1) styleLock: ONE shared DESIGN SYSTEM line (palette, type style, layout grid, decorative motifs, mood) that EVERY slide reuses so the carousel reads as one cohesive set.
+1) styleLock: ONE shared DESIGN SYSTEM line that EVERY slide reuses so the carousel reads as one cohesive set — it MUST name a medium/style token, a LIMITED palette (2-3 named colors), explicit lighting, type style, layout grid, decorative motifs and mood.
 2) slides: ONE prompt per slide that RENDERS that slide's given Korean text as a polished designed slide.
 
 HARD RULES (Korean text rendering is the #1 priority):
+- Begin EVERY slide prompt with the styleLock's medium/style token (so all slides read as ONE set), then the slide's scene/subject, then the typeset Korean text.
 - RENDER the given Korean text IN the image with PERFECT, correct modern Hangul. Use ONLY the exact Korean strings provided — never distort, misspell, translate, or invent characters, and add no extra text/captions/lorem.
 - Strong typographic hierarchy: kicker small, headline dominant and large, body smaller. Real editorial layout (grid, alignment, generous whitespace) — NOT just centered text on a photo.
 - Integrate text WITH the imagery (text panels, color blocks, intentional placement), not text floating over a busy photo. Ensure high text contrast.
 - EVERY slide reuses the SAME design system (palette, type feel, layout structure, decorative elements) per styleLock — vary the content/scene per slide, never the system. The 5 slides must look like ONE set.
 - On-topic, concrete subject imagery tied to the product/topic and each slide's motif (coffee brand → espresso/latte/cafe; gym → training). Relevant beats abstract.
 - 1:1 framing. NO brand logo or wordmark (composited separately). Advertising-grade, premium, clean.
+- Do NOT draw page numbers, pagination dots, or a slide counter — leave a small clean margin at the very bottom; the page number is composited separately.
+- Any chart, graph or infographic is DECORATIVE only — its numbers and axes are NOT real data; never invent precise statistics, and for real figures leave a clean area for composited numbers.
 - If text might garble, prefer fewer words, larger — legibility over density.
 
 TONE:
@@ -147,14 +157,16 @@ Output ONLY via the ${TOOL} tool. Prompt text (design directions) in English; th
   return `You are an expert advertising ART DIRECTOR and prompt engineer for the "gpt-image" text-to-image model, specializing in BACKGROUNDS for Korean Instagram card-news carousels (1:1, 1080x1080).
 
 You receive a carousel plan (concept + per-slide roles/motifs) and produce:
-1) styleLock: ONE short shared visual-style line (palette, lighting, texture, mood, treatment) that ALL slides share so the carousel reads as a single cohesive set.
+1) styleLock: ONE short shared visual-style line that ALL slides share so the carousel reads as a single cohesive set — it MUST name a medium/style token, a LIMITED palette (2-3 named colors), explicit lighting, texture, mood and treatment.
 2) backgrounds: the requested number of CLEAN, TEXTLESS background prompts in English.
 
 HARD RULES for every background prompt:
+- Begin EVERY background prompt with the styleLock's medium/style token, then the scene/composition, then the reserved text zone, then exclusions — so all slides read as ONE set.
 - The image MUST contain NO text, letters, numbers, words, or logos of any kind.
 - Reserve ONE clean, low-detail area (center or lower third) for the Korean copy overlaid LATER — keep that zone calm and uncluttered even if the rest of the frame carries subject imagery.
 - ${readabilityRule}
 - 1:1 square framing. No people holding/wearing readable text; no objects with readable text.
+- Any chart, graph or infographic is DECORATIVE only — its numbers/axes are not real data; keep it abstract (real figures are overlaid later).
 - Advertising-grade: intentional focal idea, clean professional finish. Not flashy clip-art.
 
 SUBJECT MATTER (make it relatable):
@@ -184,6 +196,7 @@ function buildBrief(
     designRef?: DesignReference | null;
     templateStyle?: string | null;
     renderMode?: CarouselRenderMode;
+    styleKnobs?: CarouselStyleKnobs | null;
   },
   count: number,
 ): string {
@@ -194,6 +207,15 @@ function buildBrief(
     : "";
   const refLine = params.designRef
     ? `\n# DESIGN REFERENCE (follow this closely as the styleLock foundation — palette/mood/composition${isFull ? "/typography" : ""})\n${formatDesignReference(params.designRef)}\n`
+    : "";
+  const k = params.styleKnobs;
+  const knobLines = [
+    k?.palette?.trim() ? `palette (use ONLY these named colors): ${k.palette.trim()}` : null,
+    k?.lighting?.trim() ? `lighting: ${k.lighting.trim()}` : null,
+    k?.mood?.trim() ? `mood: ${k.mood.trim()}` : null,
+  ].filter(Boolean);
+  const knobBlock = knobLines.length
+    ? `\n# USER STYLE DIRECTION (fold these into the styleLock)\n${knobLines.join("\n")}\n`
     : "";
 
   const slideLines = params.details
@@ -225,7 +247,7 @@ function buildBrief(
   if (isFull) {
     return `mode: full — produce ONE complete designed-slide prompt per slide index below, using that exact index. Each prompt RENDERS that slide's exact Korean text.
 slides requested: ${count}
-${tplLine}${refLine}
+${tplLine}${refLine}${knobBlock}
 # CAROUSEL CONCEPT (ground the imagery in this product/topic)
 bigIdea: ${c.bigIdea}
 coreMessage: ${c.coreMessage}
@@ -246,7 +268,7 @@ Produce styleLock + ${count} slide prompt(s) via ${TOOL}.`;
 
   return `${modeLine}
 backgrounds requested: ${count}
-${tplLine}${refLine}
+${tplLine}${refLine}${knobBlock}
 # CAROUSEL CONCEPT
 bigIdea: ${c.bigIdea}
 coreMessage: ${c.coreMessage}
@@ -273,6 +295,8 @@ export async function buildCarouselBackgroundPrompts(params: {
   designRef?: DesignReference | null;
   /** 선택된 템플릿의 배경 스타일 가이드(styleLock 기반) */
   templateStyle?: string | null;
+  /** 사용자 구조화 스타일 노브(선택) — styleLock에 주입 */
+  styleKnobs?: CarouselStyleKnobs | null;
   /** 오버레이 텍스트 색 계열 — 배경의 텍스트 영역 명도를 맞추기 위해 */
   textScheme?: "light" | "dark";
   /** full = 텍스트까지 구운 완성형 슬라이드 프롬프트 / overlay(기본) = 텍스트 없는 배경 */

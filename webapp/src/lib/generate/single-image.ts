@@ -1,5 +1,5 @@
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
-import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
+import { renderComposite } from "@/lib/canvas/compositor";
 import { resizeToChannel } from "@/lib/canvas/resize";
 import {
   uploadGeneratedImage,
@@ -11,7 +11,9 @@ import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { getVariant, updateVariantImage } from "./queries";
-import { singleAdConfig, type SingleAdLogo } from "./render";
+import { singleAdConfig, fullHybridConfig, type SingleAdLogo } from "./render";
+// 레퍼런스 타이포 → 설치 한글 폰트 매핑(캐러셀 인프라 재사용 — 단일 overlay에도 적용).
+import { fontSetForCategory } from "@/lib/carousel/style";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
@@ -22,6 +24,7 @@ import {
 } from "./prompt";
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
+import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import type {
   SingleImageInput,
   SingleImageResult,
@@ -29,6 +32,8 @@ import type {
   SingleRenderMode,
   ReferenceMode,
   DesignReference,
+  CopyPosition,
+  ReferenceFontCategory,
 } from "./types";
 
 export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.3.0";
@@ -44,25 +49,11 @@ const STYLE_HINTS = [
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
   if (!hasText) return "full"; // 텍스트 없으면 순수 비주얼
-  return input.renderMode === "full" ? "full" : "overlay";
-}
-
-/** 로고만 오버레이(어둠 처리 없이). full/edit 모드에서 베이킹된 이미지 위에 로고 1개를 얹는다. */
-async function composeLogoOnly(buf: Buffer, logo: SingleAdLogo): Promise<Buffer> {
-  const config: ComposeConfig = {
-    backgroundImageUrl: "",
-    output: { bucket: "", path: "" },
-    overlay: { top: false, bottom: false },
-    logo: {
-      buffer: logo.buffer,
-      url: logo.url,
-      position: logo.position ?? "top-left",
-      widthRatio: 0.16,
-      marginRatio: 0.05,
-      backingColor: logo.backingColor ?? null,
-    },
-  };
-  return renderComposite(buf, config);
+  if (input.renderMode !== "full") return "overlay";
+  // 'AI 일체형'(full) 요청이라도 정확한 날짜·금액·연락처나 긴 본문이 있으면 후합성으로 안전 강등
+  // (모델이 구운 정확 데이터는 오타·날조 위험 + 수정 불가). 가이드: 정확 데이터는 굽지 말 것.
+  if (anyNeedsOverlay(input.headline, input.sub, input.cta)) return "overlay";
+  return "full";
 }
 
 /**
@@ -131,6 +122,10 @@ export async function generateSingleImageVariants(
     concept: input.concept ?? null,
     copy: { headline: input.headline, sub: input.sub, cta: input.cta },
     tone: input.tone,
+    lighting: input.lighting ?? null,
+    palette: input.palette ?? null,
+    mood: input.mood ?? null,
+    copyPosition: input.copyPosition ?? null,
     brandHint: brand.promptHint || null,
     designRef,
     aspectRatio,
@@ -153,6 +148,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -165,6 +164,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -174,6 +177,10 @@ export async function generateSingleImageVariants(
         keyMessage: input.keyMessage,
         concept: input.concept,
         tone: input.tone,
+        lighting: input.lighting,
+        palette: input.palette,
+        mood: input.mood,
+        copyPosition: input.copyPosition,
         brand,
         styleHint,
         designRef: designRefText,
@@ -246,6 +253,9 @@ export async function generateSingleImageVariants(
           cta: input.cta,
           logo: logoForCompositor(placement),
           brandColor: brand.ctaColor,
+          copyPosition: input.copyPosition,
+          // 레퍼런스 타이포 카테고리가 있으면 그 폰트로(없으면 Pretendard).
+          fontSet: designRef?.fontCategory ? fontSetForCategory(designRef.fontCategory) : null,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -265,6 +275,8 @@ export async function generateSingleImageVariants(
           logoPosition: placement?.position ?? null,
           logoBacking: placement?.backingColor ?? null,
           brandColor: brand.ctaColor,
+          copyPosition: input.copyPosition ?? null,
+          fontCategory: designRef?.fontCategory ?? null,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -288,13 +300,19 @@ export async function generateSingleImageVariants(
       // 로고는 모델에 굽지 않고 여기서 1개만 오버레이(어둠 처리 없이 로고만). 배경 대비로 모서리·에셋 선택.
       const fullPlacement = await planLogoPlacement(finalBuf, logoAssets);
       const fullLogo = logoForCompositor(fullPlacement);
-      if (fullLogo) {
-        finalBuf = await composeLogoOnly(finalBuf, fullLogo);
-        meta.logo = {
-          url: fullPlacement?.url ?? null,
-          position: fullPlacement?.position ?? null,
-          backing: fullPlacement?.backingColor ?? null,
-        };
+      // full도 CTA는 굽지 않고 후합성(브랜드색·또렷한 버튼). 로고도 함께(스크림 없이 — 베이킹 디자인 보존).
+      if (fullLogo || input.cta) {
+        finalBuf = await renderComposite(
+          finalBuf,
+          fullHybridConfig({ cta: input.cta, logo: fullLogo, brandColor: brand.ctaColor }),
+        );
+        if (fullLogo)
+          meta.logo = {
+            url: fullPlacement?.url ?? null,
+            position: fullPlacement?.position ?? null,
+            backing: fullPlacement?.backingColor ?? null,
+          };
+        if (input.cta) meta.cta = input.cta;
       }
       const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
         mimeType: "image/png",
@@ -370,6 +388,8 @@ export async function recomposeVariant(
       logoPosition?: SingleAdLogo["position"];
       logoBacking?: string | null;
       brandColor?: string | null;
+      copyPosition?: CopyPosition | null;
+      fontCategory?: ReferenceFontCategory | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -385,6 +405,10 @@ export async function recomposeVariant(
         }
       : null,
     brandColor: compose.brandColor ?? null,
+    // 생성 시 카피 위치를 그대로 재현(텍스트존 일치).
+    copyPosition: compose.copyPosition ?? null,
+    // 생성 시 폰트(레퍼런스 타이포)도 그대로 재현.
+    fontSet: compose.fontCategory ? fontSetForCategory(compose.fontCategory) : null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).

@@ -5,6 +5,8 @@ import { PageContainer } from "@/components/layout/PageContainer";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/button";
+import { DownloadButton } from "@/components/common/DownloadButton";
+import { DownloadThumb } from "@/components/common/DownloadThumb";
 import { listGenerations, type GenerationSummary } from "@/lib/generate/queries";
 import { listCarousels } from "@/lib/carousel/queries";
 import type { CarouselRow } from "@/lib/carousel/types";
@@ -57,20 +59,12 @@ export default async function GalleryPage() {
             <div key={g.generation.id} className="space-y-1.5">
               <div className="flex flex-wrap gap-2">
                 {g.variants.map((v) => (
-                  <a
+                  <DownloadThumb
                     key={v.id}
-                    href={v.url}
-                    download
-                    target="_blank"
-                    rel="noreferrer"
-                    className="block"
-                  >
-                    <img
-                      src={v.url}
-                      alt={v.label ?? "image"}
-                      className="h-28 w-28 rounded-md border object-cover"
-                    />
-                  </a>
+                    url={v.url}
+                    filename={`ad_${v.label ?? v.id}.png`}
+                    alt={v.label ?? "이미지"}
+                  />
                 ))}
               </div>
             </div>
@@ -99,12 +93,14 @@ export default async function GalleryPage() {
                 </CardHeader>
                 <CardContent>
                   {c.status === "ready" ? (
-                    <a
-                      href={`/api/carousels/${c.id}/download`}
-                      className="text-xs text-primary underline"
+                    <DownloadButton
+                      url={`/api/carousels/${c.id}/download`}
+                      filename={`carousel_${c.id}.zip`}
+                      className="text-xs text-primary hover:underline"
+                      successToast="zip 저장됨"
                     >
                       zip 다운로드
-                    </a>
+                    </DownloadButton>
                   ) : (
                     <span className="text-xs text-muted-foreground">
                       미완성

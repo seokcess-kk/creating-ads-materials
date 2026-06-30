@@ -69,6 +69,32 @@ export async function insertVariants(
   return (retry.data ?? []) as ImageVariantRow[];
 }
 
+/** 편집본을 새 후보 행으로 추가(원본은 보존, 형제로 나란히). selected는 건드리지 않는다. */
+export async function insertEditedVariant(
+  generationId: string,
+  variant: { url: string; path: string; label: string; meta: Record<string, unknown> },
+): Promise<ImageVariantRow> {
+  const supabase = await createClient();
+  const base = {
+    generation_id: generationId,
+    url: variant.url,
+    storage_path: variant.path,
+    label: variant.label,
+    selected: false,
+    meta_json: variant.meta,
+  };
+  const first = await supabase
+    .from("image_variants")
+    .insert({ ...base, bg_url: null })
+    .select()
+    .single();
+  if (!first.error) return first.data as ImageVariantRow;
+  // 027 미적용 등 bg_url 컬럼 부재 시 제외 재시도.
+  const retry = await supabase.from("image_variants").insert(base).select().single();
+  if (retry.error) throw retry.error;
+  return retry.data as ImageVariantRow;
+}
+
 export async function getVariant(variantId: string): Promise<ImageVariantRow | null> {
   const supabase = await createClient();
   const { data, error } = await supabase

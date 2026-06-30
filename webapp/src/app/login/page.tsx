@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/common/SubmitButton";
 import { signIn } from "./actions";
 
 // searchParams 사용으로 자동 dynamic — 명시 불필요
@@ -44,9 +44,9 @@ export default async function LoginPage({
                 {error}
               </p>
             )}
-            <Button type="submit" className="w-full">
+            <SubmitButton className="w-full" pendingLabel="로그인 중…">
               로그인
-            </Button>
+            </SubmitButton>
           </form>
         </CardContent>
       </Card>

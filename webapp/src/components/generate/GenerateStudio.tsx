@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { LIGHTING_PRESETS, PALETTE_PRESETS, MOOD_PRESETS } from "@/lib/style-presets";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
+import { DownloadButton } from "@/components/common/DownloadButton";
+import { GenerationProgress } from "@/components/common/GenerationProgress";
+import { useNotifications } from "@/components/notifications/NotificationContext";
 
 interface BrandOption {
   id: string;
@@ -55,22 +60,24 @@ const ASPECTS: Array<{ value: "1:1" | "4:5" | "9:16" | "16:9"; label: string }> 
   { value: "16:9", label: "가로 16:9" },
 ];
 
-async function downloadImage(url: string, filename: string) {
-  try {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, "_blank");
-  }
-}
+const COPY_POS_PRESETS: Array<{ v: "" | "top" | "center" | "bottom"; l: string }> = [
+  { v: "", l: "자동" },
+  { v: "top", l: "상단" },
+  { v: "center", l: "중앙" },
+  { v: "bottom", l: "하단" },
+];
+
+// 선택 이미지 편집 op(결과 이미지를 base로 editImage — "바꿀 것 하나 + 나머지 유지").
+type EditOp = "localize" | "recolor" | "background" | "add" | "remove";
+const EDIT_OPS: { v: EditOp; l: string }[] = [
+  { v: "localize", l: "문구 교체/번역" },
+  { v: "background", l: "배경만 변경" },
+  { v: "recolor", l: "색만 변경" },
+  { v: "add", l: "요소 추가" },
+  { v: "remove", l: "요소 제거" },
+];
+const EDIT_INPUT_CLS =
+  "h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50";
 
 // 응답을 JSON으로 안전하게 파싱. 비-JSON(타임아웃 시 플랫폼이 내는 "An error o..." 평문/HTML 등)이면
 // 'Unexpected token' 대신 사람이 읽을 수 있는 메시지로 변환한다. 응답 실패(!ok)도 함께 처리.
@@ -106,6 +113,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [brandId, setBrandId] = useState<string>("");
   const [bakeText, setBakeText] = useState(false);
   const [count, setCount] = useState(3);
+  // 구조화 스타일 노브(프리셋 칩) — 빈 값이면 아트디렉터 자율.
+  const [lighting, setLighting] = useState("");
+  const [palette, setPalette] = useState("");
+  const [mood, setMood] = useState("");
+  const [copyPosition, setCopyPosition] = useState<"" | "top" | "center" | "bottom">("");
 
   // 레퍼런스
   const [refUrl, setRefUrl] = useState<string | null>(null);
@@ -121,12 +133,22 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [copyOptions, setCopyOptions] = useState<CopyOption[]>([]);
 
   const [generating, setGenerating] = useState(false);
+  const [genCount, setGenCount] = useState(3); // 생성 시작 시점의 후보 수(스켈레톤 슬롯 수)
   const [generationId, setGenerationId] = useState<string | null>(null);
   const [variants, setVariants] = useState<ResultVariant[]>([]);
   const [previewIdx, setPreviewIdx] = useState<number | null>(null);
 
+  const { startOp, completeOp, failOp } = useNotifications();
+
   // 라이트박스 내 카피 수정 → 재합성(이미지 모델 호출 없음). 카피는 후보별(variant.copy)로 보관.
   const [reBusy, setReBusy] = useState(false);
+
+  // 선택 이미지 편집(editImage 기반) — 디자인 보존하며 한 곳만 변경.
+  const [editOp, setEditOp] = useState<"" | EditOp>("");
+  const [editFields, setEditFields] = useState({
+    from: "", to: "", target: "", color: "", scene: "", element: "", position: "",
+  });
+  const [editBusy, setEditBusy] = useState(false);
 
   const canSubmit = keyMessage.trim().length >= 4;
   const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
@@ -226,8 +248,21 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       return;
     }
     setGenerating(true);
+    setGenCount(count);
     setVariants([]);
     setGenerationId(null);
+    const opId = startOp({
+      kind: "visual",
+      title: "이미지 생성",
+      subtitle: `${count}장 · ${aspectRatio}${bakeText ? " · AI 일체형" : ""}`,
+      estimatedSeconds: bakeText ? 55 : 40,
+      steps: [
+        { label: "프롬프트·브랜드 구성", atSec: 0 },
+        { label: "이미지 생성", atSec: 6 },
+        { label: "한글 텍스트 합성", atSec: bakeText ? 40 : 28 },
+      ],
+      celebrate: false, // 결과가 화면에 바로 뜨므로 완료 배너는 생략(진행바만 추적)
+    });
     try {
       const res = await fetch("/api/generate/image", {
         method: "POST",
@@ -239,6 +274,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           sub: sub.trim() || null,
           cta: cta.trim() || null,
           tone: tone.trim() || null,
+          lighting: lighting || null,
+          palette: palette || null,
+          mood: mood || null,
+          copyPosition: copyPosition || null,
           aspectRatio,
           referenceImageUrl: refUrl,
           referenceMode: refUrl ? refMode : undefined,
@@ -260,18 +299,26 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       );
       setGenerationId(data.generationId ?? null);
       const failed = (data.failures ?? []).length;
+      completeOp(opId, {
+        subtitle: `${data.variants.length}장 생성됨${failed ? ` · ${failed}장 실패` : ""}`,
+      });
       toast.success(
         `이미지 ${data.variants.length}장 생성됨${failed ? ` (${failed}장 실패)` : ""}`,
       );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "오류");
+      const msg = e instanceof Error ? e.message : "오류";
+      failOp(opId, msg);
+      toast.error(msg);
     } finally {
       setGenerating(false);
     }
   }
 
   async function select(v: ResultVariant) {
-    setVariants((prev) => prev.map((x) => ({ ...x, selected: x.label === v.label })));
+    // 편집본은 op별 라벨이 중복될 수 있으므로 id로 선택 매칭(없을 때만 라벨 폴백).
+    setVariants((prev) =>
+      prev.map((x) => ({ ...x, selected: v.id ? x.id === v.id : x.label === v.label })),
+    );
     if (generationId && v.id) {
       try {
         await fetch(`/api/generate/image/${generationId}/select`, {
@@ -320,6 +367,52 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       toast.error(e instanceof Error ? e.message : "오류");
     } finally {
       setReBusy(false);
+    }
+  }
+
+  const setEF = (k: keyof typeof editFields, val: string) =>
+    setEditFields((p) => ({ ...p, [k]: val }));
+
+  // op별 필수 입력 충족 여부.
+  const editReady =
+    editOp === "localize"
+      ? Boolean(editFields.from.trim() && editFields.to.trim())
+      : editOp === "background"
+        ? Boolean(editFields.scene.trim())
+        : editOp === "recolor"
+          ? Boolean(editFields.color.trim())
+          : editOp === "add"
+            ? Boolean(editFields.element.trim())
+            : editOp === "remove"
+              ? Boolean(editFields.target.trim())
+              : false;
+
+  // 선택 이미지 편집 — 결과 이미지를 base로 editImage("바꿀 것 하나 + 나머지 유지"). 새 후보로 추가.
+  async function applyEdit(v: ResultVariant) {
+    if (!generationId) {
+      toast.error("저장된 생성이 없어 편집할 수 없어요");
+      return;
+    }
+    if (!editOp || !editReady) return;
+    setEditBusy(true);
+    try {
+      const res = await fetch(`/api/generate/image/${generationId}/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sourceUrl: v.url, op: editOp, ...editFields, aspectRatio }),
+      });
+      const data = await readJson(res, "편집 실패");
+      const nv = data.variant as Omit<ResultVariant, "copy">;
+      const newIdx = variants.length;
+      setVariants((prev) => [...prev, { ...nv, copy: { headline: "", sub: "", cta: "" } }]);
+      setPreviewIdx(newIdx);
+      setEditOp("");
+      setEditFields({ from: "", to: "", target: "", color: "", scene: "", element: "", position: "" });
+      toast.success("편집본이 추가되었습니다");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "오류");
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -464,9 +557,14 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 type="button"
                 onClick={autoCopy}
                 disabled={!canSubmit || copyLoading || generating}
-                className="text-[11px] text-primary underline disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[11px] text-primary transition-transform hover:underline active:scale-95 disabled:opacity-50 disabled:active:scale-100"
               >
-                {copyLoading ? "작성 중…" : "✨ 카피 자동 작성"}
+                {copyLoading ? (
+                  <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                ) : (
+                  <SparklesIcon className="size-3" aria-hidden />
+                )}
+                {copyLoading ? "작성 중…" : "카피 자동 작성"}
               </button>
             </div>
             {copyOptions.length > 0 && (
@@ -592,6 +690,60 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
             </div>
           </div>
 
+          <div className="space-y-2 rounded-lg border p-3">
+            <Label className="text-xs text-muted-foreground">분위기·조명·색 (선택)</Label>
+            {[
+              { label: "조명", presets: LIGHTING_PRESETS, value: lighting, set: setLighting },
+              { label: "팔레트", presets: PALETTE_PRESETS, value: palette, set: setPalette },
+              { label: "무드", presets: MOOD_PRESETS, value: mood, set: setMood },
+            ].map((row) => (
+              <div key={row.label} className="space-y-1">
+                <Label className="text-[11px]">{row.label}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {row.presets.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => row.set(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        row.value === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!bakeText && (
+              <div className="space-y-1">
+                <Label className="text-[11px]">카피 위치</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {COPY_POS_PRESETS.map((o) => (
+                    <button
+                      key={o.l}
+                      type="button"
+                      disabled={generating}
+                      onClick={() => setCopyPosition(o.v)}
+                      className={cn(
+                        "rounded-lg border px-2.5 py-1 text-xs transition-colors disabled:opacity-50",
+                        copyPosition === o.v
+                          ? "border-foreground font-medium"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {hasText && (
             <label className="flex items-center gap-2 text-xs text-muted-foreground">
               <input
@@ -600,28 +752,62 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 onChange={(e) => setBakeText(e.target.checked)}
                 disabled={generating}
               />
-              AI가 텍스트도 직접 그리기 (끄면 한글 텍스트를 안정적으로 오버레이)
+              AI 일체형 시안 — 글자까지 AI가 그림 (정확한 숫자·날짜·연락처는 자동으로 또렷하게 오버레이)
             </label>
           )}
 
-          <Button onClick={generate} disabled={!canSubmit || generating}>
-            {generating ? "생성 중… (~40초)" : "이미지 생성 →"}
+          <Button onClick={generate} disabled={!canSubmit} pending={generating}>
+            {generating ? "생성 중…" : "이미지 생성 →"}
           </Button>
         </CardContent>
       </Card>
 
-      {variants.length > 0 && (
+      {(generating || variants.length > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               생성 결과
-              <Badge variant="secondary">{variants.length}장</Badge>
+              {generating ? (
+                <Badge variant="outline" className="gap-1">
+                  <Loader2Icon className="size-3 animate-spin" aria-hidden />
+                  생성 중
+                </Badge>
+              ) : (
+                <Badge variant="secondary">{variants.length}장</Badge>
+              )}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {generating && (
+              <GenerationProgress
+                estimatedSeconds={bakeText ? 55 : 40}
+                label={`이미지 ${genCount}장 만드는 중…`}
+              />
+            )}
+            {!generating && variants.length > 0 && (
+              <div className="space-y-1.5">
+                {bakeText && (
+                  <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    ⚠ AI가 글자를 직접 그렸어요 — 확대해 철자·줄바꿈을 확인하세요. 정확한 숫자·날짜는 ‘AI 일체형’을 끄거나 ‘이 이미지 편집’으로 고치는 걸 권장합니다.
+                  </p>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  비율({aspectRatio})은 유도값이에요 — 정확한 픽셀 규격은 크롭/확장으로 맞추세요.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {variants.map((v, i) => (
-                <div key={v.label} className="space-y-1.5">
+              {generating &&
+                Array.from({ length: genCount }).map((_, i) => (
+                  <div
+                    key={`skeleton-${i}`}
+                    className="aspect-square animate-pulse rounded-md border border-border bg-muted"
+                    aria-hidden
+                  />
+                ))}
+              {!generating &&
+                variants.map((v, i) => (
+                <div key={v.id ?? `${v.label}-${i}`} className="space-y-1.5">
                   <button
                     type="button"
                     onClick={() => setPreviewIdx(i)}
@@ -650,13 +836,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     >
                       {v.selected ? "✓ 선택됨" : "선택"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => downloadImage(v.url, `ad_${v.label}.png`)}
-                      className="shrink-0 text-xs text-primary underline"
-                    >
-                      다운로드
-                    </button>
+                    <DownloadButton
+                      url={v.url}
+                      filename={`ad_${i + 1}_${v.label}.png`}
+                      className="shrink-0 text-xs text-primary hover:underline"
+                    />
                   </div>
                 </div>
               ))}
@@ -710,13 +894,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               >
                 {preview.selected ? "✓ 선택됨" : "선택"}
               </button>
-              <button
-                type="button"
-                onClick={() => downloadImage(preview.url, `ad_${preview.label}.png`)}
-                className="rounded-md border border-white/40 px-2 py-1 text-xs hover:bg-white/10"
-              >
-                다운로드
-              </button>
+              <DownloadButton
+                url={preview.url}
+                filename={`ad_${(previewIdx ?? 0) + 1}_${preview.label}.png`}
+                className="rounded-md border border-white/40 px-2 py-1 text-xs text-white hover:bg-white/10"
+              />
             </div>
 
             {preview.recomposable && previewIdx !== null && (
@@ -758,10 +940,76 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       preview.copy.cta.trim()
                     )
                   }
-                  className="rounded-md border border-white/40 px-3 py-1.5 text-xs text-white hover:bg-white/10 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-white/40 px-3 py-1.5 text-xs text-white transition-transform hover:bg-white/10 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
                 >
+                  {reBusy && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
                   {reBusy ? "재합성 중…" : "재합성 →"}
                 </button>
+              </div>
+            )}
+
+            {previewIdx !== null && generationId && (
+              <div className="w-full max-w-md space-y-2 rounded-lg border border-white/20 bg-white/5 p-3">
+                <div className="text-[11px] text-white/70">
+                  이 이미지 편집 — 디자인은 그대로 두고 한 곳만 바꿔요(문구·배경·색…)
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {EDIT_OPS.map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      disabled={editBusy}
+                      onClick={() => setEditOp(editOp === o.v ? "" : o.v)}
+                      className={cn(
+                        "rounded-md border px-2 py-1 text-xs transition-colors disabled:opacity-50",
+                        editOp === o.v
+                          ? "border-white bg-white/15 text-white"
+                          : "border-white/30 text-white/70 hover:bg-white/10",
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+                {editOp && (
+                  <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                    {editOp === "localize" && (
+                      <>
+                        <input value={editFields.from} onChange={(e) => setEF("from", e.target.value)} placeholder="바꿀 문구(원본)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.to} onChange={(e) => setEF("to", e.target.value)} placeholder="새 문구" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "background" && (
+                      <input value={editFields.scene} onChange={(e) => setEF("scene", e.target.value)} placeholder="새 배경(예: 따뜻한 카페 창가)" disabled={editBusy} className={cn(EDIT_INPUT_CLS, "sm:col-span-2")} />
+                    )}
+                    {editOp === "recolor" && (
+                      <>
+                        <input value={editFields.target} onChange={(e) => setEF("target", e.target.value)} placeholder="대상(예: 배경·버튼)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.color} onChange={(e) => setEF("color", e.target.value)} placeholder="색(예: 딥네이비)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "add" && (
+                      <>
+                        <input value={editFields.element} onChange={(e) => setEF("element", e.target.value)} placeholder="추가할 요소" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                        <input value={editFields.position} onChange={(e) => setEF("position", e.target.value)} placeholder="위치(예: 왼쪽 아래)" disabled={editBusy} className={EDIT_INPUT_CLS} />
+                      </>
+                    )}
+                    {editOp === "remove" && (
+                      <input value={editFields.target} onChange={(e) => setEF("target", e.target.value)} placeholder="제거할 요소" disabled={editBusy} className={cn(EDIT_INPUT_CLS, "sm:col-span-2")} />
+                    )}
+                  </div>
+                )}
+                {editOp && (
+                  <button
+                    type="button"
+                    onClick={() => applyEdit(preview)}
+                    disabled={editBusy || !editReady}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-white/40 px-3 py-1.5 text-xs text-white transition-transform hover:bg-white/10 active:scale-95 disabled:opacity-50 disabled:active:scale-100"
+                  >
+                    {editBusy && <Loader2Icon className="size-3 animate-spin" aria-hidden />}
+                    {editBusy ? "편집 중…(~20초)" : "편집 적용 →"}
+                  </button>
+                )}
               </div>
             )}
           </div>

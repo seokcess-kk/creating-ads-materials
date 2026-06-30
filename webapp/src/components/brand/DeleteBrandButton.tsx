@@ -76,7 +76,12 @@ export function DeleteBrandButton({
           <Button variant="outline" onClick={() => setOpen(false)} disabled={deleting}>
             취소
           </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={deleting}
+            pending={deleting}
+          >
             {deleting ? "삭제 중..." : "삭제"}
           </Button>
         </DialogFooter>
