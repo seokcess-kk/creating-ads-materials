@@ -315,7 +315,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   }
 
   async function select(v: ResultVariant) {
-    setVariants((prev) => prev.map((x) => ({ ...x, selected: x.label === v.label })));
+    // 편집본은 op별 라벨이 중복될 수 있으므로 id로 선택 매칭(없을 때만 라벨 폴백).
+    setVariants((prev) =>
+      prev.map((x) => ({ ...x, selected: v.id ? x.id === v.id : x.label === v.label })),
+    );
     if (generationId && v.id) {
       try {
         await fetch(`/api/generate/image/${generationId}/select`, {
@@ -404,6 +407,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       setVariants((prev) => [...prev, { ...nv, copy: { headline: "", sub: "", cta: "" } }]);
       setPreviewIdx(newIdx);
       setEditOp("");
+      setEditFields({ from: "", to: "", target: "", color: "", scene: "", element: "", position: "" });
       toast.success("편집본이 추가되었습니다");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "오류");
@@ -803,7 +807,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 ))}
               {!generating &&
                 variants.map((v, i) => (
-                <div key={v.label} className="space-y-1.5">
+                <div key={v.id ?? `${v.label}-${i}`} className="space-y-1.5">
                   <button
                     type="button"
                     onClick={() => setPreviewIdx(i)}
@@ -834,7 +838,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     </button>
                     <DownloadButton
                       url={v.url}
-                      filename={`ad_${v.label}.png`}
+                      filename={`ad_${i + 1}_${v.label}.png`}
                       className="shrink-0 text-xs text-primary hover:underline"
                     />
                   </div>
@@ -892,7 +896,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               </button>
               <DownloadButton
                 url={preview.url}
-                filename={`ad_${preview.label}.png`}
+                filename={`ad_${(previewIdx ?? 0) + 1}_${preview.label}.png`}
                 className="rounded-md border border-white/40 px-2 py-1 text-xs text-white hover:bg-white/10"
               />
             </div>

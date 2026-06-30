@@ -43,6 +43,7 @@ export function fullSlideFallbackPrompt(
     motif ? `Scene/subject: ${motif}.` : null,
     "Cohesive limited color palette and soft directional lighting.",
     "Strong typographic hierarchy, real editorial grid, generous whitespace, high text contrast, premium advertising quality. No logos or wordmarks.",
+    "Do NOT draw page numbers or a slide counter — leave a small clean bottom margin (the page number is composited separately).",
   ]
     .filter(Boolean)
     .join(" ");
