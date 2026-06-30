@@ -211,7 +211,7 @@ export async function updateSlideCopy(
 
 export async function updateSlideImage(
   slideId: string,
-  patch: { image_url: string; image_path: string },
+  patch: { image_url: string; image_path: string; bg_url?: string | null },
 ): Promise<CarouselSlideRow> {
   const supabase = await createClient();
   const { data, error } = await supabase

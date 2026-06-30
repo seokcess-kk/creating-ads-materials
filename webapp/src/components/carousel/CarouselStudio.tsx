@@ -432,7 +432,13 @@ export function CarouselStudio({
         prev.map((s) => (s.id === slide.id ? (data.slide as SlideRow) : s)),
       );
       if (opId) completeOp(opId, { subtitle: `슬라이드 ${slide.idx} 재합성 완료` });
-      toast.success(`슬라이드 ${slide.idx} 재합성됨`);
+      if (data.converted) {
+        toast.success(
+          `슬라이드 ${slide.idx} — 정확한 정보가 있어 또렷한 자막 방식으로 전환했어요`,
+        );
+      } else {
+        toast.success(`슬라이드 ${slide.idx} 재합성됨`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "오류";
       if (opId) failOp(opId, msg);
