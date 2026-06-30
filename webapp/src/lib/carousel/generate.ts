@@ -23,6 +23,7 @@ import {
   SHARED_BG_PROMPT,
   perSlideBgPrompt,
   fullSlideFallbackPrompt,
+  fullSlideOverlayConfig,
   slideConfig,
 } from "./render";
 import { buildCarouselBackgroundPrompts, type CarouselStyleKnobs } from "./art-director";
@@ -299,11 +300,15 @@ export async function renderCarouselSlides(params: {
           metadata: { carouselId: params.carouselId, idx: detail.index },
         },
       });
-      const buf = Buffer.from(img.base64, "base64");
+      // full도 페이지 번호는 굽지 않고 후합성(숫자 가독성·일관). 스크림 없이 슬로건만.
+      const composedBuf = await renderComposite(
+        Buffer.from(img.base64, "base64"),
+        fullSlideOverlayConfig(detail.index, total, style),
+      );
       const uploaded = await uploadBuffer(
         params.carouselId,
         `slide_${String(detail.index).padStart(2, "0")}`,
-        buf,
+        composedBuf,
       );
       if (rowId) {
         await setSlideRendered(rowId, {
@@ -412,6 +417,8 @@ export async function regenerateFullSlide(params: {
   designRef?: DesignReference | null;
   brandId?: string | null;
   slide: SlideDetail;
+  /** 슬라이드 총 개수 — 페이지 번호 후합성용. */
+  total: number;
 }): Promise<{ image_url: string; image_path: string }> {
   let prompt: string | null = null;
   if (params.concept) {
@@ -448,10 +455,19 @@ export async function regenerateFullSlide(params: {
       metadata: { carouselId: params.carouselId, idx: params.slide.index },
     },
   });
+  // full도 페이지 번호는 후합성(굽지 않음). 생성 때와 동일 스타일로 슬로건만.
+  const style = resolveStyle({
+    designRef: params.designRef ?? null,
+    template: getTemplate(params.concept?.template),
+  });
+  const composedBuf = await renderComposite(
+    Buffer.from(img.base64, "base64"),
+    fullSlideOverlayConfig(params.slide.index, params.total, style),
+  );
   const uploaded = await uploadBuffer(
     params.carouselId,
     `slide_${String(params.slide.index).padStart(2, "0")}_${Date.now().toString(36)}`,
-    Buffer.from(img.base64, "base64"),
+    composedBuf,
   );
   return { image_url: uploaded.url, image_path: uploaded.path };
 }

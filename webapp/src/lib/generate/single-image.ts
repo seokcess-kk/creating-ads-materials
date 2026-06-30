@@ -1,5 +1,5 @@
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
-import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
+import { renderComposite } from "@/lib/canvas/compositor";
 import { resizeToChannel } from "@/lib/canvas/resize";
 import {
   uploadGeneratedImage,
@@ -11,7 +11,7 @@ import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { getVariant, updateVariantImage } from "./queries";
-import { singleAdConfig, type SingleAdLogo } from "./render";
+import { singleAdConfig, fullHybridConfig, type SingleAdLogo } from "./render";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
@@ -51,24 +51,6 @@ function decideMode(input: SingleImageInput): SingleRenderMode {
   // (모델이 구운 정확 데이터는 오타·날조 위험 + 수정 불가). 가이드: 정확 데이터는 굽지 말 것.
   if (anyNeedsOverlay(input.headline, input.sub, input.cta)) return "overlay";
   return "full";
-}
-
-/** 로고만 오버레이(어둠 처리 없이). full/edit 모드에서 베이킹된 이미지 위에 로고 1개를 얹는다. */
-async function composeLogoOnly(buf: Buffer, logo: SingleAdLogo): Promise<Buffer> {
-  const config: ComposeConfig = {
-    backgroundImageUrl: "",
-    output: { bucket: "", path: "" },
-    overlay: { top: false, bottom: false },
-    logo: {
-      buffer: logo.buffer,
-      url: logo.url,
-      position: logo.position ?? "top-left",
-      widthRatio: 0.16,
-      marginRatio: 0.05,
-      backingColor: logo.backingColor ?? null,
-    },
-  };
-  return renderComposite(buf, config);
 }
 
 /**
@@ -312,13 +294,19 @@ export async function generateSingleImageVariants(
       // 로고는 모델에 굽지 않고 여기서 1개만 오버레이(어둠 처리 없이 로고만). 배경 대비로 모서리·에셋 선택.
       const fullPlacement = await planLogoPlacement(finalBuf, logoAssets);
       const fullLogo = logoForCompositor(fullPlacement);
-      if (fullLogo) {
-        finalBuf = await composeLogoOnly(finalBuf, fullLogo);
-        meta.logo = {
-          url: fullPlacement?.url ?? null,
-          position: fullPlacement?.position ?? null,
-          backing: fullPlacement?.backingColor ?? null,
-        };
+      // full도 CTA는 굽지 않고 후합성(브랜드색·또렷한 버튼). 로고도 함께(스크림 없이 — 베이킹 디자인 보존).
+      if (fullLogo || input.cta) {
+        finalBuf = await renderComposite(
+          finalBuf,
+          fullHybridConfig({ cta: input.cta, logo: fullLogo, brandColor: brand.ctaColor }),
+        );
+        if (fullLogo)
+          meta.logo = {
+            url: fullPlacement?.url ?? null,
+            position: fullPlacement?.position ?? null,
+            backing: fullPlacement?.backingColor ?? null,
+          };
+        if (input.cta) meta.cta = input.cta;
       }
       const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
         mimeType: "image/png",

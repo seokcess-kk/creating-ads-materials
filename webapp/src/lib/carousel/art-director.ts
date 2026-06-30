@@ -137,6 +137,7 @@ HARD RULES (Korean text rendering is the #1 priority):
 - EVERY slide reuses the SAME design system (palette, type feel, layout structure, decorative elements) per styleLock — vary the content/scene per slide, never the system. The 5 slides must look like ONE set.
 - On-topic, concrete subject imagery tied to the product/topic and each slide's motif (coffee brand → espresso/latte/cafe; gym → training). Relevant beats abstract.
 - 1:1 framing. NO brand logo or wordmark (composited separately). Advertising-grade, premium, clean.
+- Do NOT draw page numbers, pagination dots, or a slide counter — leave a small clean margin at the very bottom; the page number is composited separately.
 - If text might garble, prefer fewer words, larger — legibility over density.
 
 TONE:

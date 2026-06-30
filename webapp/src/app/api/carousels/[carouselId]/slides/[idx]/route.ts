@@ -62,6 +62,7 @@ export async function PATCH(
         },
         designRef,
         brandId: data.carousel.brand_id,
+        total: data.slides.length,
         slide: {
           index: updated.idx,
           role: updated.role,

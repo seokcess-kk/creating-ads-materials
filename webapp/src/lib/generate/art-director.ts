@@ -133,7 +133,19 @@ function buildBriefText(brief: CreativeBrief, count: number): string {
         `copy that will be overlaid LATER (do NOT draw it; reserve a clean, low-detail band at ${zone} with strong even contrast for it): ${copyParts.join(", ")}`,
       );
     } else {
-      lines.push(`Korean text to render in the image: ${copyParts.join(", ")}`);
+      // full: 헤드라인/서브만 굽고, CTA는 굽지 않고 후합성(또렷한 브랜드 버튼).
+      const renderParts = [
+        c.headline ? `headline "${c.headline}"` : null,
+        c.sub ? `sub "${c.sub}"` : null,
+      ].filter(Boolean);
+      if (renderParts.length)
+        lines.push(
+          `Korean text to render in the image (headline dominant and large, sub a smaller subtitle): ${renderParts.join(", ")}`,
+        );
+      if (c.cta)
+        lines.push(
+          `reserve a clean, calm band near the bottom for a call-to-action button added separately — do NOT draw the button or its text "${c.cta}"`,
+        );
     }
   }
   return lines.join("\n");

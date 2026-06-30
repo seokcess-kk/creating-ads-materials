@@ -109,3 +109,40 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
 
   return config;
 }
+
+// full/edit 모드용 경량 후합성 — 베이킹된 디자인 위에 '굽지 않는' 정밀 요소(CTA 버튼·로고)만
+// 스크림 없이 올린다(그라데이션/스크림은 베이킹된 글자를 덮으므로 미사용). CTA는 자체 배경색으로 가독.
+export function fullHybridConfig(input: {
+  cta?: string | null;
+  logo?: SingleAdLogo | null;
+  brandColor?: string | null;
+}): ComposeConfig {
+  const config: ComposeConfig = {
+    backgroundImageUrl: "",
+    output: { bucket: "", path: "" },
+    fontSet: singleAdFontSet(),
+    overlay: { top: false, bottom: false },
+  };
+  if (input.logo?.buffer || input.logo?.url) {
+    config.logo = {
+      buffer: input.logo.buffer,
+      url: input.logo.url,
+      position: input.logo.position ?? "top-left",
+      widthRatio: 0.16,
+      marginRatio: 0.05,
+      backingColor: input.logo.backingColor ?? null,
+    };
+  }
+  if (input.cta) {
+    config.cta = {
+      text: input.cta,
+      bgColor: input.brandColor ?? "#2563EB",
+      textColor: "#FFFFFF",
+      sizeRatio: 0.03,
+      yRatio: 0.86,
+      autoFit: true,
+      maxWidthRatio: 0.7,
+    };
+  }
+  return config;
+}

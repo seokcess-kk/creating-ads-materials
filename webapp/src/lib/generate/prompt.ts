@@ -114,7 +114,7 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
   const textLines: string[] = [];
   if (input.headline) textLines.push(`headline "${input.headline}"`);
   if (input.sub) textLines.push(`subtext "${input.sub}"`);
-  if (input.cta) textLines.push(`call-to-action button "${input.cta}"`);
+  // CTA는 굽지 않는다(컴포지터가 또렷한 브랜드 버튼으로 후합성 — 가이드: 슬로건/버튼은 굽지 말 것).
 
   return joinSentences([
     "Polished, professional Korean social-media advertisement design, clean modern advertising style.",
@@ -136,6 +136,9 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
     input.tone ? `Mood / tone: ${input.tone}.` : null,
     input.brand?.promptHint ? `Brand cues: ${input.brand.promptHint}.` : null,
     input.designRef ? `Design reference to mimic: ${input.designRef}.` : null,
+    input.cta
+      ? "Reserve a clean, calm band near the bottom for a call-to-action button added separately — do NOT draw a button or its text."
+      : null,
     "Do NOT draw any brand logo or wordmark (the logo is added separately afterwards).",
     "Strong visual hierarchy, generous whitespace, advertising-grade composition.",
   ]);

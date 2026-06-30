@@ -177,3 +177,24 @@ export function slideConfig(
   }
   return base;
 }
+
+// full 모드 슬라이드용 경량 후합성 — 베이킹된 디자인 위에 페이지 번호만 스크림 없이 올린다.
+// 숫자는 굽지 않는다(가이드: 정확한 숫자·페이지 카운터는 후합성). 본문/헤드라인/키커는 모델이 구웠다.
+export function fullSlideOverlayConfig(
+  slideIndex: number,
+  total: number,
+  style: CarouselStyle,
+): ComposeConfig {
+  return {
+    backgroundImageUrl: "",
+    output: { bucket: "", path: "" },
+    fontSet: style.fontSet,
+    overlay: { top: false, bottom: false },
+    slogan: {
+      text: `${String(slideIndex).padStart(2, "0")} / ${String(total).padStart(2, "0")}`,
+      color: style.colors.slogan,
+      sizeRatio: 0.02,
+      yRatio: 0.95,
+    },
+  };
+}
