@@ -121,7 +121,7 @@ function buildSystem(
   // ── full 모드: 모델이 텍스트까지 구운 완성형 디자인 슬라이드 ──
   if (renderMode === "full") {
     const fullRef = hasRef
-      ? `\n\nDESIGN REFERENCE (in the brief): follow its palette / mood / composition / layout / typography CLOSELY as the shared design system. Do NOT copy any logo or wordmark it contains.`
+      ? `\n\nDESIGN REFERENCE (in the brief): follow its palette / mood / composition / layout / typography CLOSELY as the shared design system. Use the reference's EXACT hex color values from the brief verbatim in the styleLock palette — never rename, approximate, or swap them. Do NOT copy any logo or wordmark it contains.`
       : "";
     return `You are an expert advertising ART DIRECTOR + prompt engineer for the "gpt-image" text-to-image model. You design COMPLETE Korean Instagram card-news slides (1:1, 1080x1080) — background, layout, AND typeset Korean text together, like a real graphic designer.
 
@@ -152,7 +152,7 @@ Output ONLY via the ${TOOL} tool. Prompt text (design directions) in English; th
       ? "Keep the reserved text zone BRIGHT, LIGHT and airy so DARK overlay text stays readable there; overall palette stays light/clean — no dark or busy patches where the text sits."
       : "Keep the reserved text zone DEEP and DARK enough that WHITE/light overlay text stays readable there — no bright or washed-out patches where the text sits.";
   const refRule = hasRef
-    ? `\n\nDESIGN REFERENCE (provided in the brief):\n- Follow the reference's palette / mood / composition / layout CLOSELY as the foundation of the styleLock, so the carousel feels designed after it.\n- Still obey every HARD RULE (textless, reserved readable text zone). Do not copy any text or logos the reference may contain.`
+    ? `\n\nDESIGN REFERENCE (provided in the brief):\n- Follow the reference's palette / mood / composition / layout CLOSELY as the foundation of the styleLock, so the carousel feels designed after it.\n- Use the reference's EXACT hex color values given in the brief verbatim in the styleLock palette — never rename, approximate, or substitute them.\n- Still obey every HARD RULE (textless, reserved readable text zone). Do not copy any text or logos the reference may contain.`
     : "";
   return `You are an expert advertising ART DIRECTOR and prompt engineer for the "gpt-image" text-to-image model, specializing in BACKGROUNDS for Korean Instagram card-news carousels (1:1, 1080x1080).
 

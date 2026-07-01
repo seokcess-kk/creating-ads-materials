@@ -1,5 +1,12 @@
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
-import { generateImage, editImage } from "@/lib/engines";
+import {
+  generateImage,
+  editImage,
+  type ImagePart,
+  type ImageSize,
+  type GeneratedImage,
+  type GenerateImageInput,
+} from "@/lib/engines";
 import { renderComposite, type ComposeConfig } from "@/lib/canvas/compositor";
 import { uploadGeneratedImage } from "@/lib/storage/generated-images";
 import { fetchAsBuffer, fetchAsBase64 } from "@/lib/utils/image-fetch";
@@ -61,6 +68,38 @@ async function mapWithConcurrency<T, R>(
 interface ClaudeContext {
   brandId?: string | null;
   carouselId?: string | null;
+}
+
+/**
+ * 레퍼런스 이미지가 있으면 editImage로 그 픽셀을 gpt-image에 직접 참조시켜(색·구도·무드가
+ * 텍스트 요약을 거치지 않고 강하게 반영된다) 새 이미지를 만든다. 없으면 일반 text-to-image.
+ * 레퍼런스는 '스타일 참조'로만 쓰고, 구체 콘텐츠(피사체·사진·문구·로고) 복제는 프롬프트로 억제한다.
+ * aspectRatio는 캐러셀 전용이라 1:1 고정.
+ */
+async function generateSlideImage(params: {
+  prompt: string;
+  referenceImage: ImagePart | null;
+  imageSize: ImageSize;
+  /** full 모드처럼 모델이 한글 텍스트를 구워야 하면 true — 레퍼런스의 글자는 복제 금지, 지정 한글만 렌더. */
+  rendersText: boolean;
+  usageContext: GenerateImageInput["usageContext"];
+}): Promise<GeneratedImage> {
+  const shared = {
+    aspectRatio: "1:1" as const,
+    imageSize: params.imageSize,
+    usageContext: params.usageContext,
+  };
+  if (!params.referenceImage) {
+    return generateImage({ prompt: params.prompt, ...shared });
+  }
+  const guard = params.rendersText
+    ? "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so this slide reads as designed after it. Build an ENTIRELY NEW slide: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers. Render ONLY the Korean text specified above."
+    : "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.";
+  return editImage({
+    prompt: `${params.prompt}${guard}`,
+    baseImage: params.referenceImage,
+    ...shared,
+  });
 }
 
 /**
@@ -204,6 +243,8 @@ export async function renderCarouselSlides(params: {
   styleKnobs?: CarouselStyleKnobs | null;
   /** 레퍼런스 디자인 요소(있으면 배경 styleLock 기반으로 주입) */
   designRef?: DesignReference | null;
+  /** 레퍼런스 이미지 원본 URL(있으면 gpt-image에 직접 참조시켜 색·구도·무드를 강반영) */
+  referenceImageUrl?: string | null;
   /** shared 모드에서 기존 배경 재사용(재생성 시) */
   sharedBgUrl?: string | null;
   /** 슬라이드 index → DB 행 id (점진 업데이트 대상) */
@@ -215,6 +256,10 @@ export async function renderCarouselSlides(params: {
   // 레퍼런스 있으면 레퍼런스가 색·폰트 주도, 없으면 템플릿(overlay 전용).
   const style = resolveStyle({ designRef: params.designRef, template });
   const fontSet = style.fontSet;
+  // 레퍼런스 이미지를 1회만 받아 모든 슬라이드 생성에 재사용(gpt-image 직접 참조용). 실패 시 텍스트만.
+  const referenceImage = params.referenceImageUrl
+    ? await fetchAsBase64(params.referenceImageUrl).catch(() => null)
+    : null;
 
   // full=항상 슬라이드별 프롬프트 필요. overlay=per-slide거나 shared 신규일 때만.
   const needGen =
@@ -261,10 +306,11 @@ export async function renderCarouselSlides(params: {
       sharedBgBuf = await fetchAsBuffer(sharedBgUrl);
     } else {
       const sharedPrompt = ad?.backgrounds[0]?.prompt ?? SHARED_BG_PROMPT;
-      const bg = await generateImage({
+      const bg = await generateSlideImage({
         prompt: sharedPrompt,
-        aspectRatio: "1:1",
+        referenceImage,
         imageSize: "2K",
+        rendersText: false,
         usageContext: {
           operation: "carousel_bg_shared",
           brandId: params.brandId ?? null,
@@ -290,10 +336,11 @@ export async function renderCarouselSlides(params: {
           prompt += ` Shared design system across all slides (match exactly): ${styleLock}.`;
         }
       }
-      const img = await generateImage({
+      const img = await generateSlideImage({
         prompt,
-        aspectRatio: "1:1",
+        referenceImage,
         imageSize: "1K", // gpt-image-2 medium 품질 — high 대비 2~3배 빠름(1024px, 1080 인스타에 충분)
+        rendersText: true,
         usageContext: {
           operation: "carousel_slide_full",
           brandId: params.brandId ?? null,
@@ -327,10 +374,11 @@ export async function renderCarouselSlides(params: {
       const prompt =
         promptByIndex.get(detail.index) ??
         perSlideBgPrompt(params.concept, detail);
-      const bg = await generateImage({
+      const bg = await generateSlideImage({
         prompt,
-        aspectRatio: "1:1",
+        referenceImage,
         imageSize: "2K",
+        rendersText: false,
         usageContext: {
           operation: "carousel_bg_slide",
           brandId: params.brandId ?? null,
@@ -415,6 +463,8 @@ export async function regenerateFullSlide(params: {
   toneOverride?: string | null;
   styleKnobs?: CarouselStyleKnobs | null;
   designRef?: DesignReference | null;
+  /** 레퍼런스 이미지 원본 URL(있으면 gpt-image에 직접 참조) */
+  referenceImageUrl?: string | null;
   brandId?: string | null;
   slide: SlideDetail;
   /** 슬라이드 총 개수 — 페이지 번호 후합성용. */
@@ -445,10 +495,14 @@ export async function regenerateFullSlide(params: {
   }
   if (!prompt) prompt = fullSlideFallbackPrompt(params.concept, params.slide);
 
-  const img = await generateImage({
+  const referenceImage = params.referenceImageUrl
+    ? await fetchAsBase64(params.referenceImageUrl).catch(() => null)
+    : null;
+  const img = await generateSlideImage({
     prompt,
-    aspectRatio: "1:1",
+    referenceImage,
     imageSize: "1K", // full 단건 재생성도 medium 품질(생성 때와 동일)
+    rendersText: true,
     usageContext: {
       operation: "carousel_slide_full",
       brandId: params.brandId ?? null,
@@ -550,6 +604,8 @@ export async function convertFullSlideToOverlay(params: {
   toneOverride?: string | null;
   styleKnobs?: CarouselStyleKnobs | null;
   designRef?: DesignReference | null;
+  /** 레퍼런스 이미지 원본 URL(있으면 gpt-image에 직접 참조) */
+  referenceImageUrl?: string | null;
   brandId?: string | null;
   slide: SlideDetail;
   total: number;
@@ -584,10 +640,14 @@ export async function convertFullSlideToOverlay(params: {
   }
   if (!bgPrompt) bgPrompt = perSlideBgPrompt(params.concept, params.slide);
 
-  const bg = await generateImage({
+  const referenceImage = params.referenceImageUrl
+    ? await fetchAsBase64(params.referenceImageUrl).catch(() => null)
+    : null;
+  const bg = await generateSlideImage({
     prompt: bgPrompt,
-    aspectRatio: "1:1",
+    referenceImage,
     imageSize: "2K",
+    rendersText: false,
     usageContext: {
       operation: "carousel_bg_slide",
       brandId: params.brandId ?? null,
