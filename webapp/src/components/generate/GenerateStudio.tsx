@@ -119,9 +119,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [mood, setMood] = useState("");
   const [copyPosition, setCopyPosition] = useState<"" | "top" | "center" | "bottom">("");
 
-  // 레퍼런스
+  // 레퍼런스 — 반영 강도: mood(무드만) / style(스타일 강반영, 기본) / layout(레이아웃까지)
   const [refUrl, setRefUrl] = useState<string | null>(null);
-  const [refMode, setRefMode] = useState<"style" | "base">("style");
+  const [refStrength, setRefStrength] = useState<"mood" | "style" | "layout">("style");
   const [refUploading, setRefUploading] = useState(false);
   const [designRef, setDesignRef] = useState<Record<string, unknown> | null>(null);
   const [conceptDraft, setConceptDraft] = useState<string | null>(null);
@@ -280,8 +280,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           copyPosition: copyPosition || null,
           aspectRatio,
           referenceImageUrl: refUrl,
-          referenceMode: refUrl ? refMode : undefined,
-          designRef: refUrl && refMode === "style" ? designRef : undefined,
+          referenceStrength: refUrl ? refStrength : undefined,
+          designRef: refUrl ? designRef : undefined,
           brandId: brandId || null,
           renderMode: bakeText ? "full" : "overlay",
           count,
@@ -503,20 +503,21 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                   className="h-16 w-16 rounded-md border object-cover"
                 />
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] text-muted-foreground">활용 방식</span>
+                  <span className="text-[11px] text-muted-foreground">반영 강도</span>
                   <div className="flex gap-1.5">
                     {[
-                      { v: "style", l: "디자인 참고" },
-                      { v: "base", l: "이미지 변형" },
+                      { v: "mood", l: "무드만 참고" },
+                      { v: "style", l: "스타일 강반영" },
+                      { v: "layout", l: "레이아웃까지" },
                     ].map((o) => (
                       <button
                         key={o.v}
                         type="button"
                         disabled={generating}
-                        onClick={() => setRefMode(o.v as "style" | "base")}
+                        onClick={() => setRefStrength(o.v as "mood" | "style" | "layout")}
                         className={cn(
                           "rounded-md border px-2 py-1 text-[11px] transition-colors disabled:opacity-50",
-                          refMode === o.v
+                          refStrength === o.v
                             ? "border-foreground font-medium"
                             : "border-border text-muted-foreground hover:text-foreground",
                         )}
@@ -525,6 +526,13 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       </button>
                     ))}
                   </div>
+                  <span className="text-[11px] text-muted-foreground">
+                    {refStrength === "mood"
+                      ? "색·무드를 요약해 말로만 참고해요 (가장 느슨)"
+                      : refStrength === "style"
+                        ? "색·구도·무드를 그대로 따라가되 장면은 새로 만들어요"
+                        : "배치·타이포까지 템플릿처럼 유지하고 내용만 바꿔요"}
+                  </span>
                   {conceptLoading ? (
                     <span className="text-[11px] text-muted-foreground">
                       비주얼 초안 작성 중…

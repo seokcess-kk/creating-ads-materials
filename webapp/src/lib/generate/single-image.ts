@@ -17,7 +17,6 @@ import { fontSetForCategory } from "@/lib/carousel/style";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
-  buildEditPrompt,
   buildBrandContext,
   EMPTY_BRAND_CONTEXT,
   type BrandContext,
@@ -30,13 +29,13 @@ import type {
   SingleImageResult,
   GeneratedImageVariant,
   SingleRenderMode,
-  ReferenceMode,
+  ReferenceStrength,
   DesignReference,
   CopyPosition,
   ReferenceFontCategory,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.3.0";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.4.0";
 
 // 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
@@ -45,6 +44,26 @@ const STYLE_HINTS = [
   "warm, emotional lifestyle atmosphere with soft natural light",
   "premium editorial look with refined details",
 ];
+
+/**
+ * 레퍼런스 픽셀 참조 가드 — 프롬프트 뒤에 붙여 editImage 입력 이미지의 역할을 고정한다.
+ * 캐러셀 generateSlideImage 가드와 동형(157284e) + 단일 이미지의 layout(템플릿) 강도 확장.
+ *  - style: 색·조명·무드·구도만 따라가고 장면은 완전히 새로(콘텐츠 복제 억제).
+ *  - layout: 배치·타이포 위계·장식 요소까지 템플릿처럼 유지, 내용(피사체·문구)만 교체.
+ */
+function referenceGuard(
+  strength: Exclude<ReferenceStrength, "mood">,
+  rendersText: boolean,
+): string {
+  if (strength === "layout") {
+    return rendersText
+      ? "\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, text block positions, typographic hierarchy, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design. Swap ONLY the content: use the new subject/scene described above, and render ONLY the Korean text specified above, placed and styled like the reference's text. Do NOT copy the reference's literal text/letters/numbers, logos, photos or products."
+      : "\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design. Swap ONLY the content to the new subject/scene described above, and produce a fully TEXTLESS composition: where the reference has text, leave those areas as clean, empty space (Korean copy is composited there later). Do NOT copy the reference's literal text, logos, photos or products.";
+  }
+  return rendersText
+    ? "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so the result reads as designed after it. Build an ENTIRELY NEW image: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers. Render ONLY the Korean text specified above."
+    : "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.";
+}
 
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
@@ -61,7 +80,8 @@ function decideMode(input: SingleImageInput): SingleRenderMode {
  *  - 의도/맥락을 크리에이티브 브리프로 모아 아트디렉터(Claude)가 gpt-image 프롬프트 N개로 확장.
  *  - 브랜드: 카테고리(프롬프트 힌트)만 모델에 주입. 로고는 모델에 굽지 않고 생성 후 컴포지터로
  *    정확히 1개 오버레이(배경 대비에 맞춰 모서리·에셋 선택·가독성 패널). 색상은 CTA 버튼에만.
- *  - 레퍼런스: style(디자인 요소만 차용) / base(레퍼런스 자체를 변형).
+ *  - 레퍼런스 강도: mood(텍스트 요약만) / style(픽셀 직접 참조 — 색·구도·무드 강반영) /
+ *    layout(템플릿처럼 배치·타이포까지 유지). style/layout은 editImage로 레퍼런스를 모델에 보여준다.
  *  - overlay 모드면 텍스트 없는 배경에 컴포지터로 한글 오버레이.
  */
 export async function generateSingleImageVariants(
@@ -87,14 +107,17 @@ export async function generateSingleImageVariants(
     }
   }
 
-  // 레퍼런스 처리
+  // 레퍼런스 처리 — 강도 결정(구 referenceMode 호환: base=변형 → layout, style → style).
   const refUrl = input.referenceImageUrl?.trim() || null;
-  const refMode: ReferenceMode = input.referenceMode ?? "style";
-  const isEdit = Boolean(refUrl) && refMode === "base";
+  const refStrength: ReferenceStrength | null = refUrl
+    ? (input.referenceStrength ??
+      (input.referenceMode === "base" ? "layout" : "style"))
+    : null;
 
-  // 업로드 시 이미 분석했으면(input.designRef) 재분석 생략, 아니면 style 모드에서 분석.
+  // 업로드 시 이미 분석했으면(input.designRef) 재분석 생략. 픽셀을 직접 참조하는 강도에서도
+  // 텍스트 요약은 유지 — 아트디렉터의 팔레트 verbatim 지시 + overlay 폰트 매핑(fontCategory)에 쓰인다.
   let designRef: DesignReference | null = input.designRef ?? null;
-  if (!designRef && refUrl && refMode === "style") {
+  if (!designRef && refUrl) {
     designRef = await analyzeReferenceDesign(refUrl, {
       operation: "single_image_ref_analyze",
       brandId: input.brandId ?? null,
@@ -102,11 +125,13 @@ export async function generateSingleImageVariants(
     });
   }
 
-  // 로고는 모델에 굽지 않는다(중복·왜곡 방지) → 입력 이미지는 base 레퍼런스(변형 대상)만.
-  const baseRef = isEdit && refUrl ? await fetchAsBase64(refUrl).catch(() => null) : null;
-  const inputImages: ImagePart[] = [baseRef].filter(
-    (p): p is ImagePart => p != null,
-  );
+  // 픽셀 직접 참조(캐러셀 157284e와 동형) — mood는 텍스트 요약만 쓰고, style/layout은
+  // editImage로 레퍼런스 픽셀을 모델에 보여줘 색·구도·무드가 요약을 거치지 않고 반영되게 한다.
+  // 로고는 모델에 굽지 않는다(중복·왜곡 방지) → 입력 이미지는 레퍼런스뿐.
+  const refImage: ImagePart | null =
+    refUrl && refStrength && refStrength !== "mood"
+      ? await fetchAsBase64(refUrl).catch(() => null)
+      : null;
 
   // 브랜드 로고는 생성당 1회만 받아 휘도 분석(후보별 배경 대비에 맞춰 1개 선택·배치).
   const logoAssets: LogoCandidate[] = brand.logos.length
@@ -130,36 +155,19 @@ export async function generateSingleImageVariants(
     designRef,
     aspectRatio,
     mode,
-    isEdit,
+    refStrength,
   };
   const directed = await buildImagePrompts(brief, count, {
     operation: "single_image_art_director",
     brandId: input.brandId ?? null,
-    metadata: { generationId, mode, refMode: refUrl ? refMode : "none" },
+    metadata: { generationId, mode, refStrength: refStrength ?? "none" },
   });
 
   const designRefText = designRef ? formatDesignReference(designRef) : null;
   function fallbackPrompt(i: number): string {
     const styleHint = STYLE_HINTS[i % STYLE_HINTS.length];
     let p: string;
-    if (isEdit) {
-      p = buildEditPrompt({
-        mode,
-        keyMessage: input.keyMessage,
-        concept: input.concept,
-        tone: input.tone,
-        lighting: input.lighting,
-        palette: input.palette,
-        mood: input.mood,
-        copyPosition: input.copyPosition,
-        brand,
-        styleHint,
-        designRef: designRefText,
-        headline: input.headline,
-        sub: input.sub,
-        cta: input.cta,
-      });
-    } else if (mode === "overlay") {
+    if (mode === "overlay") {
       p = buildTextlessBackgroundPrompt({
         keyMessage: input.keyMessage,
         concept: input.concept,
@@ -210,19 +218,20 @@ export async function generateSingleImageVariants(
     Array.from({ length: count }, (_, i) => i).map(async (i) => {
       const prompt = directed?.[i]?.prompt ?? fallbackPrompt(i);
       const label = directed?.[i]?.label || `v${i + 1}`;
-      const useEdit = inputImages.length > 0;
       const usageContext = {
-        operation: useEdit ? "single_image_edit" : "single_image_gen",
+        operation: refImage ? "single_image_ref_gen" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, i, mode, refMode: refUrl ? refMode : "none" },
+        metadata: { generationId, i, mode, refStrength: refStrength ?? "none" },
       };
 
-      // 1) 베이스 이미지 (입력 이미지가 있으면 edit, 없으면 text-to-image)
-      const base = useEdit
+      // 1) 베이스 이미지 — 레퍼런스 픽셀이 있으면(style/layout) editImage로 직접 참조, 없으면 text-to-image.
+      const base = refImage
         ? await editImage({
-            prompt,
-            baseImage: inputImages[0],
-            extraImages: inputImages.slice(1),
+            prompt: `${prompt}${referenceGuard(
+              refStrength as Exclude<ReferenceStrength, "mood">,
+              mode === "full" && hasText,
+            )}`,
+            baseImage: refImage,
             aspectRatio,
             imageSize: "1K",
             usageContext,
@@ -239,7 +248,7 @@ export async function generateSingleImageVariants(
         model: base.model,
         size: base.size ?? null,
         aspectRatio,
-        refMode: refUrl ? refMode : "none",
+        refStrength: refStrength ?? "none",
       };
 
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
@@ -291,7 +300,7 @@ export async function generateSingleImageVariants(
         } satisfies GeneratedImageVariant;
       }
 
-      // full/edit: 텍스트가 이미지에 베이킹됨(재합성 불가). 비율이 맞을 때만 스케일(crop 금지 — 잘림 방지).
+      // full: 텍스트가 이미지에 베이킹됨(재합성 불가). 비율이 맞을 때만 스케일(crop 금지 — 잘림 방지).
       let finalBuf = await resizeToChannel(
         Buffer.from(base.base64, "base64"),
         aspectRatio,
@@ -322,7 +331,7 @@ export async function generateSingleImageVariants(
         label,
         url: uploaded.url,
         path: uploaded.path,
-        mode: isEdit ? "edit" : "full",
+        mode: "full",
         bgUrl: null,
         meta,
       } satisfies GeneratedImageVariant;

@@ -4,7 +4,15 @@ import type { AspectRatio } from "@/lib/engines";
 export type SingleRenderMode = "overlay" | "full";
 export type VariantMode = SingleRenderMode | "edit";
 
-/** 레퍼런스 활용 방식: style = 디자인 요소만 차용(새 이미지) / base = 레퍼런스 자체를 변형 */
+/**
+ * 레퍼런스 반영 강도:
+ *  - mood: 텍스트 요약(DesignReference)만 프롬프트에 주입 — 픽셀은 모델에 전달하지 않음(가장 느슨)
+ *  - style: 레퍼런스 픽셀을 editImage로 직접 참조 — 색·조명·무드·구도를 강하게 따라가되 장면·피사체는 새로
+ *  - layout: 레퍼런스를 디자인 템플릿처럼 취급 — 배치·타이포 위계·장식 요소까지 유지하고 내용만 교체
+ */
+export type ReferenceStrength = "mood" | "style" | "layout";
+
+/** @deprecated 구 style/base 토글. referenceStrength로 대체(base → layout, style → style 매핑). */
 export type ReferenceMode = "style" | "base";
 
 /** 카피(텍스트)가 들어갈 세로 위치 — overlay 컴포지터 텍스트존 + 프롬프트 여백 위치를 함께 결정. */
@@ -63,6 +71,9 @@ export interface SingleImageInput {
   copyPosition?: CopyPosition | null;
   aspectRatio?: AspectRatio;
   referenceImageUrl?: string | null;
+  /** 레퍼런스 반영 강도(기본 style). 미지정 시 구 referenceMode에서 매핑. */
+  referenceStrength?: ReferenceStrength;
+  /** @deprecated referenceStrength로 대체 — 구 클라이언트 호환용으로만 수용. */
   referenceMode?: ReferenceMode;
   /** 업로드 직후 이미 추출한 디자인 요소(있으면 생성 시 비전 재분석 생략) */
   designRef?: DesignReference | null;

@@ -27,6 +27,8 @@ const Schema = z.object({
   copyPosition: z.enum(["top", "center", "bottom"]).nullable().optional(),
   aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   referenceImageUrl: z.string().url().nullable().optional(),
+  referenceStrength: z.enum(["mood", "style", "layout"]).optional(),
+  // 구 클라이언트 호환(deprecated) — 생성 시 base→layout, style→style로 매핑.
   referenceMode: z.enum(["style", "base"]).optional(),
   designRef: DesignReferenceSchema.nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),

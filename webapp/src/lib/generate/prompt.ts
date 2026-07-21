@@ -1,5 +1,5 @@
 import type { BrandIdentity } from "@/lib/memory/types";
-import type { CopyPosition, SingleRenderMode } from "./types";
+import type { CopyPosition } from "./types";
 
 /** 카피가 들어갈 여백을 가리키는 영어 구문(프롬프트용). */
 function copyZone(pos?: CopyPosition | null): string {
@@ -144,21 +144,3 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
   ]);
 }
 
-/** 참고 이미지를 변형하는 프롬프트. overlay 모드는 텍스트 없는 배경으로, full 모드는 완성형으로. */
-export function buildEditPrompt(input: TextPromptInput & { mode: SingleRenderMode }): string {
-  if (input.mode === "overlay") {
-    return joinSentences([
-      "Transform this image into a clean, professional advertisement background.",
-      "Remove or avoid any text, letters, or logos — the result MUST be textless.",
-      `Suit an advertisement about: ${input.keyMessage}.`,
-      input.concept?.trim() ? `Direction: ${input.concept.trim()}.` : null,
-      input.styleHint ? `Style: ${input.styleHint}.` : null,
-      input.lighting?.trim() ? `Lighting: ${input.lighting.trim()}.` : null,
-      input.palette?.trim() ? `Color palette (use only these): ${input.palette.trim()}.` : null,
-      input.mood?.trim() ? `Mood: ${input.mood.trim()}.` : null,
-      input.tone ? `Mood / tone: ${input.tone}.` : null,
-      `Keep the core subject recognizable. Leave a calm, low-detail band at ${copyZone(input.copyPosition)} for overlaid text.`,
-    ]);
-  }
-  return buildFullImagePrompt(input);
-}
