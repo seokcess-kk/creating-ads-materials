@@ -68,6 +68,8 @@ function wrapByWords(
 export interface FitResult {
   fontSize: number;
   lines: string[];
+  /** 최소 크기에서도 허용 줄 수를 초과함. 호출자는 임의 축소/잘림 대신 사용자에게 알려야 한다. */
+  overflow: boolean;
 }
 
 /**
@@ -80,16 +82,19 @@ export function fitText(
   measureAt: (size: number, t: string) => number,
 ): FitResult {
   const minScale = opts.minScale ?? 0.6;
-  const scales = [1, 0.9, 0.8, 0.7, 0.6];
+  const scales = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, minScale]
+    .filter((scale, i, all) => scale >= minScale && all.indexOf(scale) === i)
+    .sort((a, b) => b - a);
   let last: FitResult | null = null;
   for (const scale of scales) {
     if (scale < minScale) break;
     const size = Math.max(12, Math.round(opts.baseSize * scale));
     const lines = wrapText(text, opts.maxWidth, (t) => measureAt(size, t));
-    last = { fontSize: size, lines };
-    if (lines.length <= opts.maxLines) return last;
+    last = { fontSize: size, lines, overflow: lines.length > opts.maxLines };
+    if (!last.overflow) return last;
   }
   if (last) return last;
   const size = Math.max(12, Math.round(opts.baseSize * minScale));
-  return { fontSize: size, lines: wrapText(text, opts.maxWidth, (t) => measureAt(size, t)) };
+  const lines = wrapText(text, opts.maxWidth, (t) => measureAt(size, t));
+  return { fontSize: size, lines, overflow: lines.length > opts.maxLines };
 }

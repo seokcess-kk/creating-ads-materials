@@ -3,6 +3,7 @@ import type { ComposeFontSet } from "@/lib/canvas/compositor";
 import type {
   DesignReference,
   ReferenceFontCategory,
+  ReferenceFontFamily,
 } from "@/lib/generate/types";
 import type { CarouselTemplate } from "./templates";
 
@@ -71,8 +72,50 @@ const FONT_SETS: Record<ReferenceFontCategory, ComposeFontSet> = {
   },
 };
 
+const FAMILY_FONT_SETS: Record<ReferenceFontFamily, ComposeFontSet> = {
+  pretendard: FONT_SETS.sans,
+  suit: {
+    headline: fe("suit", "SUIT-ExtraBold.woff2", "SUIT-ExtraBold"),
+    sub: fe("suit", "SUIT-Regular.woff2", "SUIT-Regular"),
+    cta: fe("suit", "SUIT-Bold.woff2", "SUIT-Bold"),
+  },
+  "spoqa-han-sans-neo": {
+    headline: fe("spoqa-han-sans-neo", "SpoqaHanSansNeo-Bold.woff2", "SpoqaHanSansNeo-Bold"),
+    sub: fe("spoqa-han-sans-neo", "SpoqaHanSansNeo-Regular.woff2", "SpoqaHanSansNeo-Regular"),
+    cta: fe("spoqa-han-sans-neo", "SpoqaHanSansNeo-Bold.woff2", "SpoqaHanSansNeo-Bold"),
+  },
+  scdream: {
+    headline: fe("scdream", "SCDream9.woff2", "SCDream9"),
+    sub: fe("scdream", "SCDream3.woff2", "SCDream3"),
+    cta: fe("scdream", "SCDream7.woff2", "SCDream7"),
+  },
+  "gmarket-sans": FONT_SETS.display,
+  "jalnan-gothic": {
+    headline: fe("jalnan-gothic", "JalnanGothic.woff2", "JalnanGothic"),
+    sub: fe("pretendard", "Pretendard-Medium.woff2", "Pretendard-Medium"),
+    cta: fe("jalnan-gothic", "JalnanGothic.woff2", "JalnanGothic"),
+  },
+  jalnan2: {
+    headline: fe("jalnan2", "Jalnan2.woff2", "Jalnan2"),
+    sub: fe("pretendard", "Pretendard-Medium.woff2", "Pretendard-Medium"),
+    cta: fe("jalnan2", "Jalnan2.woff2", "Jalnan2"),
+  },
+  "nanum-square-round": FONT_SETS.rounded,
+  "nanum-myeongjo": FONT_SETS.serif,
+  "nanum-barunpen": FONT_SETS.handwriting,
+  "cafe24-danjunghae": {
+    headline: fe("cafe24-danjunghae", "CAFE24DANJUNGHAE.woff2", "Cafe24Danjunghae"),
+    sub: fe("cafe24-danjunghae", "CAFE24DANJUNGHAE.woff2", "Cafe24Danjunghae"),
+    cta: fe("cafe24-danjunghae", "CAFE24DANJUNGHAE.woff2", "Cafe24Danjunghae"),
+  },
+};
+
 export function fontSetForCategory(cat?: ReferenceFontCategory | null): ComposeFontSet {
   return FONT_SETS[cat ?? "sans"] ?? FONT_SETS.sans;
+}
+
+export function fontSetForReference(ref?: Pick<DesignReference, "fontFamily" | "fontCategory"> | null): ComposeFontSet {
+  return ref?.fontFamily ? FAMILY_FONT_SETS[ref.fontFamily] : fontSetForCategory(ref?.fontCategory);
 }
 
 // ── 색 유틸 ────────────────────────────────────────────────────

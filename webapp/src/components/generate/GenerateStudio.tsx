@@ -67,6 +67,14 @@ const COPY_POS_PRESETS: Array<{ v: "" | "top" | "center" | "bottom"; l: string }
   { v: "bottom", l: "하단" },
 ];
 
+const REFERENCE_FONTS = [
+  ["pretendard", "Pretendard"], ["suit", "SUIT"], ["spoqa-han-sans-neo", "스포카 한 산스"],
+  ["scdream", "에스코어 드림"], ["gmarket-sans", "G마켓 산스"], ["jalnan-gothic", "잘난 고딕"],
+  ["jalnan2", "잘난체"], ["nanum-square-round", "나눔스퀘어라운드"],
+  ["nanum-myeongjo", "나눔명조"], ["nanum-barunpen", "나눔바른펜"],
+  ["cafe24-danjunghae", "카페24 단정해"],
+] as const;
+
 // 선택 이미지 편집 op(결과 이미지를 base로 editImage — "바꿀 것 하나 + 나머지 유지").
 type EditOp = "localize" | "recolor" | "background" | "add" | "remove";
 const EDIT_OPS: { v: EditOp; l: string }[] = [
@@ -543,6 +551,24 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                         ? "색·구도·무드를 그대로 따라가되 장면은 새로 만들어요"
                         : "배치·타이포까지 템플릿처럼 유지하고 내용만 바꿔요"}
                   </span>
+                  {designRef && (
+                    <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      후합성 폰트
+                      <select
+                        value={String(designRef.fontFamily ?? "pretendard")}
+                        disabled={generating}
+                        onChange={(e) =>
+                          setDesignRef((prev) => prev ? { ...prev, fontFamily: e.target.value } : prev)
+                        }
+                        className="h-7 rounded-md border bg-background px-2 text-[11px] text-foreground"
+                      >
+                        {REFERENCE_FONTS.map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                      <span>자동 추천 · 변경 가능</span>
+                    </label>
+                  )}
                   {conceptLoading ? (
                     <span className="text-[11px] text-muted-foreground">
                       비주얼 초안 작성 중…
@@ -800,15 +826,42 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           </div>
 
           {hasText && (
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={bakeText}
-                onChange={(e) => setBakeText(e.target.checked)}
-                disabled={generating}
-              />
-              AI 일체형 시안 — 글자까지 AI가 그림 (정확한 숫자·날짜·연락처는 자동으로 또렷하게 오버레이)
-            </label>
+            <div className="space-y-1.5">
+              <Label className="text-xs">텍스트 제작 방식</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {[
+                  {
+                    full: false,
+                    title: "정확한 광고 소재",
+                    desc: "배경은 AI로 만들고 글자는 정확하게 합성 · 집행용 권장",
+                  },
+                  {
+                    full: true,
+                    title: "레퍼런스 유사 시안",
+                    desc: "글자까지 AI가 그려 타이포 분위기 우선 · 오탈자 확인 필요",
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.title}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => setBakeText(option.full)}
+                    className={cn(
+                      "rounded-lg border p-3 text-left transition-colors disabled:opacity-50",
+                      bakeText === option.full ? "border-foreground" : "border-border",
+                    )}
+                  >
+                    <span className="block text-xs font-medium">{option.title}</span>
+                    <span className="mt-1 block text-[11px] text-muted-foreground">{option.desc}</span>
+                  </button>
+                ))}
+              </div>
+              {bakeText && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  날짜·금액·연락처나 긴 문구는 정확성을 위해 자동으로 후합성됩니다.
+                </p>
+              )}
+            </div>
           )}
 
           <Button onClick={generate} disabled={!canSubmit} pending={generating}>

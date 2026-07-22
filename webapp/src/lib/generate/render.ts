@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { ComposeConfig, ComposeFontSet, LogoPosition } from "@/lib/canvas/compositor";
-import type { CopyPosition } from "./types";
+import type { CopyPosition, ReferenceTypographyProfile } from "./types";
 
 // 카피 위치별 텍스트존 세로 위치(yRatio). 그라데이션/스크림은 전 영역 대비를 확보하므로
 // 위치만 이동해도 가독성이 유지된다. center가 현행 기본값.
@@ -44,11 +44,45 @@ export interface SingleAdLayoutInput {
   copyPosition?: CopyPosition | null;
   /** 폰트 세트 오버라이드(레퍼런스 타이포 매핑). 없으면 Pretendard. */
   fontSet?: ComposeFontSet | null;
+  /** 레퍼런스에서 측정한 타이포 비례/배치. copyPosition보다 우선한다. */
+  typography?: ReferenceTypographyProfile | null;
+}
+
+/** 이미지 모델 호출 전에 레퍼런스 텍스트 박스와 새 카피 길이의 명백한 충돌을 차단한다. */
+export function assertCopyFitsTypography(
+  input: Pick<SingleAdLayoutInput, "headline" | "sub" | "typography">,
+): void {
+  const t = input.typography;
+  if (!t) return;
+  const count = (value?: string | null) => Array.from(value?.replace(/\s/g, "") ?? "").length;
+  // 한글 정방형 글리프 폭을 약 0.9em으로 잡은 보수적 사전 검사. 실제 측정은 compositor가 수행한다.
+  const headlinePerLine = Math.max(4, Math.floor(t.headlineMaxWidthRatio / (t.headlineSizeRatio * 0.9)));
+  const headlineLimit = headlinePerLine * 2;
+  if (count(input.headline) > headlineLimit) {
+    throw new Error(`헤드라인이 레퍼런스 영역보다 깁니다. 공백 제외 ${headlineLimit}자 이내로 줄여 주세요.`);
+  }
+  if (input.sub && t.subSizeRatio && t.subMaxWidthRatio) {
+    const subPerLine = Math.max(6, Math.floor(t.subMaxWidthRatio / (t.subSizeRatio * 0.9)));
+    const subLimit = subPerLine * 2;
+    if (count(input.sub) > subLimit) {
+      throw new Error(`보조 문구가 레퍼런스 영역보다 깁니다. 공백 제외 ${subLimit}자 이내로 줄여 주세요.`);
+    }
+  }
 }
 
 // 텍스트 오버레이 레이아웃 → ComposeConfig. backgroundImageUrl/output은 renderComposite가 무시(호환용 빈값).
 export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
   const Y = COPY_Y[input.copyPosition ?? "center"];
+  const t = input.typography;
+  const align = t?.alignment ?? "center";
+  const xRatio = align === "center" ? 0.5 : align === "right" ? 0.95 : 0.05;
+  const fontWeight = t?.headlineWeight === "black"
+    ? "900"
+    : t?.headlineWeight === "regular"
+      ? "normal"
+      : t?.headlineWeight === "medium"
+        ? "500"
+        : "bold";
   const config: ComposeConfig = {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },
@@ -72,28 +106,35 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
   if (input.headline) {
     config.mainCopy = {
       text: input.headline,
-      color: "#FFFFFF",
-      sizeRatio: 0.078,
-      yRatio: Y.headline,
-      center: true,
+      color: t?.headlineColor ?? "#FFFFFF",
+      sizeRatio: t?.headlineSizeRatio ?? 0.078,
+      yRatio: t?.headlineYRatio ?? Y.headline,
+      align,
+      xRatio,
+      fontWeight,
+      lineSpacingRatio: t ? t.headlineSizeRatio * t.headlineLineHeight : undefined,
       autoFit: true,
       maxLines: 2,
-      maxWidthRatio: 0.86,
-      stroke: true,
+      maxWidthRatio: t?.headlineMaxWidthRatio ?? 0.86,
+      minScale: 0.75,
+      stroke: t?.hasStrokeOrShadow ?? true,
     };
   }
 
   if (input.sub) {
     config.subCopy = {
       text: input.sub,
-      color: "#FFFFFF",
-      sizeRatio: 0.032,
-      yRatio: Y.sub,
-      center: true,
+      color: t?.subColor ?? "#FFFFFF",
+      sizeRatio: t?.subSizeRatio ?? 0.032,
+      yRatio: t?.subYRatio ?? Y.sub,
+      align,
+      xRatio,
+      fontWeight: "normal",
       autoFit: true,
       maxLines: 2,
-      maxWidthRatio: 0.82,
-      stroke: true,
+      maxWidthRatio: t?.subMaxWidthRatio ?? 0.82,
+      minScale: 0.75,
+      stroke: t?.hasStrokeOrShadow ?? true,
     };
   }
 

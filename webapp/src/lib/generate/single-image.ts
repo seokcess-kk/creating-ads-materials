@@ -11,9 +11,9 @@ import { ApiError } from "@/lib/api-utils";
 import { getBrand } from "@/lib/memory";
 import { getIdentity } from "@/lib/memory/identity";
 import { getVariant, updateVariantImage } from "./queries";
-import { singleAdConfig, fullHybridConfig, type SingleAdLogo } from "./render";
+import { assertCopyFitsTypography, singleAdConfig, fullHybridConfig, type SingleAdLogo } from "./render";
 // 레퍼런스 타이포 → 설치 한글 폰트 매핑(캐러셀 인프라 재사용 — 단일 overlay에도 적용).
-import { fontSetForCategory } from "@/lib/carousel/style";
+import { fontSetForReference } from "@/lib/carousel/style";
 import {
   buildTextlessBackgroundPrompt,
   buildFullImagePrompt,
@@ -57,7 +57,7 @@ function referenceGuard(
 ): string {
   if (strength === "layout") {
     return rendersText
-      ? "\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, text block positions, typographic hierarchy, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design. Swap ONLY the content: use the new subject/scene described above, and render ONLY the Korean text specified above, placed and styled like the reference's text. Do NOT copy the reference's literal text/letters/numbers, logos, photos or products."
+      ? "\n\nDESIGN TEMPLATE REFERENCE — TYPOGRAPHY IS A HARD CONSTRAINT: Treat the attached image as a pixel-level design template. Preserve the exact text-block bounding boxes, baselines, alignment, line count, line-height, relative font sizes, weight, width/condensation, tracking, colors, outline/shadow treatment, and whitespace. Match the reference typeface's visible glyph personality as closely as the image model can (serif shape, terminals, stroke contrast, roundness, counters), not merely its broad font category. Render ONLY the new Korean text specified above, fitted into the same boxes without inventing, duplicating, or retaining any reference letters. Preserve the exact layout, grid, element placement, decorative elements, palette, lighting and mood. Swap subjects/content only. Do NOT copy reference logos, photos or products. Before finalizing, visually compare the new typography against the attached reference and correct any drift in geometry or styling."
       : "\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design. Swap ONLY the content to the new subject/scene described above, and produce a fully TEXTLESS composition: where the reference has text, leave those areas as clean, empty space (Korean copy is composited there later). Do NOT copy the reference's literal text, logos, photos or products.";
   }
   return rendersText
@@ -126,6 +126,14 @@ export async function generateSingleImageVariants(
       operation: "single_image_ref_analyze",
       brandId: input.brandId ?? null,
       metadata: { generationId },
+    });
+  }
+
+  if (mode === "overlay" && designRef?.typography) {
+    assertCopyFitsTypography({
+      headline: input.headline,
+      sub: input.sub,
+      typography: designRef.typography,
     });
   }
 
@@ -268,7 +276,8 @@ export async function generateSingleImageVariants(
           brandColor: brand.ctaColor,
           copyPosition: input.copyPosition,
           // 레퍼런스 타이포 카테고리가 있으면 그 폰트로(없으면 Pretendard).
-          fontSet: designRef?.fontCategory ? fontSetForCategory(designRef.fontCategory) : null,
+          fontSet: designRef ? fontSetForReference(designRef) : null,
+          typography: designRef?.typography ?? null,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -290,6 +299,8 @@ export async function generateSingleImageVariants(
           brandColor: brand.ctaColor,
           copyPosition: input.copyPosition ?? null,
           fontCategory: designRef?.fontCategory ?? null,
+          fontFamily: designRef?.fontFamily ?? null,
+          typography: designRef?.typography ?? null,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -403,6 +414,8 @@ export async function recomposeVariant(
       brandColor?: string | null;
       copyPosition?: CopyPosition | null;
       fontCategory?: ReferenceFontCategory | null;
+      fontFamily?: DesignReference["fontFamily"] | null;
+      typography?: DesignReference["typography"] | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -421,7 +434,13 @@ export async function recomposeVariant(
     // 생성 시 카피 위치를 그대로 재현(텍스트존 일치).
     copyPosition: compose.copyPosition ?? null,
     // 생성 시 폰트(레퍼런스 타이포)도 그대로 재현.
-    fontSet: compose.fontCategory ? fontSetForCategory(compose.fontCategory) : null,
+    fontSet: compose.fontFamily || compose.fontCategory
+      ? fontSetForReference({
+          fontFamily: compose.fontFamily ?? undefined,
+          fontCategory: compose.fontCategory ?? undefined,
+        })
+      : null,
+    typography: compose.typography ?? null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).

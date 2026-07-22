@@ -37,6 +37,7 @@ describe("fitText", () => {
     const r = fitText("0123456789", { baseSize: 40, maxWidth: 400, maxLines: 2 }, measureAt);
     expect(r.fontSize).toBe(40);
     expect(r.lines).toEqual(["0123456789"]);
+    expect(r.overflow).toBe(false);
   });
 
   it("길면 폰트를 축소해 maxLines를 만족", () => {
@@ -51,5 +52,6 @@ describe("fitText", () => {
   it("minScale 아래로는 내려가지 않음", () => {
     const r = fitText("aaaaaaaaaaaaaaaaaaaa", { baseSize: 100, maxWidth: 50, maxLines: 1, minScale: 0.6 }, measureAt);
     expect(r.fontSize).toBeGreaterThanOrEqual(Math.round(100 * 0.6));
+    expect(r.overflow).toBe(true);
   });
 });

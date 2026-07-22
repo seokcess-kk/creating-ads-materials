@@ -34,6 +34,36 @@ export type ReferenceFontCategory =
   | "display"
   | "handwriting";
 
+/** 서버에 설치되어 결정적으로 렌더할 수 있는 한글 폰트 패밀리. */
+export type ReferenceFontFamily =
+  | "pretendard"
+  | "suit"
+  | "spoqa-han-sans-neo"
+  | "scdream"
+  | "gmarket-sans"
+  | "jalnan-gothic"
+  | "jalnan2"
+  | "nanum-square-round"
+  | "nanum-myeongjo"
+  | "nanum-barunpen"
+  | "cafe24-danjunghae";
+
+/** 레퍼런스에서 측정한 타이포 레이아웃. 비율은 캔버스 너비/높이 기준 0~1. */
+export interface ReferenceTypographyProfile {
+  alignment: "left" | "center" | "right";
+  headlineSizeRatio: number;
+  headlineYRatio: number;
+  headlineMaxWidthRatio: number;
+  headlineLineHeight: number;
+  headlineColor: string;
+  headlineWeight: "regular" | "medium" | "bold" | "black";
+  subSizeRatio?: number;
+  subYRatio?: number;
+  subMaxWidthRatio?: number;
+  subColor?: string;
+  hasStrokeOrShadow?: boolean;
+}
+
 /** 레퍼런스 비전 분석 결과 — 디자인 요소 추출. */
 export interface DesignReference {
   palette: string[];
@@ -43,6 +73,10 @@ export interface DesignReference {
   typographyVibe: string;
   /** 타이포 카테고리(선택) — 캐러셀이 설치 폰트로 매핑할 때 사용. */
   fontCategory?: ReferenceFontCategory;
+  /** 설치 폰트 중 시각적으로 가장 가까운 패밀리. 사용자가 UI에서 보정할 수 있다. */
+  fontFamily?: ReferenceFontFamily;
+  /** 글자 배치와 비례를 후합성에서도 최대한 재현하기 위한 구조화 측정값. */
+  typography?: ReferenceTypographyProfile;
   notes?: string;
 }
 

@@ -81,10 +81,14 @@ export interface ComposeConfig {
     yRatio?: number;
     lineSpacingRatio?: number;
     center?: boolean;
+    align?: "left" | "center" | "right";
+    xRatio?: number;
+    fontWeight?: "normal" | "500" | "bold" | "900";
     // autoFit: 폭에 맞춰 자동 줄바꿈 + maxLines 이내로 폰트 축소(가변 길이 대응).
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
+    minScale?: number;
     // 외곽선으로 임의 배경 위 가독성 강화. strokeColor 미지정 시 어두운 외곽선(밝은 글자용).
     stroke?: boolean;
     strokeColor?: string;
@@ -95,9 +99,14 @@ export interface ComposeConfig {
     sizeRatio?: number;
     yRatio?: number;
     center?: boolean;
+    align?: "left" | "center" | "right";
+    xRatio?: number;
+    fontWeight?: "normal" | "500" | "bold" | "900";
+    lineSpacingRatio?: number;
     autoFit?: boolean;
     maxLines?: number;
     maxWidthRatio?: number;
+    minScale?: number;
     stroke?: boolean;
     strokeColor?: string;
   };
@@ -332,25 +341,29 @@ export async function renderComposite(
   if (config.mainCopy?.text) {
     const baseSize = Math.round(h * (config.mainCopy.sizeRatio ?? 0.048));
     const family = pickFamily(config.fontSet, "headline");
-    const center = config.mainCopy.center !== false;
+    const align = config.mainCopy.align ?? (config.mainCopy.center === false ? "left" : "center");
+    const weight = config.mainCopy.fontWeight ?? "bold";
     let fontSize = baseSize;
     let lines: string[];
     if (config.mainCopy.autoFit) {
       const maxWidth = w * (config.mainCopy.maxWidthRatio ?? 0.86);
       const fit = fitText(
         config.mainCopy.text,
-        { baseSize, maxWidth, maxLines: config.mainCopy.maxLines ?? 3 },
+        { baseSize, maxWidth, maxLines: config.mainCopy.maxLines ?? 3, minScale: config.mainCopy.minScale ?? 0.75 },
         (size, t) => {
-          ctx.font = `bold ${size}px ${family}`;
+          ctx.font = `${weight} ${size}px ${family}`;
           return ctx.measureText(t).width;
         },
       );
       fontSize = fit.fontSize;
       lines = fit.lines;
+      if (fit.overflow) {
+        throw new Error("헤드라인이 레퍼런스 텍스트 영역에 맞지 않습니다. 문구를 줄여 주세요.");
+      }
     } else {
       lines = config.mainCopy.text.split("\n");
     }
-    ctx.font = `bold ${fontSize}px ${family}`;
+    ctx.font = `${weight} ${fontSize}px ${family}`;
     const yStart = h * (config.mainCopy.yRatio ?? 0.08);
     const lineSpacing = config.mainCopy.autoFit
       ? fontSize * 1.3
@@ -364,38 +377,41 @@ export async function renderComposite(
 
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;
-      if (center) {
-        drawTextWithShadow(ctx, w / 2, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "center", mainStroke);
-      } else {
-        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, "left", mainStroke);
-      }
+      const x = w * (config.mainCopy.xRatio ?? (align === "center" ? 0.5 : align === "right" ? 0.95 : 0.05));
+      drawTextWithShadow(ctx, x, y, lines[i], config.mainCopy.color ?? "#FFFFFF", 3, align, mainStroke);
     }
   }
 
   if (config.subCopy?.text) {
     const baseSize = Math.round(h * (config.subCopy.sizeRatio ?? 0.026));
     const family = pickFamily(config.fontSet, "sub");
-    const center = config.subCopy.center !== false;
+    const align = config.subCopy.align ?? (config.subCopy.center === false ? "left" : "center");
+    const weight = config.subCopy.fontWeight ?? "normal";
     let fontSize = baseSize;
     let lines: string[];
     if (config.subCopy.autoFit) {
       const maxWidth = w * (config.subCopy.maxWidthRatio ?? 0.86);
       const fit = fitText(
         config.subCopy.text,
-        { baseSize, maxWidth, maxLines: config.subCopy.maxLines ?? 2 },
+        { baseSize, maxWidth, maxLines: config.subCopy.maxLines ?? 2, minScale: config.subCopy.minScale ?? 0.75 },
         (size, t) => {
-          ctx.font = `${size}px ${family}`;
+          ctx.font = `${weight} ${size}px ${family}`;
           return ctx.measureText(t).width;
         },
       );
       fontSize = fit.fontSize;
       lines = fit.lines;
+      if (fit.overflow) {
+        throw new Error("보조 문구가 레퍼런스 텍스트 영역에 맞지 않습니다. 문구를 줄여 주세요.");
+      }
     } else {
       lines = [config.subCopy.text];
     }
-    ctx.font = `${fontSize}px ${family}`;
+    ctx.font = `${weight} ${fontSize}px ${family}`;
     const yStart = h * (config.subCopy.yRatio ?? 0.8);
-    const lineSpacing = fontSize * 1.3;
+    const lineSpacing = config.subCopy.lineSpacingRatio
+      ? h * config.subCopy.lineSpacingRatio
+      : fontSize * 1.3;
     const subStroke = config.subCopy.stroke
       ? {
           color: config.subCopy.strokeColor ?? "rgba(0, 0, 0, 0.45)",
@@ -404,11 +420,8 @@ export async function renderComposite(
       : undefined;
     for (let i = 0; i < lines.length; i++) {
       const y = yStart + i * lineSpacing;
-      if (center) {
-        drawTextWithShadow(ctx, w / 2, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "center", subStroke);
-      } else {
-        drawTextWithShadow(ctx, w * 0.05, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, "left", subStroke);
-      }
+      const x = w * (config.subCopy.xRatio ?? (align === "center" ? 0.5 : align === "right" ? 0.95 : 0.05));
+      drawTextWithShadow(ctx, x, y, lines[i], config.subCopy.color ?? "#D4AF37", 2, align, subStroke);
     }
   }
 
