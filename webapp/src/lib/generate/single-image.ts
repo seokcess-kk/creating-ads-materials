@@ -95,12 +95,16 @@ function referenceGuard(
  * 재사용(reuse) 경로의 텍스트 제거 지시 — 레퍼런스 픽셀에서 글자·로고만 지우고
  * 나머지(레이아웃·오브젝트·장식·색·조명)는 픽셀 수준으로 보존한다.
  */
+// 컨테이너(필·배지)를 "남기고 채우기"는 모델이 변색·이동시켜 신뢰할 수 없다(실측 검증됨) —
+// 텍스트와 그 컨테이너를 함께 지우고, 필·배지는 컴포지터가 실측 좌표·보정 색으로 다시 그린다.
 const TEXT_REMOVAL_PROMPT =
-  "Remove ALL text glyphs from this image — every letter, number, word and logo wordmark, including lettering printed on objects and inside badges. " +
-  "CRITICAL: remove ONLY the glyphs. Every container shape must remain exactly as it is, just empty — badges, stickers, seals, scalloped shapes, pills, ribbons and speech bubbles stay intact with their colors and outlines. " +
-  "Where lettering sat on an object or surface, fill that area cleanly and sharply with the surrounding surface color — flat and crisp, never blurred, smudged or hazy. " +
-  "Do NOT add, move, restyle or remove anything else: keep the layout, all objects, decorative elements, colors, lighting and composition EXACTLY identical. " +
-  "The result must look like the original design before any text was typed onto it.";
+  "Remove ALL text from this image, together with the badge/pill/sticker containers that hold text. Specifically remove: " +
+  "(1) every letter, word and logo wordmark; (2) ALL numbers including large stylized/decorative numerals — a giant number is text, not decoration; " +
+  "(3) every text container: pills, badges, stickers, seals, scalloped shapes, ribbons and speech bubbles, whether filled or empty. " +
+  "Fill every removed area by cleanly extending the surrounding background colors and gradients — flat and crisp, never blurred, smudged or hazy. " +
+  "KEEP everything else exactly identical: illustrated objects (boxes, products, characters), scene decorations, colors, lighting, layout and composition. " +
+  "Lettering printed on a kept object is removed cleanly, leaving the object's plain surface. " +
+  "The result must be a completely text-free, badge-free version of the same scene.";
 
 /** 로고 버퍼를 컴포지터에 직접 전달(fetch 없이). 포맷은 sharp가 내용으로 판별. */
 function logoForCompositorFrom(
@@ -406,11 +410,27 @@ export async function generateSingleImageVariants(
         metadata: { generationId, i, mode, refStrength: refStrength ?? "none" },
       };
 
+      // 카피 없는 실측 역할의 좌표를 명시해 빈 컨테이너를 그 자리에 그리지 않게 한다
+      // (일반 지시보다 좌표 명시가 훨씬 잘 듣는다). 가드는 소프트 제약이라 재발 가능 — 최선 노력.
+      const filledRoles = new Set(
+        Object.entries(
+          mergeLayerCopy({ headline: input.headline, sub: input.sub, layers: input.layerCopy ?? null }) ?? {},
+        )
+          .filter(([, t]) => t?.trim())
+          .map(([role]) => role),
+      );
+      const emptySlots = measuredLayers.filter((l) => !filledRoles.has(l.role));
+      const emptySlotGuard = refImage && mode === "overlay" && emptySlots.length
+        ? `\n\nEMPTY-SLOT RULE: No copy will be composited at these reference text/badge positions — leave each as PLAIN background with NO container, badge, pill or sticker shape: ${emptySlots
+            .map((l) => `${l.role} at (x≈${l.xRatio.toFixed(2)}, y≈${l.yRatio.toFixed(2)})`)
+            .join(", ")}.`
+        : "";
+
       const renderBase = (correction = "") => {
         const finalPrompt = `${prompt}${refImage ? referenceGuard(
           refStrength as Exclude<ReferenceStrength, "mood">,
           mode === "full" && hasText,
-        ) : ""}${correction}`;
+        ) : ""}${emptySlotGuard}${correction}`;
         return refImage
           ? editImage({
               prompt: finalPrompt,

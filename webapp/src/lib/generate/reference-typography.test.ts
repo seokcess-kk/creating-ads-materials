@@ -5,6 +5,8 @@ import {
   extractPixelPalette,
   formatDesignReference,
   normalizeDesignReference,
+  normalizeLayerAnchors,
+  remapDuplicateRoles,
 } from "./analyze-reference";
 import { assertCopyFitsTypography, buildReferenceTextLayers, singleAdConfig } from "./render";
 import { copyLimitsForTypography, countCopyChars, layerCopySpecs } from "./copy-limits";
@@ -231,6 +233,36 @@ describe("reference typography", () => {
     ]);
     expect(specs[0]).toEqual({ role: "headline", maxChars: 20, maxLines: 2 });
     expect(specs[1].maxChars).toBeGreaterThan(specs[0].maxChars / 2);
+  });
+
+  it("re-anchors center layers recorded with an edge coordinate", () => {
+    const base = {
+      role: "headline" as const, yRatio: 0.3, sizeRatio: 0.13, lineHeight: 1.05,
+      color: "#FFFFFF", weight: "black" as const, maxLines: 1,
+    };
+    // 비전이 align=center인데 xRatio를 왼쪽 모서리로 기록 → 중심으로 재해석돼야 화면 밖 잘림이 없다.
+    const [edgeRecorded] = normalizeLayerAnchors([
+      { ...base, xRatio: 0.06, widthRatio: 0.88, align: "center" },
+    ]);
+    expect(edgeRecorded.xRatio).toBeCloseTo(0.5, 1);
+    // 정상 중심 기록은 그대로.
+    const [ok] = normalizeLayerAnchors([{ ...base, xRatio: 0.5, widthRatio: 0.8, align: "center" }]);
+    expect(ok.xRatio).toBe(0.5);
+    // left 정렬이 캔버스를 넘으면 폭을 줄인다(위치는 유지).
+    const [clamped] = normalizeLayerAnchors([{ ...base, xRatio: 0.4, widthRatio: 0.8, align: "left" }]);
+    expect(clamped.xRatio).toBe(0.4);
+    expect(clamped.widthRatio).toBeLessThanOrEqual(0.62);
+  });
+
+  it("remaps duplicate roles so every measured layer can receive copy", () => {
+    const mk = (role: "badge") => ({
+      role, xRatio: 0.5, yRatio: 0.5, widthRatio: 0.3, sizeRatio: 0.05,
+      lineHeight: 1.1, align: "center" as const, color: "#FFFFFF",
+      weight: "bold" as const, maxLines: 1,
+    });
+    const layers = remapDuplicateRoles([mk("badge"), mk("badge")]);
+    expect(layers[0].role).toBe("badge");
+    expect(layers[1].role).toBe("legal");
   });
 
   it("moves price qualifiers with the price and uses local contrast instead of failing", () => {

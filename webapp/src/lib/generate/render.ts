@@ -105,6 +105,43 @@ function toComposeLayer(
   };
 }
 
+/** 레이어의 가로 구간 [left, right] (비율). */
+function layerSpan(l: Pick<ComposeTextLayer, "xRatio" | "widthRatio" | "align">): [number, number] {
+  const left = l.align === "center" ? l.xRatio - l.widthRatio / 2 : l.align === "right" ? l.xRatio - l.widthRatio : l.xRatio;
+  return [left, left + l.widthRatio];
+}
+
+/** 레이어의 세로 구간(비율, 대략). */
+function layerBand(l: Pick<ComposeTextLayer, "yRatio" | "sizeRatio" | "lineHeight" | "maxLines">): [number, number] {
+  return [l.yRatio - l.sizeRatio, l.yRatio + l.sizeRatio * l.lineHeight * (l.maxLines - 1) + l.sizeRatio * 0.25];
+}
+
+/**
+ * 겹침 클램프 — 측정 폭이 과대하거나 새 카피가 길어 일반 텍스트가 같은 밴드의 필·배지
+ * 아래로 파고드는 것을 방지. 필 앞(정렬 반대편)에서 폭을 잘라 autoFit이 그 안에서 줄바꿈·축소한다.
+ */
+function clampAgainstPills(layers: ComposeTextLayer[]): ComposeTextLayer[] {
+  const pills = layers.filter((l) => l.backgroundColor);
+  if (!pills.length) return layers;
+  return layers.map((layer) => {
+    if (layer.backgroundColor) return layer;
+    let [left, right] = layerSpan(layer);
+    const [top, bottom] = layerBand(layer);
+    for (const pill of pills) {
+      const [pTop, pBottom] = layerBand(pill);
+      if (bottom <= pTop || top >= pBottom) continue; // 세로 밴드 안 겹침
+      const [pLeft, pRight] = layerSpan(pill);
+      if (right <= pLeft || left >= pRight) continue; // 가로 안 겹침
+      // 텍스트 시작점이 필보다 앞이면 필 앞에서 끝내고, 뒤면 필 뒤에서 시작.
+      if (layer.align === "right") left = Math.max(left, pRight + 0.015);
+      else right = Math.min(right, pLeft - 0.015);
+    }
+    const width = Math.max(0.12, right - left);
+    if (Math.abs(width - layer.widthRatio) < 0.005) return layer;
+    return { ...layer, widthRatio: width };
+  });
+}
+
 /**
  * 새 카피를 레퍼런스의 의미 레이어에 배치한다. 원본 문구나 없는 고지는 발명하지 않는다.
  * layerCopy(역할별 확장 카피)가 있으면 그것으로 레이어 전체를 명시적으로 채우고,
@@ -123,12 +160,14 @@ export function buildReferenceTextLayers(input: {
   const explicit = input.layerCopy;
   if (explicit && Object.values(explicit).some((t) => t?.trim())) {
     const used = new Set<string>();
-    return input.layers.flatMap((layer): ComposeTextLayer[] => {
-      const text = used.has(layer.role) ? "" : explicit[layer.role]?.trim() ?? "";
-      if (!text) return [];
-      used.add(layer.role);
-      return [toComposeLayer(layer, text, input.busyRoles)];
-    });
+    return clampAgainstPills(
+      input.layers.flatMap((layer): ComposeTextLayer[] => {
+        const text = used.has(layer.role) ? "" : explicit[layer.role]?.trim() ?? "";
+        if (!text) return [];
+        used.add(layer.role);
+        return [toComposeLayer(layer, text, input.busyRoles)];
+      }),
+    );
   }
 
   let headline = input.headline?.trim() ?? "";
@@ -153,7 +192,7 @@ export function buildReferenceTextLayers(input: {
   const complete = (!headline || used.has("headline"))
     && (!price || used.has("price"))
     && (!sub || used.has("sub"));
-  return complete ? result : [];
+  return complete ? clampAgainstPills(result) : [];
 }
 
 /** 이미지 모델 호출 전에 레퍼런스 텍스트 박스와 새 카피 길이의 명백한 충돌을 차단한다(클라이언트 사전 안내의 서버 백스톱). */

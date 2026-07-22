@@ -4,7 +4,7 @@ import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
 import sharp from "sharp";
 import type { UsageContext } from "@/lib/usage/record";
-import type { DesignReference } from "./types";
+import type { DesignReference, ReferenceTextRole } from "./types";
 
 const TOOL = "record_design_reference";
 
@@ -280,11 +280,69 @@ function toHex([r, g, b]: [number, number, number]): string {
   return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
 }
 
+function parseHex(color?: string | null): [number, number, number] | null {
+  const match = color?.match(/^#([0-9a-f]{6})$/i);
+  if (!match) return null;
+  const v = parseInt(match[1], 16);
+  return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+}
+
+/**
+ * 앵커 정합성 정규화 — 비전이 align=center인데 xRatio를 중심이 아니라 모서리 좌표로
+ * 기록하면 텍스트가 캔버스 밖으로 잘린다(실측 검증됨). 물리적으로 화면 안에 들어오도록
+ * 중심 좌표를 재해석·클램프하고, left/right 정렬은 폭을 캔버스에 맞게 줄인다.
+ */
+export function normalizeLayerAnchors(
+  layers: NonNullable<DesignReference["textLayers"]>,
+): NonNullable<DesignReference["textLayers"]> {
+  return layers.map((layer) => {
+    let x = layer.xRatio;
+    let w = layer.widthRatio;
+    if (layer.align === "center") {
+      if (x - w / 2 < -0.02 && x + w <= 1.02) x += w / 2; // 왼쪽 모서리로 기록된 중심
+      else if (x + w / 2 > 1.02 && x - w >= -0.02) x -= w / 2; // 오른쪽 모서리로 기록된 중심
+      x = Math.min(1 - w / 2, Math.max(w / 2, x));
+    } else if (layer.align === "left") {
+      if (x + w > 1.01) w = Math.max(0.12, 1.01 - x);
+    } else if (x - w < -0.01) {
+      w = Math.max(0.12, x + 0.01);
+    }
+    return x === layer.xRatio && w === layer.widthRatio ? layer : { ...layer, xRatio: x, widthRatio: w };
+  });
+}
+
+const DUPLICATE_ROLE_FALLBACK: ReferenceTextRole[] = ["legal", "footer", "eyebrow", "badge", "sub"];
+
+/**
+ * 중복 역할 재배정 — 비전이 배지 2개를 모두 badge로 기록하면 카피(역할당 1값)가 두 번째에
+ * 닿지 못해 빈 컨테이너가 남는다. 뒤의 중복 레이어를 빈 역할로 옮겨 모두 채울 수 있게 한다.
+ */
+export function remapDuplicateRoles(
+  layers: NonNullable<DesignReference["textLayers"]>,
+): NonNullable<DesignReference["textLayers"]> {
+  const seen = new Set<string>();
+  return layers.map((layer) => {
+    if (!seen.has(layer.role)) {
+      seen.add(layer.role);
+      return layer;
+    }
+    const free = DUPLICATE_ROLE_FALLBACK.find((role) => !seen.has(role));
+    if (!free) return layer;
+    seen.add(free);
+    return { ...layer, role: free };
+  });
+}
+
 /**
  * 실측 레이어의 글자색·배지 배경색을 레퍼런스 픽셀에서 결정적으로 재추정한다.
- * 비전이 인접 레이어의 색을 섞어 기록하는 오매핑(노랑→네이비, 틸→퍼플, 필 색 반전)을
- * 픽셀 근거로 보정 — 박스 안 지배색(=배경)과 그로부터 가장 먼 유의미 색(=글자)을 뽑는다.
- * 실패·모호(대비 부족)하면 원래 측정값을 유지한다.
+ * 비전이 인접 레이어의 색을 섞어 기록하는 오매핑(틸→퍼플, 필 색 반전 등)을 픽셀 근거로 보정.
+ *
+ * 배경/글자 판별: "박스 안 최다 색 = 배경"은 초대형 헤드라인(글자 픽셀이 과반)에서 색을
+ * 뒤집는다(흰 글자 → 파란 배경을 글자색으로 오판). 대신 박스 '주변 링'을 장면 기준점으로 삼아
+ *  - 필(배경색 기록됨): 박스 내 최다 색 = 필 배경(필은 배경이 지배적)
+ *  - 일반 텍스트: 링과 가장 가까운 유의미 클러스터 = 장면 배경
+ * 글자색 = 배경과 충분히 먼(≥48) 유의미 클러스터 중 '가장 많은' 색(최원거리 대신 최다 —
+ * 이웃 레이어에서 새어 들어온 소수 색을 배제). 실패·모호하면 측정값을 유지한다.
  */
 export async function refineLayerColors(
   image: Buffer,
@@ -295,6 +353,11 @@ export async function refineLayerColors(
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
+
+  const pixelAt = (x: number, y: number): [number, number, number] => {
+    const idx = (y * info.width + x) * info.channels;
+    return [data[idx], data[idx + 1], data[idx + 2]];
+  };
 
   return layers.map((layer) => {
     const leftRatio = layer.align === "center"
@@ -310,14 +373,12 @@ export async function refineLayerColors(
     const bottom = Math.min(info.height, Math.ceil((topRatio + heightRatio) * info.height));
     if (right <= left || bottom <= top) return layer;
 
+    // 박스 내부 클러스터(4비트 버킷)
     const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
     let samples = 0;
     for (let y = top; y < bottom; y++) {
       for (let x = left; x < right; x++) {
-        const idx = (y * info.width + x) * info.channels;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
+        const [r, g, b] = pixelAt(x, y);
         const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
         const item = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
         item.count++;
@@ -329,26 +390,67 @@ export async function refineLayerColors(
       }
     }
     if (samples < 24 || buckets.size < 2) return layer;
-
     const candidates = [...buckets.values()]
       .map((item) => ({
         rgb: [item.r / item.count, item.g / item.count, item.b / item.count] as [number, number, number],
         count: item.count,
       }))
       .sort((a, b) => b.count - a.count);
-    // 박스 안 최다 색 = 배경(필/장면), 글자는 배경에서 가장 먼 유의미(3%+) 색.
-    const bg = candidates[0];
-    const glyph = candidates
-      .slice(1)
-      .filter((c) => c.count >= samples * 0.03)
-      .sort((a, b) => rgbDistance(b.rgb, bg.rgb) - rgbDistance(a.rgb, bg.rgb))[0];
-    if (!glyph || rgbDistance(glyph.rgb, bg.rgb) < 48) return layer;
+    const significant = candidates.filter((c) => c.count >= samples * 0.03);
+    if (significant.length < 2) return layer;
+
+    // 박스 주변 링 평균색(장면 기준점). 링을 못 얻으면 최다 색 폴백.
+    const margin = Math.max(2, Math.round((bottom - top) / 3));
+    let ringSum: [number, number, number] = [0, 0, 0];
+    let ringCount = 0;
+    for (let y = Math.max(0, top - margin); y < Math.min(info.height, bottom + margin); y++) {
+      for (let x = Math.max(0, left - margin); x < Math.min(info.width, right + margin); x++) {
+        if (y >= top && y < bottom && x >= left && x < right) continue; // 내부 제외
+        const [r, g, b] = pixelAt(x, y);
+        ringSum = [ringSum[0] + r, ringSum[1] + g, ringSum[2] + b];
+        ringCount++;
+      }
+    }
+    const ringAvg: [number, number, number] | null = ringCount >= 16
+      ? [ringSum[0] / ringCount, ringSum[1] / ringCount, ringSum[2] / ringCount]
+      : null;
+
+    // 배정은 비전을 신뢰하고 값은 픽셀로 스냅: 기록된 색과 가장 가까운 박스 클러스터(거리 ≤72)로
+    // 교정한다(비전의 색 어림값 → 실제 픽셀 값). 기록 색이 박스에 아예 없으면(심한 오기록)만
+    // 링 기반 휴리스틱으로 폴백 — 배정 자체를 뒤집는 이전 방식의 반전 사고를 없앤다.
+    const snap = (
+      recorded: string | null | undefined,
+      fallback: () => { rgb: [number, number, number] } | undefined,
+    ): { rgb: [number, number, number] } | undefined => {
+      const rgb = parseHex(recorded);
+      if (rgb) {
+        const nearest = [...significant].sort(
+          (a, b) => rgbDistance(a.rgb, rgb) - rgbDistance(b.rgb, rgb),
+        )[0];
+        if (nearest && rgbDistance(nearest.rgb, rgb) <= 72) return nearest;
+      }
+      return fallback();
+    };
+    const pillFallback = () =>
+      ringAvg ? significant.find((c) => rgbDistance(c.rgb, ringAvg) >= 40) ?? significant[0] : significant[0];
+    const bg = layer.backgroundColor ? snap(layer.backgroundColor, pillFallback) : undefined;
+    const glyphFallback = () => {
+      const base = bg
+        ?? (ringAvg
+          ? [...significant].sort((a, b) => rgbDistance(a.rgb, ringAvg) - rgbDistance(b.rgb, ringAvg))[0]
+          : significant[0]);
+      return significant.find((c) => c !== base && rgbDistance(c.rgb, base.rgb) >= 48);
+    };
+    let glyph = snap(layer.color, glyphFallback);
+    // 글자색이 필 배경과 같은 클러스터로 스냅되면(저대비 오기록) 휴리스틱으로 재선정.
+    if (glyph && bg && rgbDistance(glyph.rgb, bg.rgb) < 40) glyph = glyphFallback();
+    if (!glyph) return layer;
 
     return {
       ...layer,
       color: toHex(glyph.rgb),
       // 필·배지 배경색은 모델이 기록했을 때만 픽셀 값으로 보정(없는 필을 발명하지 않음).
-      backgroundColor: layer.backgroundColor ? toHex(bg.rgb) : layer.backgroundColor,
+      backgroundColor: layer.backgroundColor && bg ? toHex(bg.rgb) : layer.backgroundColor,
     };
   });
 }
@@ -490,10 +592,15 @@ async function analyzeReference(
     const { conceptDraft, ...design } = ReferenceDraftSchema.parse(raw);
     const normalized = normalizeDesignReference(design);
     // 레이어 색은 비전 서술을 믿지 않고 픽셀에서 재추정(오매핑 보정). 실패 시 측정값 유지.
+    // 중복 역할(badge×2 등)은 빈 역할로 재배정해 카피가 모든 레이어에 닿게 한다.
     let textLayers = normalized.textLayers;
     if (textLayers?.length) {
-      textLayers = await refineLayerColors(Buffer.from(img.base64, "base64"), textLayers).catch(
-        () => normalized.textLayers,
+      textLayers = normalizeLayerAnchors(
+        remapDuplicateRoles(
+          await refineLayerColors(Buffer.from(img.base64, "base64"), textLayers).catch(
+            () => normalized.textLayers!,
+          ),
+        ),
       );
     }
     const headlineLayer = textLayers?.find((l) => l.role === "headline");

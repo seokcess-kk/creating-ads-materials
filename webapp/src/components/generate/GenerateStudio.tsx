@@ -198,14 +198,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   );
   const reuseAvailable = measuredTextLayers.length > 0;
   const reuseMode = Boolean(refUrl) && refStrength === "reuse" && reuseAvailable;
-  // 재사용은 레퍼런스의 글자를 전부 지우므로, 카피가 없는 실측 역할은 빈 공간으로 남는다 — 사전 경고.
-  const unfilledRoles = reuseMode
-    ? [...new Set(layerSpecs.map((s) => s.role))].filter((role) => {
-        if (role === "headline") return !headline.trim();
-        if (role === "sub") return !sub.trim();
-        return !(extraCopy[role] ?? "").trim();
-      })
-    : [];
+  // 카피 없는 실측 역할은 빈 공간(reuse) 또는 빈 컨테이너 잔상(layout)으로 남는다 — 사전 경고.
+  const unfilledRoles =
+    reuseMode || (Boolean(refUrl) && refStrength === "layout" && measuredTextLayers.length > 0)
+      ? [...new Set(layerSpecs.map((s) => s.role))].filter((role) => {
+          if (role === "headline") return !headline.trim();
+          if (role === "sub") return !sub.trim();
+          return !(extraCopy[role] ?? "").trim();
+        })
+      : [];
 
   // 레퍼런스 실측 타이포가 있으면 overlay 카피 자수 한도를 입력 단계에서 안내(서버 assert의 사전 노출).
   const typo =
@@ -693,7 +694,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       재사용은 교체할 카피가 필요해요 — 카피를 입력하거나 자동 작성하세요
                     </span>
                   )}
-                  {reuseMode && hasText && unfilledRoles.length > 0 && (
+                  {hasText && unfilledRoles.length > 0 && (
                     <span className="text-[11px] text-amber-700 dark:text-amber-400">
                       레퍼런스의{" "}
                       {unfilledRoles
