@@ -36,7 +36,7 @@ import type {
   ReferenceFontCategory,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.5.1";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.6.0";
 
 // 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
@@ -114,7 +114,7 @@ export async function generateSingleImageVariants(
 
   // 레퍼런스 처리 — 강도 결정(구 referenceMode 호환: base=변형 → layout, style → style).
   const refUrl = input.referenceImageUrl?.trim() || null;
-  const refStrength: ReferenceStrength | null = refUrl
+  let refStrength: ReferenceStrength | null = refUrl
     ? (input.referenceStrength ??
       (input.referenceMode === "base" ? "layout" : "style"))
     : null;
@@ -131,6 +131,14 @@ export async function generateSingleImageVariants(
     });
     designRef = analyzed ?? designRef;
   }
+  if (refUrl && !designRef) {
+    throw new ApiError(422, "레퍼런스 디자인 분석에 실패했습니다. 다시 첨부하거나 분석을 재시도해 주세요.");
+  }
+  // 텍스트 레이어가 많은 완성형 광고는 style 변형으로는 정보 구조가 소실되므로 템플릿 모드로 승격한다.
+  const layoutAutoPromoted = Boolean(
+    refStrength === "style" && (designRef?.textLayers?.length ?? 0) >= 4,
+  );
+  if (layoutAutoPromoted) refStrength = "layout";
 
   if (mode === "overlay" && designRef?.typography) {
     assertCopyFitsTypography({
@@ -175,7 +183,7 @@ export async function generateSingleImageVariants(
   const directed = await buildImagePrompts(brief, count, {
     operation: "single_image_art_director",
     brandId: input.brandId ?? null,
-    metadata: { generationId, mode, refStrength: refStrength ?? "none" },
+    metadata: { generationId, mode, refStrength: refStrength ?? "none", layoutAutoPromoted },
   });
 
   const designRefText = designRef ? formatDesignReference(designRef) : null;
@@ -238,7 +246,7 @@ export async function generateSingleImageVariants(
       const usageContext = {
         operation: refImage ? "single_image_ref_gen" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, i, mode, refStrength: refStrength ?? "none" },
+        metadata: { generationId, i, mode, refStrength: refStrength ?? "none", layoutAutoPromoted },
       };
 
       const renderBase = (correction = "") => {
@@ -288,6 +296,7 @@ export async function generateSingleImageVariants(
         size: base.size ?? null,
         aspectRatio,
         refStrength: refStrength ?? "none",
+        layoutAutoPromoted,
         zoneRetry,
         busyTextRoles,
       };

@@ -138,6 +138,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [designRef, setDesignRef] = useState<Record<string, unknown> | null>(null);
   const [conceptDraft, setConceptDraft] = useState<string | null>(null);
   const [conceptLoading, setConceptLoading] = useState(false);
+  const [refAnalysisError, setRefAnalysisError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // 카피 자동작성
@@ -162,7 +163,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   });
   const [editBusy, setEditBusy] = useState(false);
 
-  const canSubmit = keyMessage.trim().length >= 4;
+  const referenceReady = !refUrl || Boolean(designRef && !conceptLoading && !refAnalysisError);
+  const canSubmit = keyMessage.trim().length >= 4 && referenceReady;
   // 광고용이면 CTA는 이미지에 들어가지 않으므로 텍스트 존재 판정에서 제외.
   const hasText = Boolean(
     headline.trim() || sub.trim() || (placement === "organic" && cta.trim()),
@@ -198,6 +200,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   // 레퍼런스 → 비주얼·장면 초안 + 디자인 요소(생성 시 재사용). 비주얼 필드가 비어있으면 자동 채움.
   async function draftConcept(url: string) {
     setConceptLoading(true);
+    setRefAnalysisError(null);
     try {
       const res = await fetch("/api/generate/concept", {
         method: "POST",
@@ -209,7 +212,11 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         }),
       });
       const data = await readJson(res, "비주얼 초안 실패");
-      setDesignRef(data.designRef ?? null);
+      const analyzed = (data.designRef ?? null) as Record<string, unknown> | null;
+      setDesignRef(analyzed);
+      if (Array.isArray(analyzed?.textLayers) && analyzed.textLayers.length >= 4) {
+        setRefStrength("layout");
+      }
       setConceptDraft(data.conceptDraft ?? null);
       if (!concept.trim() && data.conceptDraft) {
         setConcept(data.conceptDraft);
@@ -218,7 +225,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         toast.success("레퍼런스 디자인 반영 준비됨 · '비주얼 초안 적용'으로 바꿀 수 있어요");
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "비주얼 초안 오류");
+      const message = e instanceof Error ? e.message : "비주얼 초안 오류";
+      setDesignRef(null);
+      setRefAnalysisError(message);
+      toast.error(message);
     } finally {
       setConceptLoading(false);
     }
@@ -490,6 +500,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     setRefUrl(null);
                     setDesignRef(null);
                     setConceptDraft(null);
+                    setRefAnalysisError(null);
                   }}
                   className="text-[11px] text-muted-foreground underline"
                 >
@@ -574,7 +585,19 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       비주얼 초안 작성 중…
                     </span>
                   ) : (
-                    conceptDraft && (
+                    refAnalysisError ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-destructive">분석 실패 · 생성 전 재시도가 필요해요</span>
+                        <button
+                          type="button"
+                          disabled={generating}
+                          onClick={() => void draftConcept(refUrl)}
+                          className="text-[11px] text-primary underline disabled:opacity-50"
+                        >
+                          분석 재시도
+                        </button>
+                      </div>
+                    ) : conceptDraft && (
                       <button
                         type="button"
                         disabled={generating}

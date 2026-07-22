@@ -2,10 +2,15 @@ import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import { fetchAsBase64 } from "@/lib/utils/image-fetch";
+import sharp from "sharp";
 import type { UsageContext } from "@/lib/usage/record";
 import type { DesignReference } from "./types";
 
 const TOOL = "record_design_reference";
+
+const bounded = (min: number, max: number) =>
+  z.number().finite().transform((value) => Math.min(max, Math.max(min, value)));
+const clipped = (max: number) => z.string().transform((value) => value.slice(0, max));
 
 const fontCategoryProperty = {
   type: "string",
@@ -78,11 +83,11 @@ const textLayersProperty = {
 // 상한은 넉넉히 — 모델 서술이 길어도 파싱 실패하지 않도록(디스크립터는 프롬프트로 주입).
 export const DesignReferenceSchema = z.object({
   analysisVersion: z.literal(2).optional(),
-  palette: z.array(z.string().max(40)).max(8),
-  mood: z.string().max(200),
-  composition: z.string().max(300),
-  layout: z.string().max(300),
-  typographyVibe: z.string().max(200),
+  palette: z.array(clipped(40)).transform((values) => values.slice(0, 8)),
+  mood: clipped(200),
+  composition: clipped(300),
+  layout: clipped(300),
+  typographyVibe: clipped(200),
   fontCategory: z
     .enum(["sans", "serif", "rounded", "display", "handwriting"])
     .optional(),
@@ -93,35 +98,35 @@ export const DesignReferenceSchema = z.object({
   ]).optional(),
   typography: z.object({
     alignment: z.enum(["left", "center", "right"]),
-    headlineSizeRatio: z.number().min(0.015).max(0.3),
-    headlineYRatio: z.number().min(0).max(1),
-    headlineMaxWidthRatio: z.number().min(0.2).max(1),
-    headlineLineHeight: z.number().min(0.8).max(2),
-    headlineColor: z.string().max(40),
+    headlineSizeRatio: bounded(0.015, 0.3),
+    headlineYRatio: bounded(0, 1),
+    headlineMaxWidthRatio: bounded(0.2, 1),
+    headlineLineHeight: bounded(0.8, 2),
+    headlineColor: clipped(40),
     headlineWeight: z.enum(["regular", "medium", "bold", "black"]),
-    subSizeRatio: z.number().min(0.01).max(0.2).optional(),
-    subYRatio: z.number().min(0).max(1).optional(),
-    subMaxWidthRatio: z.number().min(0.2).max(1).optional(),
-    subColor: z.string().max(40).optional(),
+    subSizeRatio: bounded(0.01, 0.2).optional(),
+    subYRatio: bounded(0, 1).optional(),
+    subMaxWidthRatio: bounded(0.2, 1).optional(),
+    subColor: clipped(40).optional(),
     hasStrokeOrShadow: z.boolean().optional(),
   }).optional(),
   textLayers: z.array(z.object({
     role: z.enum(["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"]),
-    xRatio: z.number().min(0).max(1),
-    yRatio: z.number().min(0).max(1),
-    widthRatio: z.number().min(0.1).max(1),
-    sizeRatio: z.number().min(0.01).max(0.35),
-    lineHeight: z.number().min(0.8).max(2),
+    xRatio: bounded(0, 1),
+    yRatio: bounded(0, 1),
+    widthRatio: bounded(0.1, 1),
+    sizeRatio: bounded(0.01, 0.35),
+    lineHeight: bounded(0.8, 2),
     align: z.enum(["left", "center", "right"]),
-    color: z.string().max(40),
-    gradientEndColor: z.string().max(40).optional(),
+    color: clipped(40),
+    gradientEndColor: clipped(40).optional(),
     weight: z.enum(["regular", "medium", "bold", "black"]),
-    maxLines: z.number().int().min(1).max(4),
-    strokeColor: z.string().max(60).optional(),
-    backgroundColor: z.string().max(60).optional(),
-    cornerRadiusRatio: z.number().min(0).max(0.2).optional(),
-  })).max(8).optional(),
-  notes: z.string().max(400).optional(),
+    maxLines: bounded(1, 4).transform(Math.round),
+    strokeColor: clipped(60).optional(),
+    backgroundColor: clipped(60).optional(),
+    cornerRadiusRatio: bounded(0, 0.2).optional(),
+  })).transform((values) => values.slice(0, 8)).optional(),
+  notes: clipped(400).optional(),
 });
 
 const tool: Tool = {
@@ -150,6 +155,123 @@ const tool: Tool = {
   },
 };
 
+const CORE_TOOL = "record_reference_core";
+const ReferenceCoreSchema = z.object({
+  conceptDraft: clipped(400).optional(),
+  mood: clipped(200),
+  composition: clipped(300),
+  layout: clipped(300),
+  typographyVibe: clipped(200),
+  fontCategory: z.enum(["sans", "serif", "rounded", "display", "handwriting"]).optional(),
+  fontFamily: DesignReferenceSchema.shape.fontFamily,
+  density: z.enum(["compact", "balanced", "airy"]),
+  alignment: z.enum(["left", "center", "right"]),
+  roles: z.array(z.enum(["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"]))
+    .transform((values) => [...new Set(values)].slice(0, 8)),
+});
+
+const coreTool: Tool = {
+  name: CORE_TOOL,
+  description: "정밀 좌표 분석 실패 시 사용하는 광고 레퍼런스 핵심 구조 기록.",
+  input_schema: {
+    type: "object",
+    properties: {
+      conceptDraft: { type: "string", description: "새 광고의 비주얼 컨셉 한국어 1~2문장" },
+      mood: { type: "string" },
+      composition: { type: "string" },
+      layout: { type: "string" },
+      typographyVibe: { type: "string" },
+      fontCategory: fontCategoryProperty,
+      fontFamily: fontFamilyProperty,
+      density: { type: "string", enum: ["compact", "balanced", "airy"] },
+      alignment: { type: "string", enum: ["left", "center", "right"] },
+      roles: {
+        type: "array",
+        items: { type: "string", enum: ["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"] },
+      },
+    },
+    required: ["mood", "composition", "layout", "typographyVibe", "density", "alignment", "roles"],
+  },
+};
+
+function fallbackLayers(
+  roles: z.infer<typeof ReferenceCoreSchema>["roles"],
+  density: z.infer<typeof ReferenceCoreSchema>["density"],
+  align: "left" | "center" | "right",
+  palette: string[],
+): NonNullable<DesignReference["textLayers"]> {
+  const x = align === "left" ? 0.06 : align === "right" ? 0.94 : 0.5;
+  const foreground = palette.find((color) => color === "#FFFFFF") ?? "#FFFFFF";
+  const accent = palette.find((color) => color !== foreground) ?? "#FFD600";
+  const compact = density === "compact";
+  const presets = {
+    legal: [0.04, 0.018, 0.72, 1],
+    eyebrow: [0.12, 0.045, 0.68, 1],
+    headline: [compact ? 0.28 : 0.34, compact ? 0.13 : 0.1, 0.78, 2],
+    sub: [compact ? 0.48 : 0.55, 0.045, 0.72, 2],
+    price: [compact ? 0.68 : 0.72, compact ? 0.16 : 0.13, 0.78, 1],
+    badge: [0.78, 0.04, 0.36, 1],
+    footer: [0.92, 0.055, 0.9, 1],
+  } satisfies Record<string, [number, number, number, number]>;
+  return roles.map((role) => {
+    const [yRatio, sizeRatio, widthRatio, maxLines] = presets[role];
+    const isAccent = role === "headline" || role === "price";
+    return {
+      role,
+      xRatio: role === "footer" ? 0.5 : x,
+      yRatio,
+      widthRatio,
+      sizeRatio,
+      lineHeight: 1.08,
+      align: role === "footer" ? "center" as const : align,
+      color: isAccent ? accent : foreground,
+      weight: role === "legal" ? "regular" as const : role === "sub" ? "medium" as const : "black" as const,
+      maxLines,
+    };
+  });
+}
+
+async function analyzeReferenceFallback(
+  img: Awaited<ReturnType<typeof fetchAsBase64>>,
+  palette: string[],
+  usageContext?: UsageContext,
+): Promise<{ design: DesignReference; conceptDraft?: string } | null> {
+  const resp = await callClaude({
+    model: "sonnet",
+    maxTokens: 1000,
+    system:
+      "광고 레퍼런스의 핵심 구조만 안정적으로 분류하세요. 좌표를 추정하지 말고 밀도·정렬·텍스트 역할을 선택하며 원문과 로고는 복사하지 않습니다. 도구로만 기록.",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType(img.mimeType), data: img.base64 } },
+        { type: "text", text: `이 광고의 핵심 구조를 ${CORE_TOOL} 로 기록하세요.` },
+      ],
+    }],
+    tools: [coreTool],
+    toolChoice: { type: "tool", name: CORE_TOOL },
+    usageContext: usageContext ? { ...usageContext, operation: `${usageContext.operation}_fallback` } : undefined,
+  });
+  const raw = extractToolUse(resp, CORE_TOOL);
+  const parsed = raw ? ReferenceCoreSchema.safeParse(raw) : null;
+  if (!parsed?.success) return null;
+  const core = parsed.data;
+  const roles: z.infer<typeof ReferenceCoreSchema>["roles"] = core.roles.length
+    ? core.roles
+    : ["headline", "sub", "price"];
+  const design = normalizeDesignReference({
+    palette,
+    mood: core.mood,
+    composition: core.composition,
+    layout: core.layout,
+    typographyVibe: core.typographyVibe,
+    fontCategory: core.fontCategory,
+    fontFamily: core.fontFamily,
+    textLayers: fallbackLayers(roles, core.density, core.alignment, palette),
+  });
+  return { design, conceptDraft: core.conceptDraft };
+}
+
 type Media = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 function mediaType(m: string): Media {
   return m === "image/jpeg" || m === "image/png" || m === "image/gif" || m === "image/webp"
@@ -157,13 +279,60 @@ function mediaType(m: string): Media {
     : "image/png";
 }
 
+function rgbDistance(a: [number, number, number], b: [number, number, number]): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** 모델의 색상 서술과 무관하게 레퍼런스 픽셀에서 주요·강조색을 결정적으로 추출한다. */
+export async function extractPixelPalette(image: Buffer, count = 6): Promise<string[]> {
+  const { data, info } = await sharp(image)
+    .resize(72, 72, { fit: "inside", withoutEnlargement: true })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const buckets = new Map<number, { count: number; r: number; g: number; b: number; saturation: number }>();
+  for (let i = 0; i < data.length; i += info.channels) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const saturation = max ? (max - min) / max : 0;
+    const item = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0, saturation: 0 };
+    item.count++;
+    item.r += r;
+    item.g += g;
+    item.b += b;
+    item.saturation += saturation;
+    buckets.set(key, item);
+  }
+  const candidates = [...buckets.values()]
+    .map((item) => ({
+      rgb: [item.r / item.count, item.g / item.count, item.b / item.count] as [number, number, number],
+      score: item.count * (1 + (item.saturation / item.count) * 0.85),
+    }))
+    .sort((a, b) => b.score - a.score);
+  const selected: Array<[number, number, number]> = [];
+  for (const candidate of candidates) {
+    if (selected.every((color) => rgbDistance(color, candidate.rgb) >= 46)) selected.push(candidate.rgb);
+    if (selected.length >= count) break;
+  }
+  return selected.map(([r, g, b]) =>
+    `#${[r, g, b].map((value) => Math.round(value).toString(16).padStart(2, "0")).join("").toUpperCase()}`,
+  );
+}
+
 /** 레퍼런스 이미지 → 디자인 요소 추출. 실패 시 null(스타일 주입 생략으로 graceful degrade). */
 export async function analyzeReferenceDesign(
   imageUrl: string,
   usageContext?: UsageContext,
 ): Promise<DesignReference | null> {
+  let img: Awaited<ReturnType<typeof fetchAsBase64>> | null = null;
+  let pixelPalette: string[] = [];
   try {
-    const img = await fetchAsBase64(imageUrl);
+    img = await fetchAsBase64(imageUrl);
+    pixelPalette = await extractPixelPalette(Buffer.from(img.base64, "base64"));
     const resp = await callClaude({
       model: "sonnet",
       maxTokens: 1600,
@@ -193,10 +362,18 @@ export async function analyzeReferenceDesign(
       usageContext,
     });
     const raw = extractToolUse(resp, TOOL);
-    if (!raw) return null;
-    return normalizeDesignReference(DesignReferenceSchema.parse(raw));
+    if (!raw) throw new Error("정밀 분석 도구 응답 없음");
+    const parsed = normalizeDesignReference(DesignReferenceSchema.parse(raw));
+    return { ...parsed, palette: pixelPalette.length ? pixelPalette : parsed.palette };
   } catch (e) {
-    console.warn("레퍼런스 분석 실패:", (e as Error).message);
+    console.warn("레퍼런스 정밀 분석 실패, 단순 분석 재시도:", (e as Error).message);
+    if (img) {
+      try {
+        return (await analyzeReferenceFallback(img, pixelPalette, usageContext))?.design ?? null;
+      } catch (fallbackError) {
+        console.warn("레퍼런스 단순 분석도 실패:", (fallbackError as Error).message);
+      }
+    }
     return null;
   }
 }
@@ -253,8 +430,11 @@ export async function analyzeReferenceForDraft(
   } = {},
   usageContext?: UsageContext,
 ): Promise<ReferenceDraft | null> {
+  let img: Awaited<ReturnType<typeof fetchAsBase64>> | null = null;
+  let pixelPalette: string[] = [];
   try {
-    const img = await fetchAsBase64(imageUrl);
+    img = await fetchAsBase64(imageUrl);
+    pixelPalette = await extractPixelPalette(Buffer.from(img.base64, "base64"));
     const key = opts.keyMessage?.trim() ? `\n사용자 핵심 메시지: ${opts.keyMessage.trim()}` : "";
     const brand = opts.brandName?.trim()
       ? `\n브랜드: ${opts.brandName.trim()}${opts.brandCategory?.trim() ? ` (${opts.brandCategory.trim()})` : ""}`
@@ -284,12 +464,31 @@ export async function analyzeReferenceForDraft(
       usageContext,
     });
     const raw = extractToolUse(resp, DRAFT_TOOL);
-    if (!raw) return null;
+    if (!raw) throw new Error("초안 분석 도구 응답 없음");
     const parsed = ReferenceDraftSchema.parse(raw);
     const { conceptDraft, ...design } = parsed;
-    return { conceptDraft, design: normalizeDesignReference(design) };
+    const normalized = normalizeDesignReference(design);
+    return {
+      conceptDraft,
+      design: { ...normalized, palette: pixelPalette.length ? pixelPalette : normalized.palette },
+    };
   } catch (e) {
-    console.warn("레퍼런스 초안 생성 실패:", (e as Error).message);
+    console.warn("레퍼런스 초안 정밀 분석 실패, 단순 분석 재시도:", (e as Error).message);
+    if (img) {
+      try {
+        const fallback = await analyzeReferenceFallback(img, pixelPalette, usageContext);
+        if (fallback) {
+          return {
+            conceptDraft: fallback.conceptDraft
+              ?? opts.keyMessage?.trim()
+              ?? "레퍼런스의 구도와 광고 밀도를 유지한 새로운 비주얼",
+            design: fallback.design,
+          };
+        }
+      } catch (fallbackError) {
+        console.warn("레퍼런스 초안 단순 분석도 실패:", (fallbackError as Error).message);
+      }
+    }
     return null;
   }
 }

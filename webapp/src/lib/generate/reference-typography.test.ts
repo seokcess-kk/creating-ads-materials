@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDesignReference, ReferenceDraftSchema } from "./analyze-reference";
+import sharp from "sharp";
+import {
+  DesignReferenceSchema,
+  extractPixelPalette,
+  normalizeDesignReference,
+  ReferenceDraftSchema,
+} from "./analyze-reference";
 import { assertCopyFitsTypography, buildReferenceTextLayers, singleAdConfig } from "./render";
 
 const typography = {
@@ -103,6 +109,51 @@ describe("reference typography", () => {
     ] });
     expect(config.mainCopy).toBeUndefined();
     expect(config.textLayers).toHaveLength(2);
+  });
+
+  it("clamps imperfect vision measurements instead of discarding the analysis", () => {
+    const parsed = DesignReferenceSchema.parse({
+      palette: Array.from({ length: 10 }, (_, i) => `#00000${i}`),
+      mood: "m".repeat(240),
+      composition: "center",
+      layout: "dense",
+      typographyVibe: "display",
+      textLayers: [{
+        role: "headline",
+        xRatio: -0.03,
+        yRatio: 1.06,
+        widthRatio: 1.2,
+        sizeRatio: 0.42,
+        lineHeight: 2.4,
+        align: "left",
+        color: "#FFFFFF",
+        weight: "black",
+        maxLines: 5,
+      }],
+    });
+
+    expect(parsed.palette).toHaveLength(8);
+    expect(parsed.mood).toHaveLength(200);
+    expect(parsed.textLayers?.[0]).toMatchObject({
+      xRatio: 0,
+      yRatio: 1,
+      widthRatio: 1,
+      sizeRatio: 0.35,
+      lineHeight: 2,
+      maxLines: 4,
+    });
+  });
+
+  it("extracts dominant colors from pixels without relying on model prose", async () => {
+    const raw = Buffer.alloc(40 * 20 * 3);
+    for (let i = 0; i < 40 * 20; i++) {
+      const color = i < 40 * 15 ? [20, 100, 245] : [45, 240, 145];
+      raw.set(color, i * 3);
+    }
+    const image = await sharp(raw, { raw: { width: 40, height: 20, channels: 3 } }).png().toBuffer();
+    const palette = await extractPixelPalette(image, 2);
+    expect(palette).toHaveLength(2);
+    expect(palette[0]).toMatch(/^#[0-9A-F]{6}$/);
   });
 
   it("moves price qualifiers with the price and uses local contrast instead of failing", () => {
