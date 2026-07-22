@@ -2,6 +2,14 @@ import type { AspectRatio } from "@/lib/engines";
 
 /** overlay = 텍스트 없는 배경 + 컴포지터 한글 오버레이 / full = 이미지에 텍스트까지 베이킹 */
 export type SingleRenderMode = "overlay" | "full";
+
+/**
+ * 소재 용도 — CTA 처리 방식을 결정한다.
+ *  - ad(기본): 유료 광고 지면(인스타·메타 등)은 매체가 네이티브 CTA 버튼을 제공
+ *    → 이미지에 CTA를 넣지 않는다(눌리지 않는 '가짜 버튼' 방지).
+ *  - organic: 게시물·카톡·출력물 등 버튼 없는 지면 → CTA를 이미지에 합성.
+ */
+export type Placement = "ad" | "organic";
 export type VariantMode = SingleRenderMode | "edit";
 
 /**
@@ -69,6 +77,8 @@ export interface SingleImageInput {
   mood?: string | null;
   /** 카피 세로 위치(선택) — overlay에서 텍스트존·여백 위치를 결정. */
   copyPosition?: CopyPosition | null;
+  /** 소재 용도(기본 ad) — ad면 CTA를 이미지에 넣지 않는다(매체 버튼이 대신). */
+  placement?: Placement;
   aspectRatio?: AspectRatio;
   referenceImageUrl?: string | null;
   /** 레퍼런스 반영 강도(기본 style). 미지정 시 구 referenceMode에서 매핑. */

@@ -11,6 +11,8 @@ const Schema = z.object({
   tone: z.string().max(300).nullable().optional(),
   brandId: z.string().uuid().nullable().optional(),
   count: z.number().int().min(3).max(6).optional(),
+  /** ad면 cta 미생성(매체가 CTA 버튼 제공). 미지정 시 기존대로 생성. */
+  placement: z.enum(["ad", "organic"]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -25,6 +27,7 @@ export async function POST(request: Request) {
         brandName: brand?.name ?? null,
         brandCategory: brand?.category ?? null,
         count: input.count,
+        includeCta: input.placement !== "ad",
       },
       { operation: "single_image_copy", brandId: input.brandId ?? null },
     );

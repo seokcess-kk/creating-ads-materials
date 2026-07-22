@@ -25,6 +25,7 @@ const Schema = z.object({
   palette: z.string().max(160).nullable().optional(),
   mood: z.string().max(120).nullable().optional(),
   copyPosition: z.enum(["top", "center", "bottom"]).nullable().optional(),
+  placement: z.enum(["ad", "organic"]).optional(),
   aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   referenceImageUrl: z.string().url().nullable().optional(),
   referenceStrength: z.enum(["mood", "style", "layout"]).optional(),

@@ -113,6 +113,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [brandId, setBrandId] = useState<string>("");
   const [bakeText, setBakeText] = useState(false);
   const [count, setCount] = useState(3);
+  // 용도 — ad(기본): 매체가 CTA 버튼 제공 → 이미지에 CTA 안 넣음 / organic: CTA 합성.
+  const [placement, setPlacement] = useState<"ad" | "organic">("ad");
+  // 생성 시점의 용도 스냅샷 — 결과 라이트박스의 CTA 편집 노출 기준(생성 후 토글 변경과 무관).
+  const [genPlacement, setGenPlacement] = useState<"ad" | "organic">("ad");
   // 구조화 스타일 노브(프리셋 칩) — 빈 값이면 아트디렉터 자율.
   const [lighting, setLighting] = useState("");
   const [palette, setPalette] = useState("");
@@ -151,7 +155,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [editBusy, setEditBusy] = useState(false);
 
   const canSubmit = keyMessage.trim().length >= 4;
-  const hasText = Boolean(headline.trim() || sub.trim() || cta.trim());
+  // 광고용이면 CTA는 이미지에 들어가지 않으므로 텍스트 존재 판정에서 제외.
+  const hasText = Boolean(
+    headline.trim() || sub.trim() || (placement === "organic" && cta.trim()),
+  );
 
   async function onPickReference(file: File | null) {
     if (!file) return;
@@ -224,6 +231,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           concept: concept.trim() || null,
           tone: tone.trim() || null,
           brandId: brandId || null,
+          placement,
         }),
       });
       const data = await readJson(res, "카피 생성 실패");
@@ -238,7 +246,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   function applyCopy(opt: CopyOption) {
     setHeadline(opt.headline);
     setSub(opt.sub ?? "");
-    setCta(opt.cta ?? "");
+    setCta(placement === "organic" ? (opt.cta ?? "") : "");
     toast.success("카피를 입력란에 채웠습니다 (수정 가능)");
   }
 
@@ -272,7 +280,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           concept: concept.trim() || null,
           headline: headline.trim() || null,
           sub: sub.trim() || null,
-          cta: cta.trim() || null,
+          cta: placement === "organic" ? cta.trim() || null : null,
+          placement,
           tone: tone.trim() || null,
           lighting: lighting || null,
           palette: palette || null,
@@ -288,11 +297,12 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         }),
       });
       const data = await readJson(res, "생성 실패");
+      setGenPlacement(placement);
       // 각 후보의 초기 카피 = 생성에 쓰인 폼 카피(=베이킹/합성된 값). 이후 후보별로 독립 편집.
       const formCopy: VariantCopy = {
         headline: headline.trim(),
         sub: sub.trim(),
-        cta: cta.trim(),
+        cta: placement === "organic" ? cta.trim() : "",
       };
       setVariants(
         (data.variants as ResultVariant[]).map((v) => ({ ...v, copy: { ...formCopy } })),
@@ -599,7 +609,12 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 ))}
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-2",
+                placement === "organic" ? "md:grid-cols-3" : "md:grid-cols-2",
+              )}
+            >
               <Input
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
@@ -614,13 +629,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 disabled={generating}
                 className="h-8 text-xs"
               />
-              <Input
-                value={cta}
-                onChange={(e) => setCta(e.target.value)}
-                placeholder="CTA"
-                disabled={generating}
-                className="h-8 text-xs"
-              />
+              {placement === "organic" && (
+                <Input
+                  value={cta}
+                  onChange={(e) => setCta(e.target.value)}
+                  placeholder="CTA"
+                  disabled={generating}
+                  className="h-8 text-xs"
+                />
+              )}
             </div>
           </div>
 
@@ -652,7 +669,37 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs">용도</Label>
+              <div className="flex gap-1.5">
+                {[
+                  { v: "ad", l: "광고용" },
+                  { v: "organic", l: "게시물용" },
+                ].map((o) => (
+                  <button
+                    key={o.v}
+                    type="button"
+                    disabled={generating}
+                    onClick={() => setPlacement(o.v as "ad" | "organic")}
+                    className={cn(
+                      "rounded-lg border px-2.5 py-1.5 text-xs transition-colors disabled:opacity-50",
+                      placement === o.v
+                        ? "border-foreground font-medium"
+                        : "border-border text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {o.l}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {placement === "ad"
+                  ? "매체가 CTA 버튼을 제공 — 이미지엔 CTA를 넣지 않아요"
+                  : "버튼 없는 지면(게시물·카톡·출력물) — CTA를 이미지에 합성해요"}
+              </p>
+            </div>
+
             <div className="space-y-1">
               <Label className="text-xs">비율</Label>
               <div className="flex flex-wrap gap-1.5">
@@ -914,7 +961,12 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 <div className="text-[11px] text-white/70">
                   카피 수정 후 재합성 (이미지 모델 호출 없이 배경 재사용)
                 </div>
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                <div
+                  className={cn(
+                    "grid grid-cols-1 gap-1.5",
+                    genPlacement === "organic" ? "sm:grid-cols-3" : "sm:grid-cols-2",
+                  )}
+                >
                   <input
                     value={preview.copy.headline}
                     onChange={(e) => setVariantCopy(previewIdx, "headline", e.target.value)}
@@ -929,13 +981,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     disabled={reBusy}
                     className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
                   />
-                  <input
-                    value={preview.copy.cta}
-                    onChange={(e) => setVariantCopy(previewIdx, "cta", e.target.value)}
-                    placeholder="CTA"
-                    disabled={reBusy}
-                    className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
-                  />
+                  {genPlacement === "organic" && (
+                    <input
+                      value={preview.copy.cta}
+                      onChange={(e) => setVariantCopy(previewIdx, "cta", e.target.value)}
+                      placeholder="CTA"
+                      disabled={reBusy}
+                      className="h-8 rounded-md border border-white/20 bg-black/30 px-2 text-xs text-white placeholder:text-white/40 outline-none focus-visible:border-white/50 disabled:opacity-50"
+                    />
+                  )}
                 </div>
                 <button
                   type="button"

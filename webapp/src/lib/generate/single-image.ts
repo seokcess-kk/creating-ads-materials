@@ -86,8 +86,12 @@ function decideMode(input: SingleImageInput): SingleRenderMode {
  */
 export async function generateSingleImageVariants(
   generationId: string,
-  input: SingleImageInput,
+  raw: SingleImageInput,
 ): Promise<SingleImageResult> {
+  // 용도 정규화 — 광고 지면(ad, 기본)은 매체가 네이티브 CTA 버튼을 제공하므로
+  // 이미지 속 '가짜 버튼'이 생기지 않게 CTA를 서버에서도 제거한다(클라이언트 미적용 대비).
+  const input: SingleImageInput =
+    (raw.placement ?? "ad") === "ad" && raw.cta ? { ...raw, cta: null } : raw;
   const aspectRatio: AspectRatio = input.aspectRatio ?? "1:1";
   const count = Math.min(Math.max(input.count ?? 3, 1), 4);
   const mode = decideMode(input);

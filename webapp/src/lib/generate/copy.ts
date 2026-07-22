@@ -57,8 +57,12 @@ const tool: Tool = {
   },
 };
 
-function buildSystem(tone?: string | null): string {
+function buildSystem(tone?: string | null, includeCta?: boolean): string {
   const toneLine = tone?.trim() ? `\n톤 오버라이드(우선): ${tone.trim()}` : "";
+  const ctaLine =
+    includeCta === false
+      ? "- cta는 작성하지 않는다(광고 지면 — 매체가 CTA 버튼을 제공)."
+      : "- cta는 행동 동사 위주(예: 지금 신청, 자세히 보기).";
   return `당신은 한국어 디지털 광고 카피라이터입니다. 한 컨셉에 대해 서로 다른 앵글의 카피를 여러 벌 작성합니다.
 
 ## 원칙
@@ -66,7 +70,7 @@ function buildSystem(tone?: string | null): string {
 - headline은 짧고 강하게(권장 8~16자). 모바일 가독성 우선.
 - 앵글을 다양하게: 혜택(benefit)·호기심(curiosity)·긴급성(urgency)·사회적증거(social_proof)·감성(emotional).
 - 과장/허위 금지. 입력 사실 범위 안에서.
-- cta는 행동 동사 위주(예: 지금 신청, 자세히 보기).${toneLine}
+${ctaLine}${toneLine}
 
 도구 ${TOOL} 로만 기록.`;
 }
@@ -81,6 +85,8 @@ export async function generateAdCopy(
     brandName?: string | null;
     brandCategory?: string | null;
     count?: number;
+    /** false면 cta 미생성(광고 지면 — 매체가 네이티브 CTA 버튼 제공). 기본 true. */
+    includeCta?: boolean;
   },
   usageContext?: UsageContext,
 ): Promise<CopyOption[]> {
@@ -95,7 +101,7 @@ export async function generateAdCopy(
   const resp = await callClaude({
     model: "opus",
     maxTokens: 1500,
-    system: buildSystem(input.tone),
+    system: buildSystem(input.tone, input.includeCta),
     usageContext,
     messages: [
       {
@@ -111,5 +117,9 @@ export async function generateAdCopy(
   });
   const raw = extractToolUse(resp, TOOL);
   if (!raw) throw new Error("카피 생성 실패");
-  return CopyListSchema.parse(raw).options;
+  const options = CopyListSchema.parse(raw).options;
+  // 지시와 무관하게 모델이 cta를 넣었을 수 있으므로 결정적으로 제거.
+  return input.includeCta === false
+    ? options.map((o) => ({ ...o, cta: undefined }))
+    : options;
 }
