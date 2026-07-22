@@ -24,9 +24,15 @@ export function copyLimitsForTypography(t: ReferenceTypographyProfile): CopyLimi
   return { headline: headlinePerLine * 2, sub };
 }
 
-/** 공백 제외 글자 수(서로게이트 안전). */
+/**
+ * 렌더 폭 기준 글자 수(서로게이트 안전) — 일반 글자 1, 내부 공백 0.5.
+ * 공백도 실제 렌더 폭을 차지하므로 제외하면 "한도는 통과했는데 실제로는 축소되는" 갭이 생긴다.
+ */
 export function countCopyChars(value?: string | null): number {
-  return Array.from(value?.replace(/\s/g, "") ?? "").length;
+  const chars = Array.from(value?.trim() ?? "");
+  if (!chars.length) return 0;
+  const spaces = chars.filter((c) => /\s/.test(c)).length;
+  return Math.ceil(chars.length - spaces * 0.5);
 }
 
 /** 실측 레이어 1개의 역할·자수 한도 — 디자인 인지 카피 생성과 UI 안내가 공유. */

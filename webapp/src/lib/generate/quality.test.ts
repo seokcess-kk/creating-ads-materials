@@ -53,3 +53,33 @@ describe("contrast gate", () => {
     await expect(findLowContrastLayers(image, [pill])).resolves.toEqual([]);
   });
 });
+
+describe("layer color refinement", () => {
+  it("recovers glyph and pill colors from reference pixels when vision mislabels them", async () => {
+    // 틸(#20C0B0) 필 위에 네이비(#102040) 글자 영역을 시뮬레이션 — 비전은 색을 반대로 기록했다고 가정.
+    const W = 192;
+    const raw = Buffer.alloc(W * W * 3, 0xee);
+    const box = { left: 19, right: 134, top: 76, bottom: 100 };
+    for (let y = box.top; y < box.bottom; y++) {
+      for (let x = box.left; x < box.right; x++) {
+        const glyphStripe = y % 4 === 0 || x % 5 === 0; // ~40% 글자 픽셀
+        const [r, g, b] = glyphStripe ? [0x10, 0x20, 0x40] : [0x20, 0xc0, 0xb0];
+        raw.set([r, g, b], (y * W + x) * 3);
+      }
+    }
+    const image = await sharp(raw, { raw: { width: W, height: W, channels: 3 } }).png().toBuffer();
+    const { refineLayerColors } = await import("./analyze-reference");
+    const [refined] = await refineLayerColors(image, [{
+      role: "badge",
+      xRatio: 0.1, yRatio: 0.45, widthRatio: 0.6, sizeRatio: 0.1,
+      lineHeight: 1.1, align: "left", color: "#FF00FF", // 오기록
+      weight: "bold", maxLines: 1, backgroundColor: "#FFFFFF", // 오기록
+    }]);
+    // 글자색은 네이비 계열, 필 배경은 틸 계열로 보정되어야 한다.
+    expect(refined.color).not.toBe("#FF00FF");
+    const glyph = parseInt(refined.color.slice(1), 16);
+    expect((glyph >> 16) & 255).toBeLessThan(80); // R 낮음(네이비)
+    const bg = parseInt((refined.backgroundColor ?? "#000000").slice(1), 16);
+    expect((bg >> 8) & 255).toBeGreaterThan(120); // G 높음(틸)
+  });
+});

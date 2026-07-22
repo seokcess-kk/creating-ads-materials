@@ -198,6 +198,14 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   );
   const reuseAvailable = measuredTextLayers.length > 0;
   const reuseMode = Boolean(refUrl) && refStrength === "reuse" && reuseAvailable;
+  // 재사용은 레퍼런스의 글자를 전부 지우므로, 카피가 없는 실측 역할은 빈 공간으로 남는다 — 사전 경고.
+  const unfilledRoles = reuseMode
+    ? [...new Set(layerSpecs.map((s) => s.role))].filter((role) => {
+        if (role === "headline") return !headline.trim();
+        if (role === "sub") return !sub.trim();
+        return !(extraCopy[role] ?? "").trim();
+      })
+    : [];
 
   // 레퍼런스 실측 타이포가 있으면 overlay 카피 자수 한도를 입력 단계에서 안내(서버 assert의 사전 노출).
   const typo =
@@ -685,6 +693,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       재사용은 교체할 카피가 필요해요 — 카피를 입력하거나 자동 작성하세요
                     </span>
                   )}
+                  {reuseMode && hasText && unfilledRoles.length > 0 && (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                      레퍼런스의{" "}
+                      {unfilledRoles
+                        .map((r) => ROLE_LABELS[r] ?? (r === "headline" ? "헤드라인" : r === "sub" ? "서브카피" : r))
+                        .join("·")}{" "}
+                      자리가 비어 있어요 — 그 영역이 빈 공간으로 남습니다. 카피를 채우거나 [카피 자동 작성]을 사용하세요
+                    </span>
+                  )}
                   {designRef && (
                     <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       후합성 폰트
@@ -810,7 +827,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 />
                 {copyLimits && (
                   <p className={cn("text-[10px]", headlineOver ? "text-destructive" : "text-muted-foreground")}>
-                    레퍼런스 영역 기준 공백 제외 {countCopyChars(headline)}/{copyLimits.headline}자
+                    레퍼런스 영역 기준 약 {countCopyChars(headline)}/{copyLimits.headline}자
                   </p>
                 )}
               </div>
@@ -824,7 +841,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 />
                 {copyLimits?.sub != null && (
                   <p className={cn("text-[10px]", subOver ? "text-destructive" : "text-muted-foreground")}>
-                    레퍼런스 영역 기준 공백 제외 {countCopyChars(sub)}/{copyLimits.sub}자
+                    레퍼런스 영역 기준 약 {countCopyChars(sub)}/{copyLimits.sub}자
                   </p>
                 )}
               </div>
@@ -857,7 +874,7 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       />
                       <p className="text-[10px] text-muted-foreground">
                         {ROLE_LABELS[role] ?? role}
-                        {spec ? ` · 공백 제외 ${spec.maxChars}자 이내` : ""}
+                        {spec ? ` · 약 ${spec.maxChars}자 이내` : ""}
                       </p>
                     </div>
                   );

@@ -44,6 +44,8 @@ export interface ComposeTextLayer {
   maxLines: number;
   minScale?: number;
   strokeColor?: string;
+  /** 외곽선 두께(글자 크기 대비). 실측 아웃라인은 0.07, 가독성 보정 스트로크는 얇게. 기본 0.035. */
+  strokeWidthRatio?: number;
   backgroundColor?: string;
   cornerRadiusRatio?: number;
 }
@@ -398,7 +400,7 @@ export async function renderComposite(
       const y = firstBaselineY + i * lineHeight;
       if (layer.strokeColor) {
         ctx.lineJoin = "round";
-        ctx.lineWidth = Math.max(1, fit.fontSize * 0.035);
+        ctx.lineWidth = Math.max(1, fit.fontSize * (layer.strokeWidthRatio ?? 0.035));
         ctx.strokeStyle = layer.strokeColor;
         ctx.strokeText(fit.lines[i], anchorX, y);
       }

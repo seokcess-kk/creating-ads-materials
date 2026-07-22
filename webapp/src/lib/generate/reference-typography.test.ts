@@ -162,7 +162,9 @@ describe("reference typography", () => {
     const limits = copyLimitsForTypography(typography);
     expect(limits.headline).toBeGreaterThan(0);
     expect(limits.sub).toBeGreaterThan(0);
-    expect(countCopyChars(" 시그니처 라떼 ")).toBe(6);
+    // 내부 공백은 0.5자(실제 렌더 폭 반영), 양끝 공백은 무시: 6글자 + 공백 1개 = 6.5 → 7
+    expect(countCopyChars(" 시그니처 라떼 ")).toBe(7);
+    expect(countCopyChars("임플란트")).toBe(4);
     // 서버 assert도 같은 공식을 쓰므로 한도 이내 카피는 통과한다.
     expect(() =>
       assertCopyFitsTypography({ headline: "가".repeat(limits.headline), typography }),

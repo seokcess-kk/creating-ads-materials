@@ -72,7 +72,11 @@ const textLayersProperty = {
       gradientEndColor: { type: "string", description: "그라디언트 글자인 경우 끝 색상 hex" },
       weight: { type: "string", enum: ["regular", "medium", "bold", "black"] },
       maxLines: { type: "integer", minimum: 1, maximum: 4 },
-      strokeColor: { type: "string", description: "실제로 외곽선이 보일 때만 hex/rgba" },
+      strokeColor: {
+        type: "string",
+        description:
+          "글자에 외곽선(아웃라인)이나 뚜렷한 그림자가 보이면 반드시 그 색을 hex로 기록(예: #000000). 완전히 민짜 글자일 때만 생략 — 광고 헤드라인 대부분은 외곽선이 있다.",
+      },
       backgroundColor: { type: "string", description: "배지·하단 띠 등 블록 배경색 hex/rgba" },
       cornerRadiusRatio: { type: "number", description: "배경 모서리 반경 / 이미지 높이" },
     },
@@ -272,6 +276,83 @@ function rgbDistance(a: [number, number, number], b: [number, number, number]): 
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
+function toHex([r, g, b]: [number, number, number]): string {
+  return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("").toUpperCase()}`;
+}
+
+/**
+ * 실측 레이어의 글자색·배지 배경색을 레퍼런스 픽셀에서 결정적으로 재추정한다.
+ * 비전이 인접 레이어의 색을 섞어 기록하는 오매핑(노랑→네이비, 틸→퍼플, 필 색 반전)을
+ * 픽셀 근거로 보정 — 박스 안 지배색(=배경)과 그로부터 가장 먼 유의미 색(=글자)을 뽑는다.
+ * 실패·모호(대비 부족)하면 원래 측정값을 유지한다.
+ */
+export async function refineLayerColors(
+  image: Buffer,
+  layers: NonNullable<DesignReference["textLayers"]>,
+): Promise<NonNullable<DesignReference["textLayers"]>> {
+  const { data, info } = await sharp(image)
+    .resize(192, 192, { fit: "fill" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  return layers.map((layer) => {
+    const leftRatio = layer.align === "center"
+      ? layer.xRatio - layer.widthRatio / 2
+      : layer.align === "right"
+        ? layer.xRatio - layer.widthRatio
+        : layer.xRatio;
+    const topRatio = layer.yRatio - layer.sizeRatio * 1.15;
+    const heightRatio = layer.sizeRatio * layer.lineHeight * layer.maxLines * 1.15;
+    const left = Math.max(0, Math.floor(leftRatio * info.width));
+    const right = Math.min(info.width, Math.ceil((leftRatio + layer.widthRatio) * info.width));
+    const top = Math.max(0, Math.floor(topRatio * info.height));
+    const bottom = Math.min(info.height, Math.ceil((topRatio + heightRatio) * info.height));
+    if (right <= left || bottom <= top) return layer;
+
+    const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
+    let samples = 0;
+    for (let y = top; y < bottom; y++) {
+      for (let x = left; x < right; x++) {
+        const idx = (y * info.width + x) * info.channels;
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        const key = ((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4);
+        const item = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
+        item.count++;
+        item.r += r;
+        item.g += g;
+        item.b += b;
+        buckets.set(key, item);
+        samples++;
+      }
+    }
+    if (samples < 24 || buckets.size < 2) return layer;
+
+    const candidates = [...buckets.values()]
+      .map((item) => ({
+        rgb: [item.r / item.count, item.g / item.count, item.b / item.count] as [number, number, number],
+        count: item.count,
+      }))
+      .sort((a, b) => b.count - a.count);
+    // 박스 안 최다 색 = 배경(필/장면), 글자는 배경에서 가장 먼 유의미(3%+) 색.
+    const bg = candidates[0];
+    const glyph = candidates
+      .slice(1)
+      .filter((c) => c.count >= samples * 0.03)
+      .sort((a, b) => rgbDistance(b.rgb, bg.rgb) - rgbDistance(a.rgb, bg.rgb))[0];
+    if (!glyph || rgbDistance(glyph.rgb, bg.rgb) < 48) return layer;
+
+    return {
+      ...layer,
+      color: toHex(glyph.rgb),
+      // 필·배지 배경색은 모델이 기록했을 때만 픽셀 값으로 보정(없는 필을 발명하지 않음).
+      backgroundColor: layer.backgroundColor ? toHex(bg.rgb) : layer.backgroundColor,
+    };
+  });
+}
+
 /** 모델의 색상 서술과 무관하게 레퍼런스 픽셀에서 주요·강조색을 결정적으로 추출한다. */
 export async function extractPixelPalette(image: Buffer, count = 6): Promise<string[]> {
   const { data, info } = await sharp(image)
@@ -307,9 +388,7 @@ export async function extractPixelPalette(image: Buffer, count = 6): Promise<str
     if (selected.every((color) => rgbDistance(color, candidate.rgb) >= 46)) selected.push(candidate.rgb);
     if (selected.length >= count) break;
   }
-  return selected.map(([r, g, b]) =>
-    `#${[r, g, b].map((value) => Math.round(value).toString(16).padStart(2, "0")).join("").toUpperCase()}`,
-  );
+  return selected.map(toHex);
 }
 
 interface AnalyzeOptions {
@@ -410,9 +489,22 @@ async function analyzeReference(
     if (!raw) throw new Error("정밀 분석 도구 응답 없음");
     const { conceptDraft, ...design } = ReferenceDraftSchema.parse(raw);
     const normalized = normalizeDesignReference(design);
+    // 레이어 색은 비전 서술을 믿지 않고 픽셀에서 재추정(오매핑 보정). 실패 시 측정값 유지.
+    let textLayers = normalized.textLayers;
+    if (textLayers?.length) {
+      textLayers = await refineLayerColors(Buffer.from(img.base64, "base64"), textLayers).catch(
+        () => normalized.textLayers,
+      );
+    }
+    const headlineLayer = textLayers?.find((l) => l.role === "headline");
     return {
       design: {
         ...normalized,
+        textLayers,
+        // 타이포 프로파일의 헤드라인 색도 재추정 값과 동기화(폴백 렌더 경로 일관성).
+        typography: normalized.typography && headlineLayer
+          ? { ...normalized.typography, headlineColor: headlineLayer.color }
+          : normalized.typography,
         palette: pixelPalette.length ? pixelPalette : normalized.palette,
         textLayersMeasured: true,
       },

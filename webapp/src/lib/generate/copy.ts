@@ -98,7 +98,7 @@ function buildSystem(
     ? `\n\n## 레이아웃 레이어(필수 — 각 옵션의 layers에 아래 역할 전부를 채울 것)\n${layerSpec
         .map(
           (s) =>
-            `- ${s.role}: ${ROLE_GUIDE[s.role]} — 공백 제외 ${s.maxChars}자 이내, 최대 ${s.maxLines}줄`,
+            `- ${s.role}: ${ROLE_GUIDE[s.role]} — 약 ${s.maxChars}자 이내(공백도 폭 절반을 차지), 최대 ${s.maxLines}줄`,
         )
         .join("\n")}\n- layers.headline은 headline과, layers.sub는 sub와 동일한 값으로.\n- 자수 한도는 디자인 박스 크기에서 계산된 값 — 넘기면 글자가 줄어들어 디자인이 깨진다.${
         hasPriceLayer

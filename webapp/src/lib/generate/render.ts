@@ -98,6 +98,8 @@ function toComposeLayer(
     minScale: layer.role === "headline" ? 0.6 : 0.68,
     strokeColor: layer.strokeColor
       ?? (busyRoles?.includes(layer.role) ? contrastStroke(layer.color) : undefined),
+    // 실측 아웃라인은 광고 타이포답게 두껍게, 가독성 보정 스트로크는 은은하게.
+    strokeWidthRatio: layer.strokeColor ? 0.07 : 0.04,
     backgroundColor: layer.backgroundColor,
     cornerRadiusRatio: layer.cornerRadiusRatio,
   };
@@ -162,10 +164,10 @@ export function assertCopyFitsTypography(
   if (!t) return;
   const limits = copyLimitsForTypography(t);
   if (countCopyChars(input.headline) > limits.headline) {
-    throw new Error(`헤드라인이 레퍼런스 영역보다 깁니다. 공백 제외 ${limits.headline}자 이내로 줄여 주세요.`);
+    throw new Error(`헤드라인이 레퍼런스 영역보다 깁니다. 약 ${limits.headline}자 이내로 줄여 주세요.`);
   }
   if (input.sub && limits.sub != null && countCopyChars(input.sub) > limits.sub) {
-    throw new Error(`보조 문구가 레퍼런스 영역보다 깁니다. 공백 제외 ${limits.sub}자 이내로 줄여 주세요.`);
+    throw new Error(`보조 문구가 레퍼런스 영역보다 깁니다. 약 ${limits.sub}자 이내로 줄여 주세요.`);
   }
 }
 

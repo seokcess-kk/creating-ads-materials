@@ -96,10 +96,11 @@ function referenceGuard(
  * 나머지(레이아웃·오브젝트·장식·색·조명)는 픽셀 수준으로 보존한다.
  */
 const TEXT_REMOVAL_PROMPT =
-  "Remove ALL text from this image — every letter, number, word, logo wordmark and typographic element. " +
-  "Fill the areas they occupied by cleanly extending the surrounding background colors, gradients, textures and shapes. " +
+  "Remove ALL text glyphs from this image — every letter, number, word and logo wordmark, including lettering printed on objects and inside badges. " +
+  "CRITICAL: remove ONLY the glyphs. Every container shape must remain exactly as it is, just empty — badges, stickers, seals, scalloped shapes, pills, ribbons and speech bubbles stay intact with their colors and outlines. " +
+  "Where lettering sat on an object or surface, fill that area cleanly and sharply with the surrounding surface color — flat and crisp, never blurred, smudged or hazy. " +
   "Do NOT add, move, restyle or remove anything else: keep the layout, all objects, decorative elements, colors, lighting and composition EXACTLY identical. " +
-  "The result must look like the original design before any text was placed on it.";
+  "The result must look like the original design before any text was typed onto it.";
 
 /** 로고 버퍼를 컴포지터에 직접 전달(fetch 없이). 포맷은 sharp가 내용으로 판별. */
 function logoForCompositorFrom(
