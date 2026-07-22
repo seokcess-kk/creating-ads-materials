@@ -378,7 +378,9 @@ async function analyzeReference(
 
     const resp = await callClaude({
       model: "sonnet",
-      maxTokens: 1800,
+      // 초안(필수) + 실측 레이어 최대 8개 + 타이포 측정 + 서술 필드가 모두 들어가는 출력 —
+      // 1800에선 레이어 많은 레퍼런스에서 잘려 파싱 실패(전량 실패의 실제 원인)했다.
+      maxTokens: 3000,
       system:
         "당신은 광고 디자인 분석가입니다. 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
       messages: [
@@ -400,6 +402,10 @@ async function analyzeReference(
       toolChoice: { type: "tool", name: TOOL },
       usageContext,
     });
+    if (resp.stop_reason === "max_tokens") {
+      // 출력이 잘리면 도구 입력 JSON이 불완전해 파싱이 실패한다 — 명시적으로 폴백 유도.
+      throw new Error("정밀 분석 출력이 max_tokens에서 잘림");
+    }
     const raw = extractToolUse(resp, TOOL);
     if (!raw) throw new Error("정밀 분석 도구 응답 없음");
     const { conceptDraft, ...design } = ReferenceDraftSchema.parse(raw);
@@ -434,7 +440,8 @@ async function analyzeReferenceFallback(
   const conceptAsk = wantConcept ? buildConceptAsk(opts.concept!) : "";
   const resp = await callClaude({
     model: "sonnet",
-    maxTokens: 1000,
+    // 초안(한국어 최대 400자)이 필수로 포함될 수 있어 1000은 잘림 위험 — 여유 있게.
+    maxTokens: 1800,
     system:
       "광고 레퍼런스의 핵심 구조만 안정적으로 분류하세요. 좌표를 추정하지 말고 밀도·정렬·텍스트 역할을 선택하며 원문과 로고는 복사하지 않습니다. 도구로만 기록.",
     messages: [{
@@ -448,6 +455,10 @@ async function analyzeReferenceFallback(
     toolChoice: { type: "tool", name: CORE_TOOL },
     usageContext: usageContext ? { ...usageContext, operation: `${usageContext.operation}_fallback` } : undefined,
   });
+  if (resp.stop_reason === "max_tokens") {
+    console.warn("레퍼런스 단순 분석 출력이 max_tokens에서 잘림");
+    return null;
+  }
   const raw = extractToolUse(resp, CORE_TOOL);
   const parsed = raw ? ReferenceCoreSchema.safeParse(raw) : null;
   if (!parsed?.success) return null;

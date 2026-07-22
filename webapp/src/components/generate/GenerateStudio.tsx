@@ -265,12 +265,19 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         setRefStrength("layout");
         toast.info("텍스트 구조가 많은 레퍼런스예요 — '레이아웃까지'로 설정했어요 (변경 가능)");
       }
+      // 비었거나, 직전 자동 초안 그대로거나, (구버전 에코 버그 잔여물인) 메시지 복사본이면 새 초안으로 교체.
+      // 사용자가 직접 쓴 내용은 덮지 않는다.
+      const current = concept.trim();
+      const replaceable =
+        !current || current === conceptDraft?.trim() || current === keyMessage.trim();
       setConceptDraft(data.conceptDraft ?? null);
-      if (!concept.trim() && data.conceptDraft) {
+      if (replaceable && data.conceptDraft) {
         setConcept(data.conceptDraft);
         toast.success("레퍼런스로 비주얼·장면을 채웠어요 (수정 가능)");
-      } else {
+      } else if (data.conceptDraft) {
         toast.success("레퍼런스 디자인 반영 준비됨 · '비주얼 초안 적용'으로 바꿀 수 있어요");
+      } else {
+        toast.success("레퍼런스 디자인 반영 준비됨");
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "비주얼 초안 오류";
