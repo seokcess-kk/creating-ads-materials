@@ -104,4 +104,22 @@ describe("reference typography", () => {
     expect(config.mainCopy).toBeUndefined();
     expect(config.textLayers).toHaveLength(2);
   });
+
+  it("moves price qualifiers with the price and uses local contrast instead of failing", () => {
+    const layers = buildReferenceTextLayers({
+      headline: "임플란트 개당 35만원",
+      sub: "국산정품 지르코니아",
+      busyRoles: ["sub"],
+      layers: [
+        { role: "headline", xRatio: 0.05, yRatio: 0.28, widthRatio: 0.62, sizeRatio: 0.13, lineHeight: 1.08, align: "left", color: "#FFD600", weight: "black", maxLines: 1 },
+        { role: "sub", xRatio: 0.05, yRatio: 0.46, widthRatio: 0.6, sizeRatio: 0.065, lineHeight: 1.15, align: "left", color: "#FFFFFF", weight: "black", maxLines: 2 },
+        { role: "price", xRatio: 0.05, yRatio: 0.62, widthRatio: 0.6, sizeRatio: 0.09, lineHeight: 1.1, align: "left", color: "#FFD600", weight: "black", maxLines: 1 },
+      ],
+    });
+
+    expect(layers.find((layer) => layer.text === "임플란트")).toBeTruthy();
+    expect(layers.find((layer) => layer.text === "개당35만원")).toBeTruthy();
+    expect(layers.find((layer) => layer.text === "국산정품 지르코니아")?.strokeColor)
+      .toBe("rgba(0,0,0,0.68)");
+  });
 });

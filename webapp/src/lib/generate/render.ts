@@ -47,9 +47,23 @@ export interface SingleAdLayoutInput {
   /** 레퍼런스에서 측정한 타이포 비례/배치. copyPosition보다 우선한다. */
   typography?: ReferenceTypographyProfile | null;
   textLayers?: ReferenceTextLayer[] | null;
+  /** 품질 게이트 재시도 후에도 배경 디테일이 남은 역할 — 국소 대비 처리만 적용한다. */
+  busyTextRoles?: ReferenceTextLayer["role"][] | null;
 }
 
-const PRICE_TOKEN = /(?:\d[\d,.]*\s*(?:억|천|백|십|만)?\s*원(?:부터)?|\d[\d,.]*\s*%|무료)/i;
+const PRICE_TOKEN = /(?:(?:개당|단|월|총)\s*)?(?:\d[\d,.]*\s*(?:억|천|백|십|만)?\s*원(?:부터)?|\d[\d,.]*\s*%|무료)/i;
+
+function contrastStroke(color: string): string {
+  const match = color.match(/^#([0-9a-f]{6})$/i);
+  if (!match) return "rgba(0,0,0,0.68)";
+  const value = parseInt(match[1], 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 145
+    ? "rgba(0,0,0,0.68)"
+    : "rgba(255,255,255,0.72)";
+}
 
 function layerWeight(weight: ReferenceTextLayer["weight"]): ComposeTextLayer["fontWeight"] {
   return weight === "black" ? "900" : weight === "regular" ? "normal" : weight === "medium" ? "500" : "bold";
@@ -60,6 +74,7 @@ export function buildReferenceTextLayers(input: {
   headline?: string | null;
   sub?: string | null;
   layers?: ReferenceTextLayer[] | null;
+  busyRoles?: ReferenceTextLayer["role"][] | null;
 }): ComposeTextLayer[] {
   if (!input.layers?.length) return [];
   let headline = input.headline?.trim() ?? "";
@@ -92,8 +107,9 @@ export function buildReferenceTextLayers(input: {
       fontWeight: layerWeight(layer.weight),
       fontRole: layer.role === "sub" ? "sub" : "headline",
       maxLines: layer.maxLines,
-      minScale: 0.78,
-      strokeColor: layer.strokeColor,
+      minScale: layer.role === "headline" ? 0.6 : 0.68,
+      strokeColor: layer.strokeColor
+        ?? (input.busyRoles?.includes(layer.role) ? contrastStroke(layer.color) : undefined),
       backgroundColor: layer.backgroundColor,
       cornerRadiusRatio: layer.cornerRadiusRatio,
     }];
@@ -143,6 +159,7 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     headline: input.headline,
     sub: input.sub,
     layers: input.textLayers,
+    busyRoles: input.busyTextRoles,
   });
   const config: ComposeConfig = {
     backgroundImageUrl: "",

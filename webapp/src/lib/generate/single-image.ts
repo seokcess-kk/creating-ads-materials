@@ -36,7 +36,7 @@ import type {
   ReferenceFontCategory,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.5.0";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.5.1";
 
 // 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
@@ -261,6 +261,7 @@ export async function generateSingleImageVariants(
       let base = await renderBase();
       let checkedBg: Buffer | null = null;
       let zoneRetry = false;
+      let busyTextRoles: NonNullable<DesignReference["textLayers"]>[number]["role"][] = [];
       if (mode === "overlay" && designRef?.textLayers?.length) {
         const activeLayers = designRef.textLayers.filter((layer) =>
           layer.role === "headline" || layer.role === "price" || layer.role === "sub",
@@ -272,9 +273,7 @@ export async function generateSingleImageVariants(
           checkedBg = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
           zoneRetry = true;
           const remaining = await findBusyCopyZones(checkedBg, activeLayers);
-          if (remaining.length) {
-            throw new Error(`텍스트 안전영역 품질 검사 실패: ${remaining.map((v) => v.role).join(", ")}`);
-          }
+          busyTextRoles = [...new Set(remaining.map((v) => v.role))];
         }
       }
 
@@ -290,6 +289,7 @@ export async function generateSingleImageVariants(
         aspectRatio,
         refStrength: refStrength ?? "none",
         zoneRetry,
+        busyTextRoles,
       };
 
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
@@ -308,6 +308,7 @@ export async function generateSingleImageVariants(
           fontSet: designRef ? fontSetForReference(designRef) : null,
           typography: designRef?.typography ?? null,
           textLayers: designRef?.textLayers ?? null,
+          busyTextRoles,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -332,6 +333,7 @@ export async function generateSingleImageVariants(
           fontFamily: designRef?.fontFamily ?? null,
           typography: designRef?.typography ?? null,
           textLayers: designRef?.textLayers ?? null,
+          busyTextRoles,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -448,6 +450,7 @@ export async function recomposeVariant(
       fontFamily?: DesignReference["fontFamily"] | null;
       typography?: DesignReference["typography"] | null;
       textLayers?: DesignReference["textLayers"] | null;
+      busyTextRoles?: NonNullable<DesignReference["textLayers"]>[number]["role"][] | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -474,6 +477,7 @@ export async function recomposeVariant(
       : null,
     typography: compose.typography ?? null,
     textLayers: compose.textLayers ?? null,
+    busyTextRoles: compose.busyTextRoles ?? null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).
