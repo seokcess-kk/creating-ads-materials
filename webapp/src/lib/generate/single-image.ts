@@ -23,6 +23,7 @@ import {
   type BrandContext,
 } from "./prompt";
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
+import { refineLayersFromOriginal } from "./measure-layers";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import {
@@ -250,8 +251,21 @@ export async function generateSingleImageVariants(
       },
     });
     const bgBuf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), reuseAspect);
+
+    // 궁극 수정: 좌표·크기·색·줄수는 비전 추정이 아니라 원본 픽셀에서 색 유도로 실측한다.
+    // 비전은 의미(역할·컨테이너 여부·대략 위치·색 prior)만 담당. 레이어별 실측 실패 시 비전 유지.
+    let reuseLayers = measuredLayers;
+    try {
+      reuseLayers = await refineLayersFromOriginal(
+        Buffer.from(refImage.base64, "base64"),
+        measuredLayers,
+      );
+    } catch (e) {
+      console.warn("원본 색 유도 실측 실패(비전 레이어로 폴백):", (e as Error).message);
+    }
+
     // 텍스트 제거 과정에서 존이 밝아졌을 수 있으므로 저대비 역할에 스트로크를 적용한다.
-    const reuseBusyRoles = await findLowContrastLayers(bgBuf, measuredLayers);
+    const reuseBusyRoles = await findLowContrastLayers(bgBuf, reuseLayers);
     const placement = await planLogoPlacement(bgBuf, logoAssets);
     const logo = logoForCompositorFrom(logoAssets, placement);
     const bgUploaded = await uploadGeneratedImage(generationId, "bg_reuse", {
@@ -280,7 +294,7 @@ export async function generateSingleImageVariants(
           brandColor: brand.ctaColor,
           fontSet: fontSetForReference(designRef),
           typography: designRef.typography ?? null,
-          textLayers: measuredLayers,
+          textLayers: reuseLayers,
           layerCopy,
           busyTextRoles: reuseBusyRoles,
         });
@@ -307,7 +321,7 @@ export async function generateSingleImageVariants(
             fontCategory: designRef.fontCategory ?? null,
             fontFamily: designRef.fontFamily ?? null,
             typography: designRef.typography ?? null,
-            textLayers: measuredLayers,
+            textLayers: reuseLayers,
             layerCopy,
             busyTextRoles: reuseBusyRoles,
             headline: c.headline ?? null,

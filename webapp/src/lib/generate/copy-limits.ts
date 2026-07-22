@@ -53,3 +53,52 @@ export function layerCopySpecs(layers: ReferenceTextLayer[]): LayerCopySpec[] {
     maxLines: layer.maxLines,
   }));
 }
+
+/** 겹침 클램프가 다루는 레이어 기하(분석 ReferenceTextLayer·합성 ComposeTextLayer 공통 부분). */
+interface LayerBoxLike {
+  xRatio: number;
+  yRatio: number;
+  widthRatio: number;
+  sizeRatio: number;
+  lineHeight: number;
+  maxLines: number;
+  align: "left" | "center" | "right";
+  backgroundColor?: string;
+}
+
+function boxSpan(l: LayerBoxLike): [number, number] {
+  const left = l.align === "center" ? l.xRatio - l.widthRatio / 2 : l.align === "right" ? l.xRatio - l.widthRatio : l.xRatio;
+  return [left, left + l.widthRatio];
+}
+
+function boxBand(l: LayerBoxLike): [number, number] {
+  return [l.yRatio - l.sizeRatio, l.yRatio + l.sizeRatio * l.lineHeight * (l.maxLines - 1) + l.sizeRatio * 0.25];
+}
+
+/**
+ * 레이어 겹침 클램프 — 측정 폭 과대·긴 카피로 일반 텍스트가 같은 밴드의 필·배지 아래로
+ * 파고드는 것을 방지. 필 앞에서 폭을 줄이고, center 정렬은 줄인 구간의 중심으로 앵커를
+ * 다시 잡는다(폭만 줄이면 재중앙화되며 다시 침범 — 실측 검증된 버그).
+ * 분석 결과와 합성 직전 양쪽에서 같은 함수를 쓴다(UI 자수 한도·카피 생성 한도와 정합).
+ */
+export function clampLayerOverlaps<T extends LayerBoxLike>(layers: T[]): T[] {
+  const pills = layers.filter((l) => l.backgroundColor);
+  if (!pills.length) return layers;
+  return layers.map((layer) => {
+    if (layer.backgroundColor) return layer;
+    let [left, right] = boxSpan(layer);
+    const [top, bottom] = boxBand(layer);
+    for (const pill of pills) {
+      const [pTop, pBottom] = boxBand(pill);
+      if (bottom <= pTop || top >= pBottom) continue;
+      const [pLeft, pRight] = boxSpan(pill);
+      if (right <= pLeft || left >= pRight) continue;
+      if (layer.align === "right") left = Math.max(left, pRight + 0.015);
+      else right = Math.min(right, pLeft - 0.015);
+    }
+    const width = Math.max(0.12, right - left);
+    if (Math.abs(width - layer.widthRatio) < 0.005) return layer;
+    const xRatio = layer.align === "center" ? left + width / 2 : layer.align === "right" ? left + width : layer.xRatio;
+    return { ...layer, widthRatio: width, xRatio };
+  });
+}
