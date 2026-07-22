@@ -19,16 +19,26 @@ const TEXT_REMOVAL_PROMPT =
   "Lettering printed on a kept object is removed cleanly, leaving the object's plain surface. " +
   "The result must be a completely text-free, badge-free version of the same scene.";
 
-// 실사용 재현 — 사용자가 실제 앱에서 넣은 카피 세트.
-const LAYER_COPY: Record<string, string> = {
-  eyebrow: "지금 확인하는 임플란트 가격",
-  badge: "가격공개",
-  headline: "이 가격 실화?",
-  sub: "국산 오스템으로 이 가격",
-  price: "35",
-  legal: "개당·상담 후 결정",
-  footer: "개당·상담 후 결정",
-};
+// 실사용 재현 — 사용자가 실제 앱에서 넣은 카피 세트. --long 은 오버플로 강등 스트레스용.
+const LAYER_COPY: Record<string, string> = process.argv.includes("--long")
+  ? {
+      eyebrow: "지금 바로 확인하는 우리동네 임플란트 최저가 이벤트",
+      badge: "오늘만 가격 전격 공개",
+      headline: "이 가격 실화? 지금 바로 확인",
+      sub: "국산 정품 오스템 지르코니아로 이 가격이 가능해?",
+      price: "35",
+      legal: "개당 가격 기준·부가세 별도·상담 후 결정",
+      footer: "개당 가격 기준·부가세 별도",
+    }
+  : {
+      eyebrow: "지금 확인하는 임플란트 가격",
+      badge: "가격공개",
+      headline: "이 가격 실화?",
+      sub: "국산 오스템으로 이 가격",
+      price: "35",
+      legal: "개당·상담 후 결정",
+      footer: "개당·상담 후 결정",
+    };
 
 async function main() {
   const label = process.argv[2] ?? "r1";

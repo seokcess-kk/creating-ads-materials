@@ -353,14 +353,23 @@ export async function renderComposite(
     const family = pickFamily(config.fontSet, layer.fontRole);
     const baseSize = Math.round(h * layer.sizeRatio);
     const maxWidth = w * layer.widthRatio;
-    const fit = fitText(
+    const measure = (size: number, value: string) => {
+      ctx.font = `${layer.fontWeight} ${size}px ${family}`;
+      return ctx.measureText(value).width;
+    };
+    let fit = fitText(
       layer.text,
       { baseSize, maxWidth, maxLines: layer.maxLines, minScale: layer.minScale ?? 0.78 },
-      (size, value) => {
-        ctx.font = `${layer.fontWeight} ${size}px ${family}`;
-        return ctx.measureText(value).width;
-      },
+      measure,
     );
+    // 실측 줄수·폭은 원본 카피 기준이라 새(더 긴) 카피와 어긋날 수 있다.
+    // throw로 전량 실패시키는 대신 단계적으로 강등: 줄 +1·축소 0.4 → 줄 +2·축소 0.3.
+    if (fit.overflow) {
+      fit = fitText(layer.text, { baseSize, maxWidth, maxLines: layer.maxLines + 1, minScale: 0.4 }, measure);
+    }
+    if (fit.overflow) {
+      fit = fitText(layer.text, { baseSize, maxWidth, maxLines: layer.maxLines + 2, minScale: 0.3 }, measure);
+    }
     if (fit.overflow) {
       throw new Error(`${layer.text} 문구가 레퍼런스의 ${layer.maxLines}줄 영역에 맞지 않습니다.`);
     }
