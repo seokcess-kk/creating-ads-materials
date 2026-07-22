@@ -51,7 +51,7 @@ async function main() {
   const { nearestAspect, resizeToChannel } = await import("@/lib/canvas/resize");
   const { findLowContrastLayers } = await import("@/lib/generate/quality");
   const { fontSetForReference } = await import("@/lib/carousel/style");
-  const { refineLayersFromOriginal } = await import("@/lib/generate/measure-layers");
+  const { refineLayersFromOriginal, assessRemoval } = await import("@/lib/generate/measure-layers");
 
   const refBuf = await fs.readFile(REF);
   const dataUrl = `data:image/jpeg;base64,${refBuf.toString("base64")}`;
@@ -82,17 +82,34 @@ async function main() {
     );
   }
 
-  // 2) 텍스트 제거(원본 비율 스냅)
+  // 2) 텍스트 제거(원본 비율 스냅) — 프로덕션과 동일한 드리프트 게이트(나쁜 롤 1회 재시도 후 선택)
   const meta = await sharp(refBuf).metadata();
   const aspect = nearestAspect(meta.width, meta.height) ?? "1:1";
-  const cleaned = await editImage({
-    prompt: TEXT_REMOVAL_PROMPT,
-    baseImage: { mimeType: "image/jpeg", base64: refBuf.toString("base64") },
-    aspectRatio: aspect,
-    imageSize: "1K",
-    usageContext: { operation: "single_image_reuse_clean", brandId: null, metadata: { harness: label } },
-  });
-  const bgBuf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), aspect);
+  const attemptRemoval = async () => {
+    const cleaned = await editImage({
+      prompt: TEXT_REMOVAL_PROMPT,
+      baseImage: { mimeType: "image/jpeg", base64: refBuf.toString("base64") },
+      aspectRatio: aspect,
+      imageSize: "1K",
+      usageContext: { operation: "single_image_reuse_clean", brandId: null, metadata: { harness: label } },
+    });
+    const buf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), aspect);
+    const check = await assessRemoval(refBuf, buf, design!.textLayers!);
+    return { buf, ...check, bad: check.drift > 0.12 || check.unremoved.length > 0 };
+  };
+  let best = await attemptRemoval();
+  console.log(`[${label}] removal drift: ${(best.drift * 100).toFixed(1)}% unremoved: ${best.unremoved.join(",") || "-"}`);
+  if (best.bad) {
+    const second = await attemptRemoval();
+    console.log(`[${label}] retry drift: ${(second.drift * 100).toFixed(1)}% unremoved: ${second.unremoved.join(",") || "-"}`);
+    if (
+      second.unremoved.length < best.unremoved.length ||
+      (second.unremoved.length === best.unremoved.length && second.drift < best.drift)
+    ) {
+      best = second;
+    }
+  }
+  const bgBuf = best.buf;
   await fs.writeFile(`${OUT}/it-${label}-cleaned.png`, bgBuf);
 
   // 3) 원본 색 유도 실측 — 기하·색의 정본. 비전은 의미(역할·컨테이너·대략 위치·색 prior)만.

@@ -5,7 +5,10 @@ import { nearestAspect, resizeToChannel } from "@/lib/canvas/resize";
 import {
   uploadGeneratedImage,
   deleteGeneratedImage,
+  getCachedImage,
+  putCachedImage,
 } from "@/lib/storage/generated-images";
+import { createHash } from "node:crypto";
 import { fetchAsBase64, fetchAsBuffer } from "@/lib/utils/image-fetch";
 import { analyzeLogos, planLogoPlacement, type LogoCandidate } from "@/lib/canvas/logo-placement";
 import { ApiError } from "@/lib/api-utils";
@@ -23,7 +26,7 @@ import {
   type BrandContext,
 } from "./prompt";
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
-import { refineLayersFromOriginal } from "./measure-layers";
+import { refineLayersFromOriginal, assessRemoval } from "./measure-layers";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import {
@@ -233,35 +236,65 @@ export async function generateSingleImageVariants(
     : [];
 
   // ── 재사용(reuse) 경로: 레퍼런스에서 텍스트만 지운 배경 1장 + 카피 변형 N개 재합성 ──
-  // 아트디렉터·생성 프롬프트가 필요 없다(장면을 새로 만들지 않음). 모델 호출은 텍스트 제거 1회뿐.
+  // 아트디렉터·생성 프롬프트가 필요 없다(장면을 새로 만들지 않음).
   if (refStrength === "reuse" && refImage && designRef) {
+    const refBuf = Buffer.from(refImage.base64, "base64");
     // 실측 좌표(0~1 비율)가 어긋나지 않게 사용자 비율 대신 레퍼런스 원본 프레이밍에 스냅.
-    const refMeta = await sharp(Buffer.from(refImage.base64, "base64")).metadata();
+    const refMeta = await sharp(refBuf).metadata();
     const reuseAspect = nearestAspect(refMeta.width, refMeta.height) ?? aspectRatio;
-
-    const cleaned = await editImage({
-      prompt: TEXT_REMOVAL_PROMPT,
-      baseImage: refImage,
-      aspectRatio: reuseAspect,
-      imageSize: "1K",
-      usageContext: {
-        operation: "single_image_reuse_clean",
-        brandId: input.brandId ?? null,
-        metadata: { generationId },
-      },
-    });
-    const bgBuf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), reuseAspect);
 
     // 궁극 수정: 좌표·크기·색·줄수는 비전 추정이 아니라 원본 픽셀에서 색 유도로 실측한다.
     // 비전은 의미(역할·컨테이너 여부·대략 위치·색 prior)만 담당. 레이어별 실측 실패 시 비전 유지.
     let reuseLayers = measuredLayers;
     try {
-      reuseLayers = await refineLayersFromOriginal(
-        Buffer.from(refImage.base64, "base64"),
-        measuredLayers,
-      );
+      reuseLayers = await refineLayersFromOriginal(refBuf, measuredLayers);
     } catch (e) {
       console.warn("원본 색 유도 실측 실패(비전 레이어로 폴백):", (e as Error).message);
+    }
+
+    // 텍스트 제거는 확률 과정(장면 드리프트·잔존 롤) — 품질 편차의 남은 원인.
+    //  1) 레퍼런스별 캐시: 같은 레퍼런스 재생성은 검증된 제거본을 재사용(품질 고정·비용 0).
+    //  2) 캐시 미스: 평가(파국 드리프트 >12% 또는 텍스트 잔존)에 걸리면 1회 재시도 후 나은 쪽.
+    const cachePath = `reuse-clean/${createHash("sha256")
+      .update(`${refUrl}|${TEXT_REMOVAL_PROMPT.length}|${reuseAspect}`)
+      .digest("hex")}.png`;
+    let bgBuf = await getCachedImage(cachePath).catch(() => null);
+    let removalMeta: Record<string, unknown> = { cached: true };
+    if (!bgBuf) {
+      const attemptRemoval = async (attempt: number) => {
+        const cleaned = await editImage({
+          prompt: TEXT_REMOVAL_PROMPT,
+          baseImage: refImage,
+          aspectRatio: reuseAspect,
+          imageSize: "1K",
+          usageContext: {
+            operation: "single_image_reuse_clean",
+            brandId: input.brandId ?? null,
+            metadata: { generationId, attempt },
+          },
+        });
+        const buf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), reuseAspect);
+        const check = await assessRemoval(refBuf, buf, measuredLayers).catch(
+          () => ({ drift: 0, unremoved: [] as string[] }),
+        );
+        return { buf, ...check, bad: check.drift > 0.12 || check.unremoved.length > 0 };
+      };
+      let best = await attemptRemoval(1);
+      let retried = false;
+      if (best.bad) {
+        retried = true;
+        const second = await attemptRemoval(2);
+        // 잔존 없는 쪽 우선, 동률이면 드리프트 낮은 쪽.
+        if (
+          second.unremoved.length < best.unremoved.length ||
+          (second.unremoved.length === best.unremoved.length && second.drift < best.drift)
+        ) {
+          best = second;
+        }
+      }
+      bgBuf = best.buf;
+      removalMeta = { cached: false, drift: best.drift, unremoved: best.unremoved, retried };
+      await putCachedImage(cachePath, bgBuf).catch(() => {});
     }
 
     // 텍스트 제거 과정에서 존이 밝아졌을 수 있으므로 저대비 역할에 스트로크를 적용한다.
@@ -307,11 +340,9 @@ export async function generateSingleImageVariants(
           mode: "overlay",
           label: c.headline?.trim() || `카피 ${i + 1}`,
           promptVersion: SINGLE_IMAGE_PROMPT_VERSION,
-          provider: cleaned.provider,
-          model: cleaned.model,
-          size: cleaned.size ?? null,
           aspectRatio: reuseAspect,
           refStrength: "reuse",
+          removal: removalMeta,
           compose: {
             logoUrl: placement?.url ?? null,
             logoPosition: placement?.position ?? null,

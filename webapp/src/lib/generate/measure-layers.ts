@@ -70,6 +70,78 @@ function percentileBox(xs: number[], ys: number[], lo = 0.02, hi = 0.98) {
 
 type Layers = NonNullable<DesignReference["textLayers"]>;
 
+export interface RemovalAssessment {
+  /** 시드 밖(유지 영역) 변경 픽셀 비율 — 장면 드리프트. 일러스트 재렌더 노이즈로 정상도 ~10%. */
+  drift: number;
+  /** 시드 안이 거의 안 변한(<3%) 역할 = 텍스트가 안 지워지고 남았을 가능성(잔존 검출). */
+  unremoved: Layers[number]["role"][];
+}
+
+/**
+ * 텍스트 제거 품질 평가 — 재사용 경로가 나쁜 제거 롤을 감지·재시도·선택하는 결정적 기준.
+ *  - drift: 파국적 장면 변형(레이아웃 붕괴) 검출용 — 0.12+ 에서만 나쁜 롤로 판정.
+ *  - unremoved: 유령 텍스트("28" 잔존 사고) 검출 — 하나라도 있으면 재시도 가치가 있다.
+ */
+export async function assessRemoval(
+  original: Buffer,
+  cleaned: Buffer,
+  visionLayers: Layers,
+): Promise<RemovalAssessment> {
+  const meta = await sharp(cleaned).metadata();
+  if (!meta.width || !meta.height) return { drift: 0, unremoved: [] };
+  const H = Math.max(64, Math.round(W * (meta.height / meta.width)));
+  const [a, b] = await Promise.all([
+    sharp(original).resize(W, H, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(cleaned).resize(W, H, { fit: "fill" }).removeAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
+  const ch = a.info.channels;
+  const changedAt = (x: number, y: number): boolean => {
+    const i = (y * W + x) * ch;
+    const d =
+      Math.abs(a.data[i] - b.data[i]) +
+      Math.abs(a.data[i + 1] - b.data[i + 1]) +
+      Math.abs(a.data[i + 2] - b.data[i + 2]);
+    return d > 96;
+  };
+  const hoods = visionLayers.map((l) => {
+    const left = l.align === "center" ? l.xRatio - l.widthRatio / 2 : l.align === "right" ? l.xRatio - l.widthRatio : l.xRatio;
+    const top = l.yRatio - l.sizeRatio * 1.15;
+    const height = l.sizeRatio * l.lineHeight * l.maxLines * 1.3;
+    return { role: l.role, left: left - 0.08, right: left + l.widthRatio + 0.08, top: top - 0.08, bottom: top + height + 0.08 };
+  });
+
+  let outside = 0;
+  let changed = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const fx = x / W;
+      const fy = y / H;
+      if (hoods.some((s) => fx >= s.left && fx <= s.right && fy >= s.top && fy <= s.bottom)) continue;
+      outside++;
+      if (changedAt(x, y)) changed++;
+    }
+  }
+
+  const unremoved: Layers[number]["role"][] = [];
+  for (const hood of hoods) {
+    const x0 = Math.max(0, Math.floor(hood.left * W));
+    const x1 = Math.min(W - 1, Math.ceil(hood.right * W));
+    const y0 = Math.max(0, Math.floor(hood.top * H));
+    const y1 = Math.min(H - 1, Math.ceil(hood.bottom * H));
+    let total = 0;
+    let inChanged = 0;
+    for (let y = y0; y <= y1; y += 2) {
+      for (let x = x0; x <= x1; x += 2) {
+        total++;
+        if (changedAt(x, y)) inChanged++;
+      }
+    }
+    if (total > 0 && inChanged / total < 0.03) unremoved.push(hood.role);
+  }
+
+  return { drift: outside ? changed / outside : 0, unremoved: [...new Set(unremoved)] };
+}
+
 /**
  * 원본 픽셀에서 비전 레이어의 기하·색·줄수를 실측 보정한다(제거본 불필요 — 드리프트 무관).
  * 레이어별로 실패하면 그 레이어만 비전 값을 유지한다.
