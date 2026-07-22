@@ -398,8 +398,6 @@ export async function renderCarouselSlides(params: {
     }
 
     const config: ComposeConfig = {
-      backgroundImageUrl: "",
-      output: { bucket: "", path: "" },
       fontSet,
       ...slideConfig(detail, total, style),
     };
@@ -438,8 +436,6 @@ export async function recomposeSlide(params: {
     template: getTemplate(params.templateId),
   });
   const config: ComposeConfig = {
-    backgroundImageUrl: "",
-    output: { bucket: "", path: "" },
     fontSet: style.fontSet,
     ...slideConfig(params.slide, params.total, style),
   };
@@ -663,8 +659,6 @@ export async function convertFullSlideToOverlay(params: {
   );
 
   const config: ComposeConfig = {
-    backgroundImageUrl: "",
-    output: { bucket: "", path: "" },
     fontSet: style.fontSet,
     ...slideConfig(params.slide, params.total, style),
   };

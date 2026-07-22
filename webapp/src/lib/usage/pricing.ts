@@ -134,7 +134,3 @@ export function estimateGeminiImageCost(
     (model ? GEMINI_IMAGE_PRICING[model] : undefined) ?? 0.04;
   return p * count;
 }
-
-export function getPricingNote(): string {
-  return "2026-01 기준 추정 단가. 실제 청구와 차이 가능.";
-}

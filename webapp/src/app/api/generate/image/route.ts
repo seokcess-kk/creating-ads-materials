@@ -14,6 +14,12 @@ import type { SingleImageInput, SingleImageResult } from "@/lib/generate/types";
 
 export const maxDuration = 180;
 
+/** 역할별 확장 카피 — 실측 레이어 역할만 허용. */
+const LayerCopySchema = z.record(
+  z.enum(["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"]),
+  z.string().max(120),
+);
+
 const Schema = z.object({
   keyMessage: z.string().min(4).max(500),
   concept: z.string().max(1000).nullable().optional(),
@@ -28,10 +34,19 @@ const Schema = z.object({
   placement: z.enum(["ad", "organic"]).optional(),
   aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9"]).optional(),
   referenceImageUrl: z.string().url().nullable().optional(),
-  referenceStrength: z.enum(["mood", "style", "layout"]).optional(),
-  // 구 클라이언트 호환(deprecated) — 생성 시 base→layout, style→style로 매핑.
-  referenceMode: z.enum(["style", "base"]).optional(),
+  referenceStrength: z.enum(["mood", "style", "layout", "reuse"]).optional(),
   designRef: DesignReferenceSchema.nullable().optional(),
+  layerCopy: LayerCopySchema.nullable().optional(),
+  copyVariants: z
+    .array(z.object({
+      headline: z.string().max(120).nullable().optional(),
+      sub: z.string().max(200).nullable().optional(),
+      cta: z.string().max(60).nullable().optional(),
+      layers: LayerCopySchema.nullable().optional(),
+    }))
+    .max(4)
+    .nullable()
+    .optional(),
   brandId: z.string().uuid().nullable().optional(),
   renderMode: z.enum(["overlay", "full"]).optional(),
   count: z.number().int().min(1).max(4).optional(),

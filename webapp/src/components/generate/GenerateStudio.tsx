@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { DownloadButton } from "@/components/common/DownloadButton";
 import { GenerationProgress } from "@/components/common/GenerationProgress";
 import { useNotifications } from "@/components/notifications/NotificationContext";
+import { copyLimitsForTypography, countCopyChars, layerCopySpecs } from "@/lib/generate/copy-limits";
+import type { ReferenceTextLayer, ReferenceTypographyProfile } from "@/lib/generate/types";
 
 interface BrandOption {
   id: string;
@@ -44,7 +46,18 @@ interface CopyOption {
   sub?: string;
   cta?: string;
   angle: CopyAngle;
+  /** 디자인 인지 카피 — 레퍼런스 실측 레이어 역할 전체를 채운 확장 카피. */
+  layers?: Record<string, string>;
 }
+
+/** 실측 레이어의 headline/sub 외 역할 입력란 라벨. */
+const ROLE_LABELS: Record<string, string> = {
+  eyebrow: "상단 예고",
+  price: "가격·수치",
+  badge: "뱃지",
+  legal: "고지 문구",
+  footer: "하단 안내",
+};
 const ANGLE_LABEL: Record<CopyAngle, string> = {
   benefit: "혜택",
   curiosity: "호기심",
@@ -131,9 +144,14 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   const [mood, setMood] = useState("");
   const [copyPosition, setCopyPosition] = useState<"" | "top" | "center" | "bottom">("");
 
-  // 레퍼런스 — 반영 강도: mood(무드만) / style(스타일 강반영, 기본) / layout(레이아웃까지)
+  // 레퍼런스 — 반영 강도: mood(무드만) / style(강반영, 기본) / layout(레이아웃까지) / reuse(그대로 재사용)
   const [refUrl, setRefUrl] = useState<string | null>(null);
-  const [refStrength, setRefStrength] = useState<"mood" | "style" | "layout">("style");
+  const [refStrength, setRefStrength] = useState<"mood" | "style" | "layout" | "reuse">("style");
+  // 분석 결과 텍스트 레이어가 많으면 layout을 '추천'(배지)하고, 사용자가 아직 안 골랐을 때만 기본값을 바꾼다.
+  const [layoutSuggested, setLayoutSuggested] = useState(false);
+  const strengthTouched = useRef(false);
+  // headline/sub 외 실측 레이어 역할(eyebrow·price·badge…)의 카피 — 디자인 인지 카피 적용/편집.
+  const [extraCopy, setExtraCopy] = useState<Record<string, string>>({});
   const [refUploading, setRefUploading] = useState(false);
   const [designRef, setDesignRef] = useState<Record<string, unknown> | null>(null);
   const [conceptDraft, setConceptDraft] = useState<string | null>(null);
@@ -163,12 +181,34 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
   });
   const [editBusy, setEditBusy] = useState(false);
 
-  const referenceReady = !refUrl || Boolean(designRef && !conceptLoading && !refAnalysisError);
-  const canSubmit = keyMessage.trim().length >= 4 && referenceReady;
+  // 분석 중에만 잠시 잠근다. 분석 실패는 차단 사유가 아님 — 픽셀 스타일만으로도 생성 가능(서버 graceful degrade).
+  const referenceReady = !refUrl || !conceptLoading;
   // 광고용이면 CTA는 이미지에 들어가지 않으므로 텍스트 존재 판정에서 제외.
   const hasText = Boolean(
     headline.trim() || sub.trim() || (placement === "organic" && cta.trim()),
   );
+  // 실측 텍스트 레이어 — 디자인 인지 카피(역할 전체 채움)와 자수 안내의 근거.
+  const measuredTextLayers =
+    designRef?.textLayersMeasured === true && Array.isArray(designRef.textLayers)
+      ? (designRef.textLayers as ReferenceTextLayer[])
+      : [];
+  const layerSpecs = measuredTextLayers.length ? layerCopySpecs(measuredTextLayers) : [];
+  const extraRoles = [...new Set(layerSpecs.map((s) => s.role))].filter(
+    (r) => r !== "headline" && r !== "sub",
+  );
+  const reuseAvailable = measuredTextLayers.length > 0;
+  const reuseMode = Boolean(refUrl) && refStrength === "reuse" && reuseAvailable;
+
+  // 레퍼런스 실측 타이포가 있으면 overlay 카피 자수 한도를 입력 단계에서 안내(서버 assert의 사전 노출).
+  const typo =
+    (!bakeText || Boolean(refUrl)) && designRef?.textLayersMeasured === true && designRef.typography
+      ? (designRef.typography as ReferenceTypographyProfile)
+      : null;
+  const copyLimits = typo ? copyLimitsForTypography(typo) : null;
+  const headlineOver = copyLimits ? countCopyChars(headline) > copyLimits.headline : false;
+  const subOver = copyLimits?.sub != null ? countCopyChars(sub) > copyLimits.sub : false;
+  const canSubmit =
+    keyMessage.trim().length >= 4 && referenceReady && !headlineOver && !subOver;
 
   async function onPickReference(file: File | null) {
     if (!file) return;
@@ -187,6 +227,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
         .uploadToSignedUrl(sign.path, sign.token, file);
       if (error) throw error;
       setRefUrl(sign.publicUrl);
+      strengthTouched.current = false;
+      setRefStrength("style");
+      setExtraCopy({});
       toast.success("레퍼런스 첨부됨 · 비주얼 초안을 만드는 중…");
       await draftConcept(sign.publicUrl);
     } catch (e) {
@@ -214,8 +257,13 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
       const data = await readJson(res, "비주얼 초안 실패");
       const analyzed = (data.designRef ?? null) as Record<string, unknown> | null;
       setDesignRef(analyzed);
-      if (Array.isArray(analyzed?.textLayers) && analyzed.textLayers.length >= 4) {
+      // 텍스트 레이어가 많은 완성형 광고는 '레이아웃까지'가 유리 — 추천 배지를 달고,
+      // 사용자가 아직 강도를 직접 고르지 않았을 때만 기본값을 바꾼다(선택을 덮지 않음).
+      const denseLayout = Array.isArray(analyzed?.textLayers) && analyzed.textLayers.length >= 4;
+      setLayoutSuggested(denseLayout);
+      if (denseLayout && !strengthTouched.current) {
         setRefStrength("layout");
+        toast.info("텍스트 구조가 많은 레퍼런스예요 — '레이아웃까지'로 설정했어요 (변경 가능)");
       }
       setConceptDraft(data.conceptDraft ?? null);
       if (!concept.trim() && data.conceptDraft) {
@@ -250,6 +298,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           tone: tone.trim() || null,
           brandId: brandId || null,
           placement,
+          // 실측 레이어가 있으면 역할 전체(eyebrow·price…)를 자수 한도 내로 채운 디자인 인지 카피 요청.
+          layerSpec: layerSpecs.length ? layerSpecs : undefined,
         }),
       });
       const data = await readJson(res, "카피 생성 실패");
@@ -265,27 +315,65 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
     setHeadline(opt.headline);
     setSub(opt.sub ?? "");
     setCta(placement === "organic" ? (opt.cta ?? "") : "");
+    // 확장 레이어 카피(가격·뱃지 등)도 함께 적용 — 해당 역할 입력란에 채워져 수정 가능.
+    const next: Record<string, string> = {};
+    for (const role of extraRoles) {
+      const text = opt.layers?.[role]?.trim();
+      if (text) next[role] = text;
+    }
+    setExtraCopy(next);
     toast.success("카피를 입력란에 채웠습니다 (수정 가능)");
   }
 
   async function generate() {
     if (!canSubmit) {
-      toast.error("메시지를 4자 이상 입력하세요");
+      toast.error(
+        headlineOver || subOver
+          ? "카피가 레퍼런스 영역보다 깁니다 — 표시된 자수 이내로 줄여 주세요"
+          : conceptLoading
+            ? "레퍼런스 분석이 끝나면 생성할 수 있어요"
+            : "메시지를 4자 이상 입력하세요",
+      );
       return;
     }
+    // 레퍼런스 흐름은 항상 후합성(overlay) — 베이킹 토글은 레퍼런스 없는 생성에서만 유효.
+    const effBake = !refUrl && bakeText;
+    // 역할별 확장 카피(빈 값 제외). 서버가 headline/sub를 병합한다.
+    const extraClean = Object.fromEntries(
+      Object.entries(extraCopy).filter(([, v]) => v.trim()),
+    );
+    // reuse + 자동 카피 옵션이 있으면 후보 축을 '카피'로 — 배경 1장에 옵션별 재합성(모델 호출 1회).
+    const ctaOf = (v?: string | null) => (placement === "organic" ? v?.trim() || null : null);
+    const copyVariants =
+      reuseMode && copyOptions.length
+        ? [
+            { headline: headline.trim() || null, sub: sub.trim() || null, cta: ctaOf(cta), layers: extraClean },
+            ...copyOptions
+              .filter((o) => o.headline.trim() !== headline.trim())
+              .slice(0, Math.max(0, count - 1))
+              .map((o) => ({
+                headline: o.headline,
+                sub: o.sub ?? null,
+                cta: ctaOf(o.cta),
+                layers: o.layers ?? null,
+              })),
+          ]
+        : undefined;
+    const effCount = copyVariants?.length ?? (reuseMode ? 1 : count);
+
     setGenerating(true);
-    setGenCount(count);
+    setGenCount(effCount);
     setVariants([]);
     setGenerationId(null);
     const opId = startOp({
       kind: "visual",
       title: "이미지 생성",
-      subtitle: `${count}장 · ${aspectRatio}${bakeText ? " · AI 일체형" : ""}`,
-      estimatedSeconds: bakeText ? 55 : 40,
+      subtitle: `${effCount}장 · ${aspectRatio}${effBake ? " · AI 일체형" : ""}${reuseMode ? " · 레퍼런스 재사용" : ""}`,
+      estimatedSeconds: reuseMode ? 30 : effBake ? 55 : 40,
       steps: [
         { label: "프롬프트·브랜드 구성", atSec: 0 },
-        { label: "이미지 생성", atSec: 6 },
-        { label: "한글 텍스트 합성", atSec: bakeText ? 40 : 28 },
+        { label: reuseMode ? "레퍼런스 텍스트 제거" : "이미지 생성", atSec: 6 },
+        { label: "한글 텍스트 합성", atSec: reuseMode ? 22 : effBake ? 40 : 28 },
       ],
       celebrate: false, // 결과가 화면에 바로 뜨므로 완료 배너는 생략(진행바만 추적)
     });
@@ -309,21 +397,32 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           referenceImageUrl: refUrl,
           referenceStrength: refUrl ? refStrength : undefined,
           designRef: refUrl ? designRef : undefined,
+          layerCopy: Object.keys(extraClean).length ? extraClean : undefined,
+          copyVariants,
           brandId: brandId || null,
-          renderMode: bakeText ? "full" : "overlay",
+          renderMode: effBake ? "full" : "overlay",
           count,
         }),
       });
       const data = await readJson(res, "생성 실패");
       setGenPlacement(placement);
-      // 각 후보의 초기 카피 = 생성에 쓰인 폼 카피(=베이킹/합성된 값). 이후 후보별로 독립 편집.
+      // 각 후보의 초기 카피 = 생성에 쓰인 카피(카피 변형이면 후보별, 아니면 폼 카피). 이후 독립 편집.
       const formCopy: VariantCopy = {
         headline: headline.trim(),
         sub: sub.trim(),
         cta: placement === "organic" ? cta.trim() : "",
       };
       setVariants(
-        (data.variants as ResultVariant[]).map((v) => ({ ...v, copy: { ...formCopy } })),
+        (data.variants as ResultVariant[]).map((v, i) => ({
+          ...v,
+          copy: copyVariants?.[i]
+            ? {
+                headline: copyVariants[i].headline ?? "",
+                sub: copyVariants[i].sub ?? "",
+                cta: copyVariants[i].cta ?? "",
+              }
+            : { ...formCopy },
+        })),
       );
       setGenerationId(data.generationId ?? null);
       const failed = (data.failures ?? []).length;
@@ -501,6 +600,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     setDesignRef(null);
                     setConceptDraft(null);
                     setRefAnalysisError(null);
+                    setLayoutSuggested(false);
+                    setExtraCopy({});
+                    strengthTouched.current = false;
                   }}
                   className="text-[11px] text-muted-foreground underline"
                 >
@@ -533,17 +635,21 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 />
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[11px] text-muted-foreground">반영 강도</span>
-                  <div className="flex gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
                     {[
                       { v: "mood", l: "무드만 참고" },
                       { v: "style", l: "스타일 강반영" },
                       { v: "layout", l: "레이아웃까지" },
+                      ...(reuseAvailable ? [{ v: "reuse", l: "그대로 재사용" }] : []),
                     ].map((o) => (
                       <button
                         key={o.v}
                         type="button"
                         disabled={generating}
-                        onClick={() => setRefStrength(o.v as "mood" | "style" | "layout")}
+                        onClick={() => {
+                          strengthTouched.current = true;
+                          setRefStrength(o.v as typeof refStrength);
+                        }}
                         className={cn(
                           "rounded-md border px-2 py-1 text-[11px] transition-colors disabled:opacity-50",
                           refStrength === o.v
@@ -552,6 +658,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                         )}
                       >
                         {o.l}
+                        {o.v === "layout" && layoutSuggested && (
+                          <span className="ml-1 text-[10px] text-primary">추천</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -560,8 +669,15 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                       ? "색·무드를 요약해 말로만 참고해요 (가장 느슨)"
                       : refStrength === "style"
                         ? "색·구도·무드를 그대로 따라가되 장면은 새로 만들어요"
-                        : "배치·타이포까지 템플릿처럼 유지하고 내용만 바꿔요"}
+                        : refStrength === "layout"
+                          ? "배치·타이포까지 템플릿처럼 유지하고 내용만 바꿔요"
+                          : "텍스트만 지우고 새 카피로 교체해요 — 내 소재·사용권 있는 템플릿 전용"}
                   </span>
+                  {refStrength === "reuse" && !hasText && (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                      재사용은 교체할 카피가 필요해요 — 카피를 입력하거나 자동 작성하세요
+                    </span>
+                  )}
                   {designRef && (
                     <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       후합성 폰트
@@ -587,7 +703,9 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                   ) : (
                     refAnalysisError ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-destructive">분석 실패 · 생성 전 재시도가 필요해요</span>
+                        <span className="text-[11px] text-destructive">
+                          분석 실패 · 이대로 생성하면 색·구도(픽셀)만 반영돼요
+                        </span>
                         <button
                           type="button"
                           disabled={generating}
@@ -651,6 +769,17 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                     {opt.sub && (
                       <div className="text-[11px] text-muted-foreground">{opt.sub}</div>
                     )}
+                    {opt.layers && (
+                      <div className="mt-0.5 flex flex-wrap gap-x-2">
+                        {extraRoles.map((role) =>
+                          opt.layers?.[role] ? (
+                            <span key={role} className="text-[10px] text-muted-foreground">
+                              {ROLE_LABELS[role] ?? role}: {opt.layers[role]}
+                            </span>
+                          ) : null,
+                        )}
+                      </div>
+                    )}
                     {opt.cta && (
                       <div className="mt-0.5 text-[10px] text-primary">▶ {opt.cta}</div>
                     )}
@@ -664,20 +793,34 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 placement === "organic" ? "md:grid-cols-3" : "md:grid-cols-2",
               )}
             >
-              <Input
-                value={headline}
-                onChange={(e) => setHeadline(e.target.value)}
-                placeholder="헤드라인"
-                disabled={generating}
-                className="h-8 text-xs"
-              />
-              <Input
-                value={sub}
-                onChange={(e) => setSub(e.target.value)}
-                placeholder="서브카피"
-                disabled={generating}
-                className="h-8 text-xs"
-              />
+              <div className="space-y-0.5">
+                <Input
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  placeholder="헤드라인"
+                  disabled={generating}
+                  className={cn("h-8 text-xs", headlineOver && "border-destructive")}
+                />
+                {copyLimits && (
+                  <p className={cn("text-[10px]", headlineOver ? "text-destructive" : "text-muted-foreground")}>
+                    레퍼런스 영역 기준 공백 제외 {countCopyChars(headline)}/{copyLimits.headline}자
+                  </p>
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <Input
+                  value={sub}
+                  onChange={(e) => setSub(e.target.value)}
+                  placeholder="서브카피"
+                  disabled={generating}
+                  className={cn("h-8 text-xs", subOver && "border-destructive")}
+                />
+                {copyLimits?.sub != null && (
+                  <p className={cn("text-[10px]", subOver ? "text-destructive" : "text-muted-foreground")}>
+                    레퍼런스 영역 기준 공백 제외 {countCopyChars(sub)}/{copyLimits.sub}자
+                  </p>
+                )}
+              </div>
               {placement === "organic" && (
                 <Input
                   value={cta}
@@ -688,6 +831,32 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
                 />
               )}
             </div>
+
+            {/* 레퍼런스 실측 레이어의 확장 역할(가격·뱃지·고지…) — 디자인 인지 카피 편집란 */}
+            {extraRoles.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                {extraRoles.map((role) => {
+                  const spec = layerSpecs.find((s) => s.role === role);
+                  return (
+                    <div key={role} className="space-y-0.5">
+                      <Input
+                        value={extraCopy[role] ?? ""}
+                        onChange={(e) =>
+                          setExtraCopy((prev) => ({ ...prev, [role]: e.target.value }))
+                        }
+                        placeholder={ROLE_LABELS[role] ?? role}
+                        disabled={generating}
+                        className="h-8 text-xs"
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        {ROLE_LABELS[role] ?? role}
+                        {spec ? ` · 공백 제외 ${spec.maxChars}자 이내` : ""}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -794,6 +963,8 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
             </div>
           </div>
 
+          {/* 레퍼런스가 있으면 색·조명·무드·카피 위치는 레퍼런스가 결정 — 모순 입력을 막기 위해 숨김 */}
+          {!refUrl && (
           <div className="space-y-2 rounded-lg border p-3">
             <Label className="text-xs text-muted-foreground">분위기·조명·색 (선택)</Label>
             {[
@@ -847,8 +1018,10 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
               </div>
             )}
           </div>
+          )}
 
-          {hasText && (
+          {/* 레퍼런스 흐름은 항상 후합성(정확한 카피) — 베이킹 선택은 레퍼런스 없을 때만 의미 */}
+          {hasText && !refUrl && (
             <div className="space-y-1.5">
               <Label className="text-xs">텍스트 제작 방식</Label>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -911,13 +1084,13 @@ export function GenerateStudio({ brands }: { brands: BrandOption[] }) {
           <CardContent className="space-y-3">
             {generating && (
               <GenerationProgress
-                estimatedSeconds={bakeText ? 55 : 40}
+                estimatedSeconds={!refUrl && bakeText ? 55 : 40}
                 label={`이미지 ${genCount}장 만드는 중…`}
               />
             )}
             {!generating && variants.length > 0 && (
               <div className="space-y-1.5">
-                {bakeText && (
+                {!refUrl && bakeText && (
                   <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                     ⚠ AI가 글자를 직접 그렸어요 — 확대해 철자·줄바꿈을 확인하세요. 정확한 숫자·날짜는 ‘AI 일체형’을 끄거나 ‘이 이미지 편집’으로 고치는 걸 권장합니다.
                   </p>

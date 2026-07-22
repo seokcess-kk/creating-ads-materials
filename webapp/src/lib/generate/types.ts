@@ -10,18 +10,19 @@ export type SingleRenderMode = "overlay" | "full";
  *  - organic: 게시물·카톡·출력물 등 버튼 없는 지면 → CTA를 이미지에 합성.
  */
 export type Placement = "ad" | "organic";
-export type VariantMode = SingleRenderMode | "edit";
 
 /**
  * 레퍼런스 반영 강도:
  *  - mood: 텍스트 요약(DesignReference)만 프롬프트에 주입 — 픽셀은 모델에 전달하지 않음(가장 느슨)
  *  - style: 레퍼런스 픽셀을 editImage로 직접 참조 — 색·조명·무드·구도를 강하게 따라가되 장면·피사체는 새로
  *  - layout: 레퍼런스를 디자인 템플릿처럼 취급 — 배치·타이포 위계·장식 요소까지 유지하고 내용만 교체
+ *  - reuse: 레퍼런스 배경을 그대로 재사용 — 텍스트만 지우고(1콜) 새 카피를 실측 좌표에 합성.
+ *    디자인 충실도 최상·비용 최소. 자기 소재/사용권 있는 템플릿 전용(실측 레이어 필요).
  */
-export type ReferenceStrength = "mood" | "style" | "layout";
+export type ReferenceStrength = "mood" | "style" | "layout" | "reuse";
 
-/** @deprecated 구 style/base 토글. referenceStrength로 대체(base → layout, style → style 매핑). */
-export type ReferenceMode = "style" | "base";
+/** 역할별 카피 — 레퍼런스 실측 레이어 전체(eyebrow·price·badge…)를 채우기 위한 확장 카피. */
+export type LayerCopy = Partial<Record<ReferenceTextRole, string>>;
 
 /** 카피(텍스트)가 들어갈 세로 위치 — overlay 컴포지터 텍스트존 + 프롬프트 여백 위치를 함께 결정. */
 export type CopyPosition = "top" | "center" | "bottom";
@@ -108,6 +109,11 @@ export interface DesignReference {
   typography?: ReferenceTypographyProfile;
   /** 단일 headline/sub로 평탄화하지 않은 광고 레이어 구조. */
   textLayers?: ReferenceTextLayer[];
+  /**
+   * textLayers 출처 — true: 비전이 레퍼런스에서 실측 / false: 분석 폴백이 프리셋으로 구성.
+   * 프리셋 레이어는 합성 배치에는 쓰되, 품질 게이트·프롬프트 기하 주입 근거로는 쓰지 않는다.
+   */
+  textLayersMeasured?: boolean;
   notes?: string;
 }
 
@@ -118,12 +124,13 @@ export type CopyAngle =
   | "social_proof"
   | "emotional";
 
-/** 카피 자동작성 1벌. */
+/** 카피 자동작성 1벌. layers는 레퍼런스 실측 레이어 역할 전체를 채우는 확장 카피(디자인 인지 모드). */
 export interface CopyOption {
   headline: string;
   sub?: string;
   cta?: string;
   angle: CopyAngle;
+  layers?: LayerCopy;
 }
 
 /** 단일 이미지 생성 요청 입력. keyMessage(알릴 핵심)만 필수, 나머지는 선택. */
@@ -146,12 +153,22 @@ export interface SingleImageInput {
   placement?: Placement;
   aspectRatio?: AspectRatio;
   referenceImageUrl?: string | null;
-  /** 레퍼런스 반영 강도(기본 style). 미지정 시 구 referenceMode에서 매핑. */
+  /** 레퍼런스 반영 강도(기본 style). */
   referenceStrength?: ReferenceStrength;
-  /** @deprecated referenceStrength로 대체 — 구 클라이언트 호환용으로만 수용. */
-  referenceMode?: ReferenceMode;
   /** 업로드 직후 이미 추출한 디자인 요소(있으면 생성 시 비전 재분석 생략) */
   designRef?: DesignReference | null;
+  /** 역할별 확장 카피 — 실측 레이어 전체를 채운다(headline/sub는 병합 시 이 값이 우선). */
+  layerCopy?: LayerCopy | null;
+  /**
+   * 카피 변형 목록(reuse 전용) — 배경 1장을 재사용해 카피만 바꾼 후보 N개를 만든다.
+   * 있으면 count 대신 이 목록이 후보 수를 결정(최대 4).
+   */
+  copyVariants?: Array<{
+    headline?: string | null;
+    sub?: string | null;
+    cta?: string | null;
+    layers?: LayerCopy | null;
+  }> | null;
   brandId?: string | null;
   renderMode?: SingleRenderMode;
   count?: number;
@@ -161,7 +178,7 @@ export interface GeneratedImageVariant {
   label: string;
   url: string;
   path: string;
-  mode: VariantMode;
+  mode: SingleRenderMode;
   /** overlay 모드 재합성용 텍스트 없는 배경 URL(없으면 재합성 불가) */
   bgUrl?: string | null;
   /** image_variants.meta_json에 저장할 추적 정보(prompt/provider/model/size/compose 등) */

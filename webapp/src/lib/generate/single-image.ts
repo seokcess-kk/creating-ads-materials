@@ -1,6 +1,7 @@
+import sharp from "sharp";
 import { generateImage, editImage, type AspectRatio, type ImagePart } from "@/lib/engines";
 import { renderComposite } from "@/lib/canvas/compositor";
-import { resizeToChannel } from "@/lib/canvas/resize";
+import { nearestAspect, resizeToChannel } from "@/lib/canvas/resize";
 import {
   uploadGeneratedImage,
   deleteGeneratedImage,
@@ -24,7 +25,8 @@ import {
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
-import { copyZoneCorrection, findBusyCopyZones } from "./quality";
+import { copyZoneCorrection, findBusyCopyZones, type CopyZoneViolation } from "./quality";
+import { verifyBakedImage, bakeQaCorrection } from "./verify-baked";
 import type {
   SingleImageInput,
   SingleImageResult,
@@ -33,6 +35,7 @@ import type {
   ReferenceStrength,
   DesignReference,
   CopyPosition,
+  LayerCopy,
   ReferenceFontCategory,
 } from "./types";
 
@@ -66,6 +69,43 @@ function referenceGuard(
     : "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.";
 }
 
+/**
+ * 재사용(reuse) 경로의 텍스트 제거 지시 — 레퍼런스 픽셀에서 글자·로고만 지우고
+ * 나머지(레이아웃·오브젝트·장식·색·조명)는 픽셀 수준으로 보존한다.
+ */
+const TEXT_REMOVAL_PROMPT =
+  "Remove ALL text from this image — every letter, number, word, logo wordmark and typographic element. " +
+  "Fill the areas they occupied by cleanly extending the surrounding background colors, gradients, textures and shapes. " +
+  "Do NOT add, move, restyle or remove anything else: keep the layout, all objects, decorative elements, colors, lighting and composition EXACTLY identical. " +
+  "The result must look like the original design before any text was placed on it.";
+
+/** 로고 버퍼를 컴포지터에 직접 전달(fetch 없이). 포맷은 sharp가 내용으로 판별. */
+function logoForCompositorFrom(
+  logoAssets: LogoCandidate[],
+  placement: { url: string; position: SingleAdLogo["position"]; backingColor: string | null } | null,
+): SingleAdLogo | null {
+  if (!placement) return null;
+  const asset = logoAssets.find((a) => a.url === placement.url);
+  if (!asset) return null;
+  return {
+    buffer: asset.buf,
+    position: placement.position,
+    backingColor: placement.backingColor,
+  };
+}
+
+/** 역할별 카피 병합 — headline/sub 명시값이 layers보다 우선(폼 편집이 최종). */
+function mergeLayerCopy(copy: {
+  headline?: string | null;
+  sub?: string | null;
+  layers?: LayerCopy | null;
+}): LayerCopy | null {
+  const merged: LayerCopy = { ...(copy.layers ?? {}) };
+  if (copy.headline?.trim()) merged.headline = copy.headline.trim();
+  if (copy.sub?.trim()) merged.sub = copy.sub.trim();
+  return Object.values(merged).some((t) => t?.trim()) ? merged : null;
+}
+
 function decideMode(input: SingleImageInput): SingleRenderMode {
   const hasText = Boolean(input.headline || input.sub || input.cta);
   if (!hasText) return "full"; // 텍스트 없으면 순수 비주얼
@@ -95,7 +135,6 @@ export async function generateSingleImageVariants(
     (raw.placement ?? "ad") === "ad" && raw.cta ? { ...raw, cta: null } : raw;
   const aspectRatio: AspectRatio = input.aspectRatio ?? "1:1";
   const count = Math.min(Math.max(input.count ?? 3, 1), 4);
-  const mode = decideMode(input);
   const hasText = Boolean(input.headline || input.sub || input.cta);
 
   // 선택적 브랜드 컨텍스트(카테고리 + 로고만)
@@ -112,33 +151,34 @@ export async function generateSingleImageVariants(
     }
   }
 
-  // 레퍼런스 처리 — 강도 결정(구 referenceMode 호환: base=변형 → layout, style → style).
+  // 레퍼런스 처리 — 강도는 사용자 선택을 그대로 따른다(자동 승격 없음 — 추천은 UI가 제안만).
   const refUrl = input.referenceImageUrl?.trim() || null;
   let refStrength: ReferenceStrength | null = refUrl
-    ? (input.referenceStrength ??
-      (input.referenceMode === "base" ? "layout" : "style"))
+    ? (input.referenceStrength ?? "style")
     : null;
 
-  // 구 분석 결과에는 구조화 textLayers가 없으므로 텍스트가 있는 레퍼런스 생성은 자동 재분석한다.
-  // 새 분석이 실패하면 기존 요약을 유지해 생성 자체는 계속한다.
+  // 실측 textLayers가 없으면(구 분석·프리셋 폴백) 텍스트가 있는 레퍼런스 생성은 정밀 재분석을 시도한다.
+  // 분석은 어디까지나 보강 — 실패해도 생성은 계속한다(style/layout이면 픽셀 참조가 본체).
   let designRef: DesignReference | null = input.designRef ?? null;
-  const needsLayerAnalysis = Boolean(refUrl && hasText && designRef?.analysisVersion !== 2);
+  const needsLayerAnalysis = Boolean(refUrl && hasText && designRef?.textLayersMeasured !== true);
   if (refUrl && (!designRef || needsLayerAnalysis)) {
     const analyzed = await analyzeReferenceDesign(refUrl, {
       operation: "single_image_ref_analyze",
       brandId: input.brandId ?? null,
-      metadata: { generationId, reason: needsLayerAnalysis ? "missing_text_layers" : "missing_design_ref" },
+      metadata: { generationId, reason: needsLayerAnalysis ? "missing_measured_layers" : "missing_design_ref" },
     });
-    designRef = analyzed ?? designRef;
+    // 재분석이 실측을 얻지 못하면 기존(폴백 포함) 요약을 유지한다.
+    if (analyzed && (analyzed.textLayersMeasured === true || !designRef)) designRef = analyzed;
   }
-  if (refUrl && !designRef) {
-    throw new ApiError(422, "레퍼런스 디자인 분석에 실패했습니다. 다시 첨부하거나 분석을 재시도해 주세요.");
+  // 실측 레이어만 게이트·기하 주입의 근거가 된다(프리셋 좌표는 합성 배치에만 사용).
+  const measuredLayers = designRef?.textLayersMeasured === true ? (designRef.textLayers ?? []) : [];
+
+  // 재사용은 실측 좌표와 카피가 모두 있어야 성립 — 아니면 템플릿 생성(layout)으로 강등.
+  if (refStrength === "reuse" && (!measuredLayers.length || !hasText)) {
+    refStrength = "layout";
   }
-  // 텍스트 레이어가 많은 완성형 광고는 style 변형으로는 정보 구조가 소실되므로 템플릿 모드로 승격한다.
-  const layoutAutoPromoted = Boolean(
-    refStrength === "style" && (designRef?.textLayers?.length ?? 0) >= 4,
-  );
-  if (layoutAutoPromoted) refStrength = "layout";
+  // 재사용은 항상 후합성(overlay) — 배경을 그대로 쓰므로 베이킹 개념이 없다.
+  const mode: SingleRenderMode = refStrength === "reuse" ? "overlay" : decideMode(input);
 
   if (mode === "overlay" && designRef?.typography) {
     assertCopyFitsTypography({
@@ -164,6 +204,111 @@ export async function generateSingleImageVariants(
       )
     : [];
 
+  // ── 재사용(reuse) 경로: 레퍼런스에서 텍스트만 지운 배경 1장 + 카피 변형 N개 재합성 ──
+  // 아트디렉터·생성 프롬프트가 필요 없다(장면을 새로 만들지 않음). 모델 호출은 텍스트 제거 1회뿐.
+  if (refStrength === "reuse" && refImage && designRef) {
+    // 실측 좌표(0~1 비율)가 어긋나지 않게 사용자 비율 대신 레퍼런스 원본 프레이밍에 스냅.
+    const refMeta = await sharp(Buffer.from(refImage.base64, "base64")).metadata();
+    const reuseAspect = nearestAspect(refMeta.width, refMeta.height) ?? aspectRatio;
+
+    const cleaned = await editImage({
+      prompt: TEXT_REMOVAL_PROMPT,
+      baseImage: refImage,
+      aspectRatio: reuseAspect,
+      imageSize: "1K",
+      usageContext: {
+        operation: "single_image_reuse_clean",
+        brandId: input.brandId ?? null,
+        metadata: { generationId },
+      },
+    });
+    const bgBuf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), reuseAspect);
+    const placement = await planLogoPlacement(bgBuf, logoAssets);
+    const logo = logoForCompositorFrom(logoAssets, placement);
+    const bgUploaded = await uploadGeneratedImage(generationId, "bg_reuse", {
+      mimeType: "image/png",
+      base64: bgBuf.toString("base64"),
+    });
+
+    // 카피 변형 목록(있으면 그것이 후보 수). 광고용이면 CTA는 여기서도 제거.
+    const stripCta = (raw.placement ?? "ad") === "ad";
+    const copies = (
+      input.copyVariants?.length
+        ? input.copyVariants
+        : [{ headline: input.headline, sub: input.sub, cta: input.cta, layers: input.layerCopy ?? null }]
+    )
+      .slice(0, 4)
+      .map((c) => ({ ...c, cta: stripCta ? null : c.cta }));
+
+    const results = await Promise.allSettled(
+      copies.map(async (c, i) => {
+        const layerCopy = mergeLayerCopy(c);
+        const config = singleAdConfig({
+          headline: c.headline,
+          sub: c.sub,
+          cta: c.cta,
+          logo,
+          brandColor: brand.ctaColor,
+          fontSet: fontSetForReference(designRef),
+          typography: designRef.typography ?? null,
+          textLayers: measuredLayers,
+          layerCopy,
+        });
+        const composed = await renderComposite(bgBuf, config);
+        const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
+          mimeType: "image/png",
+          base64: composed.toString("base64"),
+        });
+        const meta: Record<string, unknown> = {
+          mode: "overlay",
+          label: c.headline?.trim() || `카피 ${i + 1}`,
+          promptVersion: SINGLE_IMAGE_PROMPT_VERSION,
+          provider: cleaned.provider,
+          model: cleaned.model,
+          size: cleaned.size ?? null,
+          aspectRatio: reuseAspect,
+          refStrength: "reuse",
+          compose: {
+            logoUrl: placement?.url ?? null,
+            logoPosition: placement?.position ?? null,
+            logoBacking: placement?.backingColor ?? null,
+            brandColor: brand.ctaColor,
+            copyPosition: null,
+            fontCategory: designRef.fontCategory ?? null,
+            fontFamily: designRef.fontFamily ?? null,
+            typography: designRef.typography ?? null,
+            textLayers: measuredLayers,
+            layerCopy,
+            busyTextRoles: [],
+            headline: c.headline ?? null,
+            sub: c.sub ?? null,
+            cta: c.cta ?? null,
+          },
+        };
+        return {
+          label: String(meta.label),
+          url: uploaded.url,
+          path: uploaded.path,
+          mode: "overlay",
+          bgUrl: bgUploaded.url,
+          meta,
+        } satisfies GeneratedImageVariant;
+      }),
+    );
+    const variants: GeneratedImageVariant[] = [];
+    const failures: Array<{ label: string; reason: string }> = [];
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") variants.push(r.value);
+      else failures.push({ label: `카피 ${i + 1}`, reason: (r.reason as Error)?.message ?? "unknown" });
+    });
+    if (variants.length === 0) {
+      throw new Error(
+        `재사용 합성 실패 — ${failures.map((f) => `${f.label}: ${f.reason}`).join(" / ")}`,
+      );
+    }
+    return { variants, failures };
+  }
+
   // 아트디렉터: 브리프 → gpt-image 프롬프트 N개 (실패 시 템플릿 폴백). 로고는 합성 단계라 hasLogo=false.
   const brief: CreativeBrief = {
     keyMessage: input.keyMessage,
@@ -183,7 +328,7 @@ export async function generateSingleImageVariants(
   const directed = await buildImagePrompts(brief, count, {
     operation: "single_image_art_director",
     brandId: input.brandId ?? null,
-    metadata: { generationId, mode, refStrength: refStrength ?? "none", layoutAutoPromoted },
+    metadata: { generationId, mode, refStrength: refStrength ?? "none" },
   });
 
   const designRefText = designRef ? formatDesignReference(designRef) : null;
@@ -225,20 +370,6 @@ export async function generateSingleImageVariants(
     return p;
   }
 
-  // 로고 버퍼를 컴포지터에 직접 전달(fetch 없이). 포맷은 sharp가 내용으로 판별.
-  function logoForCompositor(
-    placement: { url: string; position: SingleAdLogo["position"]; backingColor: string | null } | null,
-  ): SingleAdLogo | null {
-    if (!placement) return null;
-    const asset = logoAssets.find((a) => a.url === placement.url);
-    if (!asset) return null;
-    return {
-      buffer: asset.buf,
-      position: placement.position,
-      backingColor: placement.backingColor,
-    };
-  }
-
   const results = await Promise.allSettled(
     Array.from({ length: count }, (_, i) => i).map(async (i) => {
       const prompt = directed?.[i]?.prompt ?? fallbackPrompt(i);
@@ -246,7 +377,7 @@ export async function generateSingleImageVariants(
       const usageContext = {
         operation: refImage ? "single_image_ref_gen" : "single_image_gen",
         brandId: input.brandId ?? null,
-        metadata: { generationId, i, mode, refStrength: refStrength ?? "none", layoutAutoPromoted },
+        metadata: { generationId, i, mode, refStrength: refStrength ?? "none" },
       };
 
       const renderBase = (correction = "") => {
@@ -265,23 +396,66 @@ export async function generateSingleImageVariants(
           : generateImage({ prompt: finalPrompt, aspectRatio, imageSize: "1K", usageContext });
       };
 
-      // 1) 베이스 이미지. 구조화 텍스트 박스가 있으면 실제 픽셀의 피사체 침범을 검사하고 1회 교정한다.
+      // 1) 베이스 이미지. 실측 텍스트 박스가 있으면 픽셀의 피사체 침범을 검사하고 1회 교정하되,
+      //    교정본이 더 나쁘면 원본을 유지한다(재시도가 항상 낫다는 보장이 없음).
       let base = await renderBase();
       let checkedBg: Buffer | null = null;
       let zoneRetry = false;
       let busyTextRoles: NonNullable<DesignReference["textLayers"]>[number]["role"][] = [];
-      if (mode === "overlay" && designRef?.textLayers?.length) {
-        const activeLayers = designRef.textLayers.filter((layer) =>
+      if (mode === "overlay" && measuredLayers.length) {
+        const activeLayers = measuredLayers.filter((layer) =>
           layer.role === "headline" || layer.role === "price" || layer.role === "sub",
         );
         checkedBg = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
         const violations = await findBusyCopyZones(checkedBg, activeLayers);
         if (violations.length) {
-          base = await renderBase(copyZoneCorrection(violations));
-          checkedBg = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+          const severity = (v: CopyZoneViolation[]) => v.reduce((s, x) => s + x.edgeDensity, 0);
+          const retryBase = await renderBase(copyZoneCorrection(violations));
+          const retryBg = await resizeToChannel(Buffer.from(retryBase.base64, "base64"), aspectRatio);
+          const remaining = await findBusyCopyZones(retryBg, activeLayers);
           zoneRetry = true;
-          const remaining = await findBusyCopyZones(checkedBg, activeLayers);
-          busyTextRoles = [...new Set(remaining.map((v) => v.role))];
+          if (severity(remaining) <= severity(violations)) {
+            base = retryBase;
+            checkedBg = retryBg;
+            busyTextRoles = [...new Set(remaining.map((v) => v.role))];
+          } else {
+            busyTextRoles = [...new Set(violations.map((v) => v.role))];
+          }
+        }
+      }
+
+      // 1b) full 모드는 텍스트가 이미지에 구워지므로 결과를 비전 QA로 검증한다(오타·무단 텍스트·로고).
+      //     실패 시 교정 재생성 1회 후 문제가 적은 쪽을 채택. QA 인프라 실패는 생성을 막지 않는다.
+      let bakeQa: { retried: boolean; issues: unknown } | null = null;
+      if (mode === "full") {
+        const expected = { headline: input.headline, sub: input.sub };
+        const qaContext = {
+          operation: "single_image_bake_qa",
+          brandId: input.brandId ?? null,
+          metadata: { generationId, i },
+        };
+        const first = await verifyBakedImage(
+          { base64: base.base64, mimeType: base.mimeType },
+          expected,
+          qaContext,
+        );
+        if (first) {
+          bakeQa = { retried: false, issues: first.issues };
+          if (!first.ok) {
+            const retryBase = await renderBase(bakeQaCorrection(first.issues));
+            const second = await verifyBakedImage(
+              { base64: retryBase.base64, mimeType: retryBase.mimeType },
+              expected,
+              qaContext,
+            );
+            // 재검증 불가(null)면 교정 지시가 반영된 재생성본을 신뢰한다.
+            if (!second || second.issues.length <= first.issues.length) {
+              base = retryBase;
+              bakeQa = { retried: true, issues: second?.issues ?? null };
+            } else {
+              bakeQa = { retried: true, issues: first.issues };
+            }
+          }
         }
       }
 
@@ -296,9 +470,9 @@ export async function generateSingleImageVariants(
         size: base.size ?? null,
         aspectRatio,
         refStrength: refStrength ?? "none",
-        layoutAutoPromoted,
         zoneRetry,
         busyTextRoles,
+        ...(bakeQa ? { qa: bakeQa } : {}),
       };
 
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
@@ -306,17 +480,23 @@ export async function generateSingleImageVariants(
         const bgBuf = checkedBg ?? await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
         // 오버레이는 그라데이션+스크림으로 배경이 어두워지므로 darken을 반영해 로고 대비를 판단.
         const placement = await planLogoPlacement(bgBuf, logoAssets, { darken: 0.55 });
+        const layerCopy = mergeLayerCopy({
+          headline: input.headline,
+          sub: input.sub,
+          layers: input.layerCopy ?? null,
+        });
         const config = singleAdConfig({
           headline: input.headline,
           sub: input.sub,
           cta: input.cta,
-          logo: logoForCompositor(placement),
+          logo: logoForCompositorFrom(logoAssets, placement),
           brandColor: brand.ctaColor,
           copyPosition: input.copyPosition,
           // 레퍼런스 타이포 카테고리가 있으면 그 폰트로(없으면 Pretendard).
           fontSet: designRef ? fontSetForReference(designRef) : null,
           typography: designRef?.typography ?? null,
           textLayers: designRef?.textLayers ?? null,
+          layerCopy,
           busyTextRoles,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
@@ -342,6 +522,7 @@ export async function generateSingleImageVariants(
           fontFamily: designRef?.fontFamily ?? null,
           typography: designRef?.typography ?? null,
           textLayers: designRef?.textLayers ?? null,
+          layerCopy,
           busyTextRoles,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
@@ -365,7 +546,7 @@ export async function generateSingleImageVariants(
       );
       // 로고는 모델에 굽지 않고 여기서 1개만 오버레이(어둠 처리 없이 로고만). 배경 대비로 모서리·에셋 선택.
       const fullPlacement = await planLogoPlacement(finalBuf, logoAssets);
-      const fullLogo = logoForCompositor(fullPlacement);
+      const fullLogo = logoForCompositorFrom(logoAssets, fullPlacement);
       // full도 CTA는 굽지 않고 후합성(브랜드색·또렷한 버튼). 로고도 함께(스크림 없이 — 베이킹 디자인 보존).
       if (fullLogo || input.cta) {
         finalBuf = await renderComposite(
@@ -459,9 +640,16 @@ export async function recomposeVariant(
       fontFamily?: DesignReference["fontFamily"] | null;
       typography?: DesignReference["typography"] | null;
       textLayers?: DesignReference["textLayers"] | null;
+      layerCopy?: LayerCopy | null;
       busyTextRoles?: NonNullable<DesignReference["textLayers"]>[number]["role"][] | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
+  // 저장된 역할별 카피 위에 이번 편집(headline/sub)을 덮어 병합 — 나머지 역할(eyebrow·price…)은 보존.
+  const layerCopy = mergeLayerCopy({
+    headline: input.headline,
+    sub: input.sub,
+    layers: compose.layerCopy ?? null,
+  });
   const config = singleAdConfig({
     headline: input.headline,
     sub: input.sub,
@@ -486,6 +674,7 @@ export async function recomposeVariant(
       : null,
     typography: compose.typography ?? null,
     textLayers: compose.textLayers ?? null,
+    layerCopy,
     busyTextRoles: compose.busyTextRoles ?? null,
   });
   const composed = await renderComposite(bgBuf, config);
@@ -499,6 +688,7 @@ export async function recomposeVariant(
     ...meta,
     compose: {
       ...compose,
+      layerCopy,
       headline: input.headline ?? null,
       sub: input.sub ?? null,
       cta: input.cta ?? null,

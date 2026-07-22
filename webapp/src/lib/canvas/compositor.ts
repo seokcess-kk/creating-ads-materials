@@ -1,5 +1,4 @@
 import { createCanvas, GlobalFonts, type CanvasRenderingContext2D } from "@napi-rs/canvas";
-import { createClient } from "@/lib/supabase/server";
 import { decodeImage } from "./decode-image";
 import { fitText } from "./text-fit";
 import path from "node:path";
@@ -15,15 +14,6 @@ export type LogoPosition =
   | "bottom-left"
   | "bottom-center"
   | "bottom-right";
-
-export const LOGO_POSITIONS: LogoPosition[] = [
-  "top-left",
-  "top-center",
-  "top-right",
-  "bottom-left",
-  "bottom-center",
-  "bottom-right",
-];
 
 export interface CanvasFontEntry {
   family: string;
@@ -59,8 +49,6 @@ export interface ComposeTextLayer {
 }
 
 export interface ComposeConfig {
-  backgroundImageUrl: string;
-  output: { bucket: string; path: string };
   overlay?: {
     top?: boolean;
     topOpacity?: number;
@@ -265,8 +253,7 @@ function drawRoundedRect(
   ctx.closePath();
 }
 
-// 배경 버퍼 위에 오버레이를 합성해 PNG 버퍼를 반환(업로드 없음).
-// composeAd가 Supabase 업로드로 감싸고, 로컬 테스트/E2E는 이 함수를 직접 사용한다.
+// 배경 버퍼 위에 오버레이를 합성해 PNG 버퍼를 반환(업로드 없음 — 업로드는 호출자 책임).
 export async function renderComposite(
   background: Buffer | Uint8Array,
   config: ComposeConfig,
@@ -555,26 +542,4 @@ export async function renderComposite(
   }
 
   return canvas.toBuffer("image/png");
-}
-
-export async function composeAd(config: ComposeConfig): Promise<string> {
-  const bgRes = await fetch(config.backgroundImageUrl);
-  if (!bgRes.ok) throw new Error(`배경 이미지 fetch 실패: ${bgRes.status}`);
-  const bgBuffer = Buffer.from(await bgRes.arrayBuffer());
-
-  const buffer = await renderComposite(bgBuffer, config);
-
-  const supabase = await createClient();
-  const { error } = await supabase.storage
-    .from(config.output.bucket)
-    .upload(config.output.path, buffer, {
-      contentType: "image/png",
-      upsert: true,
-    });
-  if (error) throw error;
-
-  const { data: urlData } = supabase.storage
-    .from(config.output.bucket)
-    .getPublicUrl(config.output.path);
-  return urlData.publicUrl;
 }

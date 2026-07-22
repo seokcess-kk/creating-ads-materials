@@ -64,11 +64,6 @@ interface NotificationContextValue {
   requestBrowserPermission: () => Promise<void>;
 }
 
-/** 안정적 op id — 같은 run+stage는 항상 같은 id (게이트/복원기 공유, 중복 방지) */
-export function stageOpId(runId: string | null | undefined, stage: string): string {
-  return `stage:${runId ?? "norun"}:${stage}`;
-}
-
 const NotificationContext = createContext<NotificationContextValue | null>(null);
 
 const BROWSER_NOTIF_KEY = "ad-studio-browser-notifications";

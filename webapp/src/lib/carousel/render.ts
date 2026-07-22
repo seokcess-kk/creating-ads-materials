@@ -55,7 +55,7 @@ export function slideConfig(
   slide: Pick<SlideDetail, "index" | "role" | "kicker" | "headline" | "body">,
   total: number,
   style: CarouselStyle,
-): Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> {
+): Omit<ComposeConfig, "fontSet"> {
   const c = style.colors;
   const centered = style.align !== "left";
   // textScheme이 오버레이 tint·stroke의 단일 소스.
@@ -64,7 +64,7 @@ export function slideConfig(
   const lightText = style.textScheme === "light";
   const stroke = true;
   const strokeColor = lightText ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.72)";
-  const base: Omit<ComposeConfig, "backgroundImageUrl" | "output" | "fontSet"> = {
+  const base: Omit<ComposeConfig, "fontSet"> = {
     overlay: {
       top: true,
       topOpacity: style.overlay.topOpacity,
@@ -187,8 +187,6 @@ export function fullSlideOverlayConfig(
   style: CarouselStyle,
 ): ComposeConfig {
   return {
-    backgroundImageUrl: "",
-    output: { bucket: "", path: "" },
     fontSet: style.fontSet,
     overlay: { top: false, bottom: false },
     slogan: {

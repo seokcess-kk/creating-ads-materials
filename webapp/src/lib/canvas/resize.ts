@@ -22,6 +22,28 @@ export function targetPixels(
 }
 
 /**
+ * 원본 픽셀 크기 → 가장 가까운 지원 비율. 레퍼런스 재사용(reuse)처럼 실측 좌표(0~1 비율)를
+ * 보존해야 하는 경로에서 사용자 비율 대신 원본 프레이밍에 스냅해 좌표 어긋남을 막는다.
+ */
+export function nearestAspect(
+  width?: number | null,
+  height?: number | null,
+): AspectRatio | null {
+  if (!width || !height) return null;
+  const ratio = width / height;
+  let best: AspectRatio | null = null;
+  let bestDiff = Infinity;
+  for (const [aspect, t] of Object.entries(TARGET_PIXELS)) {
+    const diff = Math.abs(ratio - t.width / t.height);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = aspect as AspectRatio;
+    }
+  }
+  return best;
+}
+
+/**
  * 생성물을 채널 목표 픽셀로 리사이즈해 PNG 버퍼로 반환. 목표 비율을 모르면 원본 그대로(안전 폴백).
  *
  * - allowCrop=true(기본, overlay 배경): cover-crop. 텍스트 없는 배경이라 가장자리가 잘려도 안전하며,

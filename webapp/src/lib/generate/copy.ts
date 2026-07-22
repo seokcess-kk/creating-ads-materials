@@ -2,9 +2,12 @@ import { z } from "zod";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import { callClaude, extractToolUse } from "@/lib/engines/claude";
 import type { UsageContext } from "@/lib/usage/record";
+import type { LayerCopySpec } from "./copy-limits";
 import type { CopyOption } from "./types";
 
 const TOOL = "record_ad_copy";
+
+const LAYER_ROLES = ["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"] as const;
 
 export const CopyOptionSchema = z.object({
   headline: z.string().min(1).max(24),
@@ -17,6 +20,10 @@ export const CopyOptionSchema = z.object({
     "social_proof",
     "emotional",
   ]),
+  // 디자인 인지 모드(layerSpec 제공 시): 레퍼런스 실측 레이어 역할 전체를 채우는 확장 카피.
+  layers: z
+    .record(z.enum(LAYER_ROLES), z.string().max(80))
+    .optional(),
 });
 
 export const CopyListSchema = z.object({
@@ -26,7 +33,7 @@ export const CopyListSchema = z.object({
 const tool: Tool = {
   name: TOOL,
   description:
-    "광고 소재용 한국어 카피를 서로 다른 앵글로 여러 벌 작성. 각 벌은 headline(짧게)·sub(선택)·cta(선택)·angle.",
+    "광고 소재용 한국어 카피를 서로 다른 앵글로 여러 벌 작성. 각 벌은 headline(짧게)·sub(선택)·cta(선택)·angle. 레이어 스펙이 주어지면 layers로 역할 전체를 채운다.",
   input_schema: {
     type: "object",
     properties: {
@@ -48,6 +55,14 @@ const tool: Tool = {
               enum: ["benefit", "curiosity", "urgency", "social_proof", "emotional"],
               description: "혜택/호기심/긴급성/사회적증거/감성 중 하나",
             },
+            layers: {
+              type: "object",
+              description:
+                "레이어 스펙이 주어진 경우 필수 — 스펙의 모든 역할을 자수 한도 내로 채운 역할별 카피. headline/sub는 위 필드와 동일 값.",
+              properties: Object.fromEntries(
+                LAYER_ROLES.map((role) => [role, { type: "string" }]),
+              ),
+            },
           },
           required: ["headline", "angle"],
         },
@@ -57,12 +72,35 @@ const tool: Tool = {
   },
 };
 
-function buildSystem(tone?: string | null, includeCta?: boolean): string {
+const ROLE_GUIDE: Record<(typeof LAYER_ROLES)[number], string> = {
+  eyebrow: "헤드라인 위 짧은 예고(예: 겨울 한정, NEW)",
+  headline: "핵심 한 줄",
+  price: "가격·수치 강조(예: 35만원, 최대 50%)",
+  sub: "보조 설명 한 줄",
+  badge: "짧은 뱃지 문구(예: 당일예약, 무료상담)",
+  legal: "고지·조건 문구(과장 없이 사실만)",
+  footer: "하단 안내(예: 상담 문의·지점명)",
+};
+
+function buildSystem(
+  tone?: string | null,
+  includeCta?: boolean,
+  layerSpec?: LayerCopySpec[] | null,
+): string {
   const toneLine = tone?.trim() ? `\n톤 오버라이드(우선): ${tone.trim()}` : "";
   const ctaLine =
     includeCta === false
       ? "- cta는 작성하지 않는다(광고 지면 — 매체가 CTA 버튼을 제공)."
       : "- cta는 행동 동사 위주(예: 지금 신청, 자세히 보기).";
+  // 디자인 인지 모드 — 레퍼런스 실측 레이어의 역할·자수 한도에 맞춰 처음부터 박스에 맞는 카피를 쓴다.
+  const layerLines = layerSpec?.length
+    ? `\n\n## 레이아웃 레이어(필수 — 각 옵션의 layers에 아래 역할 전부를 채울 것)\n${layerSpec
+        .map(
+          (s) =>
+            `- ${s.role}: ${ROLE_GUIDE[s.role]} — 공백 제외 ${s.maxChars}자 이내, 최대 ${s.maxLines}줄`,
+        )
+        .join("\n")}\n- layers.headline은 headline과, layers.sub는 sub와 동일한 값으로.\n- 자수 한도는 디자인 박스 크기에서 계산된 값 — 넘기면 글자가 줄어들어 디자인이 깨진다.`
+    : "";
   return `당신은 한국어 디지털 광고 카피라이터입니다. 한 컨셉에 대해 서로 다른 앵글의 카피를 여러 벌 작성합니다.
 
 ## 원칙
@@ -70,7 +108,7 @@ function buildSystem(tone?: string | null, includeCta?: boolean): string {
 - headline은 짧고 강하게(권장 8~16자). 모바일 가독성 우선.
 - 앵글을 다양하게: 혜택(benefit)·호기심(curiosity)·긴급성(urgency)·사회적증거(social_proof)·감성(emotional).
 - 과장/허위 금지. 입력 사실 범위 안에서.
-${ctaLine}${toneLine}
+${ctaLine}${toneLine}${layerLines}
 
 도구 ${TOOL} 로만 기록.`;
 }
@@ -87,6 +125,8 @@ export async function generateAdCopy(
     count?: number;
     /** false면 cta 미생성(광고 지면 — 매체가 네이티브 CTA 버튼 제공). 기본 true. */
     includeCta?: boolean;
+    /** 레퍼런스 실측 레이어 스펙 — 있으면 역할 전체를 자수 한도 내로 채운 layers를 함께 생성. */
+    layerSpec?: LayerCopySpec[] | null;
   },
   usageContext?: UsageContext,
 ): Promise<CopyOption[]> {
@@ -100,8 +140,8 @@ export async function generateAdCopy(
     : "";
   const resp = await callClaude({
     model: "opus",
-    maxTokens: 1500,
-    system: buildSystem(input.tone, input.includeCta),
+    maxTokens: input.layerSpec?.length ? 2500 : 1500,
+    system: buildSystem(input.tone, input.includeCta, input.layerSpec),
     usageContext,
     messages: [
       {
@@ -117,9 +157,23 @@ export async function generateAdCopy(
   });
   const raw = extractToolUse(resp, TOOL);
   if (!raw) throw new Error("카피 생성 실패");
-  const options = CopyListSchema.parse(raw).options;
+  let options = CopyListSchema.parse(raw).options;
   // 지시와 무관하게 모델이 cta를 넣었을 수 있으므로 결정적으로 제거.
-  return input.includeCta === false
-    ? options.map((o) => ({ ...o, cta: undefined }))
-    : options;
+  if (input.includeCta === false) {
+    options = options.map((o) => ({ ...o, cta: undefined }));
+  }
+  // 디자인 인지 모드 정합: headline/sub는 layers와 항상 일치시키고, 스펙에 없는 역할은 버린다.
+  if (input.layerSpec?.length) {
+    const allowed = new Set(input.layerSpec.map((s) => s.role));
+    options = options.map((o) => {
+      const layers = Object.fromEntries(
+        Object.entries(o.layers ?? {}).filter(([role, text]) => allowed.has(role as never) && text?.trim()),
+      ) as CopyOption["layers"];
+      return {
+        ...o,
+        layers: { ...layers, headline: o.headline, ...(o.sub ? { sub: o.sub } : {}) },
+      };
+    });
+  }
+  return options;
 }

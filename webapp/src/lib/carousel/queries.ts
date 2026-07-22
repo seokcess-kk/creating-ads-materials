@@ -134,17 +134,6 @@ export async function getCarousel(
   };
 }
 
-export async function getSlide(slideId: string): Promise<CarouselSlideRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("carousel_slides")
-    .select("*")
-    .eq("id", slideId)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as CarouselSlideRow | null) ?? null;
-}
-
 /**
  * 슬라이드 스켈레톤(텍스트만, 이미지 없음) 일괄 삽입.
  * 상세 카피 확정 직후 호출 → 클라이언트가 폴링으로 골격을 먼저 보고, 이후 이미지가 채워짐.

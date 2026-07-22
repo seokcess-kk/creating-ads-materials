@@ -143,29 +143,6 @@ export async function setSelectedVariant(
   if (setErr) throw setErr;
 }
 
-export async function getGeneration(
-  generationId: string,
-): Promise<{ generation: ImageGenerationRow; variants: ImageVariantRow[] } | null> {
-  const supabase = await createClient();
-  const { data: gen, error: genErr } = await supabase
-    .from("image_generations")
-    .select("*")
-    .eq("id", generationId)
-    .maybeSingle();
-  if (genErr) throw genErr;
-  if (!gen) return null;
-  const { data: variants, error: varErr } = await supabase
-    .from("image_variants")
-    .select("*")
-    .eq("generation_id", generationId)
-    .order("created_at", { ascending: true });
-  if (varErr) throw varErr;
-  return {
-    generation: gen as ImageGenerationRow,
-    variants: (variants ?? []) as ImageVariantRow[],
-  };
-}
-
 export interface GenerationSummary {
   generation: ImageGenerationRow;
   variants: ImageVariantRow[];

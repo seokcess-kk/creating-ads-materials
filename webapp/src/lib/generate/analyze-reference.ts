@@ -126,16 +126,28 @@ export const DesignReferenceSchema = z.object({
     backgroundColor: clipped(60).optional(),
     cornerRadiusRatio: bounded(0, 0.2).optional(),
   })).transform((values) => values.slice(0, 8)).optional(),
+  // 클라이언트를 오간 분석 결과가 route 파싱에서 출처 플래그를 잃지 않도록 스키마에 포함.
+  textLayersMeasured: z.boolean().optional(),
   notes: clipped(400).optional(),
+});
+
+/** 정밀 분석 + (선택) 컨셉 초안. 하나의 도구로 업로드 초안·서버 재분석을 모두 처리한다. */
+const ReferenceDraftSchema = DesignReferenceSchema.extend({
+  conceptDraft: clipped(400).optional(),
 });
 
 const tool: Tool = {
   name: TOOL,
   description:
-    "레퍼런스 이미지에서 재현 가능한 '디자인 요소'만 추출. 콘텐츠/문구가 아니라 색·무드·구도·레이아웃·타이포 느낌.",
+    "레퍼런스 이미지에서 재현 가능한 '디자인 요소'만 추출. 콘텐츠/문구가 아니라 색·무드·구도·레이아웃·타이포 느낌. 요청 시 새 광고의 컨셉 초안도 함께.",
   input_schema: {
     type: "object",
     properties: {
+      conceptDraft: {
+        type: "string",
+        description:
+          "요청된 경우에만: 이 레퍼런스를 참고해 새로 만들 광고 이미지의 컨셉 초안(한국어 1~2문장, 장면·소재·분위기).",
+      },
       palette: {
         type: "array",
         items: { type: "string" },
@@ -231,47 +243,6 @@ function fallbackLayers(
   });
 }
 
-async function analyzeReferenceFallback(
-  img: Awaited<ReturnType<typeof fetchAsBase64>>,
-  palette: string[],
-  usageContext?: UsageContext,
-): Promise<{ design: DesignReference; conceptDraft?: string } | null> {
-  const resp = await callClaude({
-    model: "sonnet",
-    maxTokens: 1000,
-    system:
-      "광고 레퍼런스의 핵심 구조만 안정적으로 분류하세요. 좌표를 추정하지 말고 밀도·정렬·텍스트 역할을 선택하며 원문과 로고는 복사하지 않습니다. 도구로만 기록.",
-    messages: [{
-      role: "user",
-      content: [
-        { type: "image", source: { type: "base64", media_type: mediaType(img.mimeType), data: img.base64 } },
-        { type: "text", text: `이 광고의 핵심 구조를 ${CORE_TOOL} 로 기록하세요.` },
-      ],
-    }],
-    tools: [coreTool],
-    toolChoice: { type: "tool", name: CORE_TOOL },
-    usageContext: usageContext ? { ...usageContext, operation: `${usageContext.operation}_fallback` } : undefined,
-  });
-  const raw = extractToolUse(resp, CORE_TOOL);
-  const parsed = raw ? ReferenceCoreSchema.safeParse(raw) : null;
-  if (!parsed?.success) return null;
-  const core = parsed.data;
-  const roles: z.infer<typeof ReferenceCoreSchema>["roles"] = core.roles.length
-    ? core.roles
-    : ["headline", "sub", "price"];
-  const design = normalizeDesignReference({
-    palette,
-    mood: core.mood,
-    composition: core.composition,
-    layout: core.layout,
-    typographyVibe: core.typographyVibe,
-    fontCategory: core.fontCategory,
-    fontFamily: core.fontFamily,
-    textLayers: fallbackLayers(roles, core.density, core.alignment, palette),
-  });
-  return { design, conceptDraft: core.conceptDraft };
-}
-
 type Media = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 function mediaType(m: string): Media {
   return m === "image/jpeg" || m === "image/png" || m === "image/gif" || m === "image/webp"
@@ -323,127 +294,52 @@ export async function extractPixelPalette(image: Buffer, count = 6): Promise<str
   );
 }
 
-/** 레퍼런스 이미지 → 디자인 요소 추출. 실패 시 null(스타일 주입 생략으로 graceful degrade). */
-export async function analyzeReferenceDesign(
-  imageUrl: string,
-  usageContext?: UsageContext,
-): Promise<DesignReference | null> {
-  let img: Awaited<ReturnType<typeof fetchAsBase64>> | null = null;
-  let pixelPalette: string[] = [];
-  try {
-    img = await fetchAsBase64(imageUrl);
-    pixelPalette = await extractPixelPalette(Buffer.from(img.base64, "base64"));
-    const resp = await callClaude({
-      model: "sonnet",
-      maxTokens: 1600,
-      system:
-        "당신은 광고 디자인 분석가입니다. 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                media_type: mediaType(img.mimeType),
-                data: img.base64,
-              },
-            },
-            {
-              type: "text",
-              text: `이 이미지의 디자인 요소를 추출해 ${TOOL} 로 기록하세요.`,
-            },
-          ],
-        },
-      ],
-      tools: [tool],
-      toolChoice: { type: "tool", name: TOOL },
-      usageContext,
-    });
-    const raw = extractToolUse(resp, TOOL);
-    if (!raw) throw new Error("정밀 분석 도구 응답 없음");
-    const parsed = normalizeDesignReference(DesignReferenceSchema.parse(raw));
-    return { ...parsed, palette: pixelPalette.length ? pixelPalette : parsed.palette };
-  } catch (e) {
-    console.warn("레퍼런스 정밀 분석 실패, 단순 분석 재시도:", (e as Error).message);
-    if (img) {
-      try {
-        return (await analyzeReferenceFallback(img, pixelPalette, usageContext))?.design ?? null;
-      } catch (fallbackError) {
-        console.warn("레퍼런스 단순 분석도 실패:", (fallbackError as Error).message);
-      }
-    }
-    return null;
-  }
-}
-
-// ── 컨셉 초안 + 디자인 요소 동시 추출 (업로드 직후 1콜) ──────────
-const DRAFT_TOOL = "record_reference_draft";
-
-export const ReferenceDraftSchema = DesignReferenceSchema.extend({
-  conceptDraft: z.string().min(1).max(400),
-});
-
-export interface ReferenceDraft {
-  conceptDraft: string;
-  design: DesignReference;
-}
-
-const draftTool: Tool = {
-  name: DRAFT_TOOL,
-  description:
-    "레퍼런스 이미지를 참고해 (1) 새 광고 이미지의 컨셉 초안과 (2) 재현 가능한 디자인 요소를 함께 기록.",
-  input_schema: {
-    type: "object",
-    properties: {
-      conceptDraft: {
-        type: "string",
-        description:
-          "이 레퍼런스를 참고해 새로 만들 광고 이미지의 컨셉 초안(한국어 1~2문장, 장면·소재·분위기). 사용자 핵심 메시지가 있으면 반영.",
-      },
-      palette: { type: "array", items: { type: "string" }, description: "주요 색 3~6개(hex/색이름)" },
-      mood: { type: "string", description: "전체 무드/톤" },
-      composition: { type: "string", description: "구도/시선 흐름/여백" },
-      layout: { type: "string", description: "요소 배치/정렬" },
-      typographyVibe: { type: "string", description: "타이포 느낌(있다면)" },
-      fontCategory: fontCategoryProperty,
-      fontFamily: fontFamilyProperty,
-      typography: typographyProperty,
-      textLayers: textLayersProperty,
-      notes: { type: "string", description: "재현에 도움되는 메모(선택)" },
-    },
-    required: ["conceptDraft", "palette", "mood", "composition", "layout", "typographyVibe"],
-  },
-};
-
-/**
- * 레퍼런스 → 컨셉 초안 + 디자인 요소(1콜). 업로드 직후 호출용.
- * 실패 시 null.
- */
-export async function analyzeReferenceForDraft(
-  imageUrl: string,
-  opts: {
+interface AnalyzeOptions {
+  /** 컨셉 초안도 요청(업로드 직후 흐름). 핵심 메시지·브랜드가 있으면 초안에 반영. */
+  concept?: {
     keyMessage?: string | null;
     brandName?: string | null;
     brandCategory?: string | null;
-  } = {},
+  } | null;
+}
+
+interface AnalyzeResult {
+  design: DesignReference;
+  conceptDraft: string | null;
+}
+
+/**
+ * 레퍼런스 분석 공통 경로 — 정밀(좌표 실측, textLayersMeasured=true) 시도 후
+ * 실패하면 단순 구조 분석 + 프리셋 레이어(textLayersMeasured=false)로 강등. 둘 다 실패 시 null.
+ * 팔레트는 모델 서술 대신 픽셀에서 결정적으로 추출해 덮어쓴다.
+ */
+async function analyzeReference(
+  imageUrl: string,
+  opts: AnalyzeOptions = {},
   usageContext?: UsageContext,
-): Promise<ReferenceDraft | null> {
+): Promise<AnalyzeResult | null> {
   let img: Awaited<ReturnType<typeof fetchAsBase64>> | null = null;
   let pixelPalette: string[] = [];
   try {
     img = await fetchAsBase64(imageUrl);
     pixelPalette = await extractPixelPalette(Buffer.from(img.base64, "base64"));
-    const key = opts.keyMessage?.trim() ? `\n사용자 핵심 메시지: ${opts.keyMessage.trim()}` : "";
-    const brand = opts.brandName?.trim()
-      ? `\n브랜드: ${opts.brandName.trim()}${opts.brandCategory?.trim() ? ` (${opts.brandCategory.trim()})` : ""}`
+
+    const wantConcept = Boolean(opts.concept);
+    const key = opts.concept?.keyMessage?.trim()
+      ? `\n사용자 핵심 메시지: ${opts.concept.keyMessage.trim()}`
       : "";
+    const brand = opts.concept?.brandName?.trim()
+      ? `\n브랜드: ${opts.concept.brandName.trim()}${opts.concept.brandCategory?.trim() ? ` (${opts.concept.brandCategory.trim()})` : ""}`
+      : "";
+    const conceptAsk = wantConcept
+      ? ` conceptDraft(새 광고의 비주얼 컨셉 초안)도 함께 기록하세요.${key}${brand}`
+      : "";
+
     const resp = await callClaude({
       model: "sonnet",
       maxTokens: 1800,
       system:
-        "당신은 광고 아트 디렉터입니다. 컨셉 초안과 함께 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
+        "당신은 광고 디자인 분석가입니다. 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
       messages: [
         {
           role: "user",
@@ -454,46 +350,116 @@ export async function analyzeReferenceForDraft(
             },
             {
               type: "text",
-              text: `이 레퍼런스를 참고해 컨셉 초안과 디자인 요소를 ${DRAFT_TOOL} 로 기록하세요.${key}${brand}`,
+              text: `이 이미지의 디자인 요소를 추출해 ${TOOL} 로 기록하세요.${conceptAsk}`,
             },
           ],
         },
       ],
-      tools: [draftTool],
-      toolChoice: { type: "tool", name: DRAFT_TOOL },
+      tools: [tool],
+      toolChoice: { type: "tool", name: TOOL },
       usageContext,
     });
-    const raw = extractToolUse(resp, DRAFT_TOOL);
-    if (!raw) throw new Error("초안 분석 도구 응답 없음");
-    const parsed = ReferenceDraftSchema.parse(raw);
-    const { conceptDraft, ...design } = parsed;
+    const raw = extractToolUse(resp, TOOL);
+    if (!raw) throw new Error("정밀 분석 도구 응답 없음");
+    const { conceptDraft, ...design } = ReferenceDraftSchema.parse(raw);
     const normalized = normalizeDesignReference(design);
     return {
-      conceptDraft,
-      design: { ...normalized, palette: pixelPalette.length ? pixelPalette : normalized.palette },
+      design: {
+        ...normalized,
+        palette: pixelPalette.length ? pixelPalette : normalized.palette,
+        textLayersMeasured: true,
+      },
+      conceptDraft: conceptDraft ?? null,
     };
   } catch (e) {
-    console.warn("레퍼런스 초안 정밀 분석 실패, 단순 분석 재시도:", (e as Error).message);
-    if (img) {
-      try {
-        const fallback = await analyzeReferenceFallback(img, pixelPalette, usageContext);
-        if (fallback) {
-          return {
-            conceptDraft: fallback.conceptDraft
-              ?? opts.keyMessage?.trim()
-              ?? "레퍼런스의 구도와 광고 밀도를 유지한 새로운 비주얼",
-            design: fallback.design,
-          };
-        }
-      } catch (fallbackError) {
-        console.warn("레퍼런스 초안 단순 분석도 실패:", (fallbackError as Error).message);
-      }
+    console.warn("레퍼런스 정밀 분석 실패, 단순 분석 재시도:", (e as Error).message);
+    if (!img) return null;
+    try {
+      return await analyzeReferenceFallback(img, pixelPalette, usageContext);
+    } catch (fallbackError) {
+      console.warn("레퍼런스 단순 분석도 실패:", (fallbackError as Error).message);
+      return null;
     }
-    return null;
   }
 }
 
-/** DesignReference → 프롬프트 주입용 영어 디스크립터. */
+async function analyzeReferenceFallback(
+  img: Awaited<ReturnType<typeof fetchAsBase64>>,
+  palette: string[],
+  usageContext?: UsageContext,
+): Promise<AnalyzeResult | null> {
+  const resp = await callClaude({
+    model: "sonnet",
+    maxTokens: 1000,
+    system:
+      "광고 레퍼런스의 핵심 구조만 안정적으로 분류하세요. 좌표를 추정하지 말고 밀도·정렬·텍스트 역할을 선택하며 원문과 로고는 복사하지 않습니다. 도구로만 기록.",
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image", source: { type: "base64", media_type: mediaType(img.mimeType), data: img.base64 } },
+        { type: "text", text: `이 광고의 핵심 구조를 ${CORE_TOOL} 로 기록하세요.` },
+      ],
+    }],
+    tools: [coreTool],
+    toolChoice: { type: "tool", name: CORE_TOOL },
+    usageContext: usageContext ? { ...usageContext, operation: `${usageContext.operation}_fallback` } : undefined,
+  });
+  const raw = extractToolUse(resp, CORE_TOOL);
+  const parsed = raw ? ReferenceCoreSchema.safeParse(raw) : null;
+  if (!parsed?.success) return null;
+  const core = parsed.data;
+  const roles: z.infer<typeof ReferenceCoreSchema>["roles"] = core.roles.length
+    ? core.roles
+    : ["headline", "sub", "price"];
+  const design = normalizeDesignReference({
+    palette,
+    mood: core.mood,
+    composition: core.composition,
+    layout: core.layout,
+    typographyVibe: core.typographyVibe,
+    fontCategory: core.fontCategory,
+    fontFamily: core.fontFamily,
+    textLayers: fallbackLayers(roles, core.density, core.alignment, palette),
+    // 프리셋 좌표 — 실측 아님. 게이트·프롬프트 기하 주입에서 제외된다.
+    textLayersMeasured: false,
+  });
+  return { design, conceptDraft: core.conceptDraft ?? null };
+}
+
+/** 레퍼런스 이미지 → 디자인 요소 추출(서버 재분석 등 컨셉 초안 불필요 시). 실패 시 null. */
+export async function analyzeReferenceDesign(
+  imageUrl: string,
+  usageContext?: UsageContext,
+): Promise<DesignReference | null> {
+  return (await analyzeReference(imageUrl, {}, usageContext))?.design ?? null;
+}
+
+export interface ReferenceDraft {
+  conceptDraft: string;
+  design: DesignReference;
+}
+
+/** 레퍼런스 → 컨셉 초안 + 디자인 요소(업로드 직후 1콜). 실패 시 null. */
+export async function analyzeReferenceForDraft(
+  imageUrl: string,
+  opts: {
+    keyMessage?: string | null;
+    brandName?: string | null;
+    brandCategory?: string | null;
+  } = {},
+  usageContext?: UsageContext,
+): Promise<ReferenceDraft | null> {
+  const result = await analyzeReference(imageUrl, { concept: opts }, usageContext);
+  if (!result) return null;
+  return {
+    conceptDraft: result.conceptDraft
+      ?? opts.keyMessage?.trim()
+      ?? "레퍼런스의 구도와 광고 밀도를 유지한 새로운 비주얼",
+    design: result.design,
+  };
+}
+
+/** DesignReference → 프롬프트 주입용 영어 디스크립터. 기하 수치는 실측일 때만 주입한다. */
 export function formatDesignReference(ref: DesignReference): string {
   const parts: string[] = [];
   if (ref.palette.length) parts.push(`color palette: ${ref.palette.join(", ")}`);
@@ -503,13 +469,14 @@ export function formatDesignReference(ref: DesignReference): string {
   if (ref.typographyVibe) parts.push(`typography vibe: ${ref.typographyVibe}`);
   if (ref.fontCategory) parts.push(`font class: ${ref.fontCategory}`);
   if (ref.fontFamily) parts.push(`closest installed font: ${ref.fontFamily}`);
-  if (ref.typography) {
+  const measured = ref.textLayersMeasured === true;
+  if (ref.typography && measured) {
     const t = ref.typography;
     parts.push(
       `typography geometry: ${t.alignment} aligned, headline size ${t.headlineSizeRatio}H, baseline ${t.headlineYRatio}H, block width ${t.headlineMaxWidthRatio}W, line-height ${t.headlineLineHeight}, weight ${t.headlineWeight}, color ${t.headlineColor}`,
     );
   }
-  if (ref.textLayers?.length) {
+  if (ref.textLayers?.length && measured) {
     parts.push(
       `text layer geometry: ${ref.textLayers.map((l) => `${l.role}@(${l.xRatio},${l.yRatio}) ${l.widthRatio}W ${l.sizeRatio}H ${l.align} ${l.color}${l.backgroundColor ? ` on ${l.backgroundColor}` : ""}`).join(" | ")}`,
     );
