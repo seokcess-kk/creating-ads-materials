@@ -48,8 +48,36 @@ const typographyProperty = {
   ],
 } as const;
 
+const textLayersProperty = {
+  type: "array",
+  maxItems: 8,
+  description:
+    "광고의 텍스트 블록을 의미 역할별로 분해한 레이아웃. 원문 문구는 기록하지 말고 eyebrow/headline/price/sub/badge/legal/footer 역할과 시각 속성만 기록.",
+  items: {
+    type: "object",
+    properties: {
+      role: { type: "string", enum: ["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"] },
+      xRatio: { type: "number", description: "블록 기준점 X / 이미지 너비" },
+      yRatio: { type: "number", description: "첫 baseline Y / 이미지 높이" },
+      widthRatio: { type: "number", description: "텍스트 블록 최대 너비 / 이미지 너비" },
+      sizeRatio: { type: "number", description: "글자 크기 / 이미지 높이" },
+      lineHeight: { type: "number", description: "행간 / 글자 크기" },
+      align: { type: "string", enum: ["left", "center", "right"] },
+      color: { type: "string", description: "주 색상 hex" },
+      gradientEndColor: { type: "string", description: "그라디언트 글자인 경우 끝 색상 hex" },
+      weight: { type: "string", enum: ["regular", "medium", "bold", "black"] },
+      maxLines: { type: "integer", minimum: 1, maximum: 4 },
+      strokeColor: { type: "string", description: "실제로 외곽선이 보일 때만 hex/rgba" },
+      backgroundColor: { type: "string", description: "배지·하단 띠 등 블록 배경색 hex/rgba" },
+      cornerRadiusRatio: { type: "number", description: "배경 모서리 반경 / 이미지 높이" },
+    },
+    required: ["role", "xRatio", "yRatio", "widthRatio", "sizeRatio", "lineHeight", "align", "color", "weight", "maxLines"],
+  },
+} as const;
+
 // 상한은 넉넉히 — 모델 서술이 길어도 파싱 실패하지 않도록(디스크립터는 프롬프트로 주입).
 export const DesignReferenceSchema = z.object({
+  analysisVersion: z.literal(2).optional(),
   palette: z.array(z.string().max(40)).max(8),
   mood: z.string().max(200),
   composition: z.string().max(300),
@@ -77,6 +105,22 @@ export const DesignReferenceSchema = z.object({
     subColor: z.string().max(40).optional(),
     hasStrokeOrShadow: z.boolean().optional(),
   }).optional(),
+  textLayers: z.array(z.object({
+    role: z.enum(["eyebrow", "headline", "price", "sub", "badge", "legal", "footer"]),
+    xRatio: z.number().min(0).max(1),
+    yRatio: z.number().min(0).max(1),
+    widthRatio: z.number().min(0.1).max(1),
+    sizeRatio: z.number().min(0.01).max(0.35),
+    lineHeight: z.number().min(0.8).max(2),
+    align: z.enum(["left", "center", "right"]),
+    color: z.string().max(40),
+    gradientEndColor: z.string().max(40).optional(),
+    weight: z.enum(["regular", "medium", "bold", "black"]),
+    maxLines: z.number().int().min(1).max(4),
+    strokeColor: z.string().max(60).optional(),
+    backgroundColor: z.string().max(60).optional(),
+    cornerRadiusRatio: z.number().min(0).max(0.2).optional(),
+  })).max(8).optional(),
   notes: z.string().max(400).optional(),
 });
 
@@ -99,6 +143,7 @@ const tool: Tool = {
       fontCategory: fontCategoryProperty,
       fontFamily: fontFamilyProperty,
       typography: typographyProperty,
+      textLayers: textLayersProperty,
       notes: { type: "string", description: "재현에 도움되는 기타 메모(선택)" },
     },
     required: ["palette", "mood", "composition", "layout", "typographyVibe"],
@@ -121,9 +166,9 @@ export async function analyzeReferenceDesign(
     const img = await fetchAsBase64(imageUrl);
     const resp = await callClaude({
       model: "sonnet",
-      maxTokens: 800,
+      maxTokens: 1600,
       system:
-        "당신은 광고 디자인 분석가입니다. 주어진 레퍼런스 이미지에서 '재현 가능한 디자인 요소'만 추출합니다(이미지에 담긴 구체적 콘텐츠/문구가 아니라 색·무드·구도·레이아웃·타이포 느낌). 도구로만 기록.",
+        "당신은 광고 디자인 분석가입니다. 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
       messages: [
         {
           role: "user",
@@ -188,6 +233,7 @@ const draftTool: Tool = {
       fontCategory: fontCategoryProperty,
       fontFamily: fontFamilyProperty,
       typography: typographyProperty,
+      textLayers: textLayersProperty,
       notes: { type: "string", description: "재현에 도움되는 메모(선택)" },
     },
     required: ["conceptDraft", "palette", "mood", "composition", "layout", "typographyVibe"],
@@ -215,9 +261,9 @@ export async function analyzeReferenceForDraft(
       : "";
     const resp = await callClaude({
       model: "sonnet",
-      maxTokens: 1000,
+      maxTokens: 1800,
       system:
-        "당신은 광고 아트 디렉터입니다. 주어진 레퍼런스 이미지를 참고해 (1) 새로 만들 광고 이미지의 컨셉 초안과 (2) 재현 가능한 디자인 요소를 추출합니다. 도구로만 기록.",
+        "당신은 광고 아트 디렉터입니다. 컨셉 초안과 함께 레퍼런스를 실제 재제작할 수 있도록 텍스트를 의미 레이어로 분해하고 정규화 좌표·크기·색·장식을 측정합니다. 원문 문구나 로고는 복사하지 말고 역할과 스타일만 기록하세요. 도구로만 기록.",
       messages: [
         {
           role: "user",
@@ -264,12 +310,17 @@ export function formatDesignReference(ref: DesignReference): string {
       `typography geometry: ${t.alignment} aligned, headline size ${t.headlineSizeRatio}H, baseline ${t.headlineYRatio}H, block width ${t.headlineMaxWidthRatio}W, line-height ${t.headlineLineHeight}, weight ${t.headlineWeight}, color ${t.headlineColor}`,
     );
   }
+  if (ref.textLayers?.length) {
+    parts.push(
+      `text layer geometry: ${ref.textLayers.map((l) => `${l.role}@(${l.xRatio},${l.yRatio}) ${l.widthRatio}W ${l.sizeRatio}H ${l.align} ${l.color}${l.backgroundColor ? ` on ${l.backgroundColor}` : ""}`).join(" | ")}`,
+    );
+  }
   return parts.join("; ");
 }
 
 /** 선택 필드 누락 때문에 분석 전체가 폐기되지 않도록 안전한 카테고리만 보정한다. */
 export function normalizeDesignReference(ref: DesignReference): DesignReference {
-  if (ref.fontCategory && ref.fontFamily) return ref;
+  if (ref.fontCategory && ref.fontFamily) return { ...ref, analysisVersion: 2 };
   const vibe = ref.typographyVibe.toLowerCase();
   const fontCategory = /serif|명조|세리프/.test(vibe)
     ? "serif"
@@ -289,6 +340,7 @@ export function normalizeDesignReference(ref: DesignReference): DesignReference 
   } as const;
   return {
     ...ref,
+    analysisVersion: 2,
     fontCategory: ref.fontCategory ?? fontCategory,
     fontFamily: ref.fontFamily ?? familyByCategory[ref.fontCategory ?? fontCategory],
   };

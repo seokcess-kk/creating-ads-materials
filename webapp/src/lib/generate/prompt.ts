@@ -79,6 +79,8 @@ interface BasePromptInput {
   mood?: string | null;
   /** 카피 여백 위치(선택, overlay) */
   copyPosition?: CopyPosition | null;
+  /** 레퍼런스 자체의 밀도와 텍스트 박스를 우선하고 일반 미니멀 프리셋을 적용하지 않는다. */
+  referenceDriven?: boolean;
 }
 
 interface TextPromptInput extends BasePromptInput {
@@ -93,8 +95,10 @@ export function buildTextlessBackgroundPrompt(input: BasePromptInput): string {
     "High-quality, professional Korean social-media advertisement background, CLEAN and TEXTLESS.",
     `Communicates: ${input.keyMessage}.`,
     input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
-    input.styleHint ? `Style: ${input.styleHint}.` : null,
-    `Keep the hero subject and busy detail away from the copy zone; reserve a clean, low-detail band at ${copyZone(input.copyPosition)} (good, even contrast) for Korean copy overlaid later.`,
+    input.styleHint && !input.referenceDriven ? `Style: ${input.styleHint}.` : null,
+    input.referenceDriven
+      ? "Preserve the reference's exact visual density, object scale, grid and all text-block negative-space shapes. Keep every measured text-layer rectangle free of subjects and high-frequency detail; do not replace the reference layout with a generic centered copy zone."
+      : `Keep the hero subject and busy detail away from the copy zone; reserve a clean, low-detail band at ${copyZone(input.copyPosition)} (good, even contrast) for Korean copy overlaid later.`,
     input.lighting?.trim()
       ? `Lighting: ${input.lighting.trim()}.`
       : "Soft professional lighting with a clear focal point.",
@@ -120,7 +124,7 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
     "Polished, professional Korean social-media advertisement design, clean modern advertising style.",
     `Communicates: ${input.keyMessage}.`,
     input.concept?.trim() ? `Hero scene / subject: ${input.concept.trim()}.` : null,
-    input.styleHint ? `Style: ${input.styleHint}.` : null,
+    input.styleHint && !input.referenceDriven ? `Style: ${input.styleHint}.` : null,
     input.lighting?.trim()
       ? `Lighting: ${input.lighting.trim()}.`
       : "Soft professional lighting, clear focal point.",
@@ -140,7 +144,9 @@ export function buildFullImagePrompt(input: TextPromptInput): string {
       ? "Reserve a clean, calm band near the bottom for a call-to-action button added separately — do NOT draw a button or its text."
       : null,
     "Do NOT draw any brand logo or wordmark (the logo is added separately afterwards).",
-    "Strong visual hierarchy, generous whitespace, advertising-grade composition.",
+    input.referenceDriven
+      ? "Preserve the reference's visual density, grid, text-block geometry and advertising hierarchy exactly."
+      : "Strong visual hierarchy, generous whitespace, advertising-grade composition.",
   ]);
 }
 

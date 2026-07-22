@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeDesignReference, ReferenceDraftSchema } from "./analyze-reference";
-import { assertCopyFitsTypography, singleAdConfig } from "./render";
+import { assertCopyFitsTypography, buildReferenceTextLayers, singleAdConfig } from "./render";
 
 const typography = {
   alignment: "right" as const,
@@ -79,5 +79,29 @@ describe("reference typography", () => {
         typography: { ...typography, headlineMaxWidthRatio: 0.3 },
       }),
     ).toThrow(/이내로 줄여 주세요/);
+  });
+
+  it("splits a price into an independent styled advertising layer", () => {
+    const layers = buildReferenceTextLayers({
+      headline: "오스템 임플란트 35만원",
+      sub: "국산정품 지르코니아",
+      layers: [
+        { role: "headline", xRatio: 0.06, yRatio: 0.35, widthRatio: 0.55, sizeRatio: 0.08, lineHeight: 1.05, align: "left", color: "#FFFFFF", weight: "black", maxLines: 2 },
+        { role: "price", xRatio: 0.06, yRatio: 0.58, widthRatio: 0.48, sizeRatio: 0.15, lineHeight: 1, align: "left", color: "#FFD700", gradientEndColor: "#00E5FF", weight: "black", maxLines: 1 },
+        { role: "sub", xRatio: 0.06, yRatio: 0.7, widthRatio: 0.55, sizeRatio: 0.03, lineHeight: 1.2, align: "left", color: "#FFFFFF", weight: "regular", maxLines: 2 },
+      ],
+    });
+
+    expect(layers.map((layer) => [layer.text, layer.color])).toEqual([
+      ["오스템 임플란트", "#FFFFFF"],
+      ["35만원", "#FFD700"],
+      ["국산정품 지르코니아", "#FFFFFF"],
+    ]);
+    const config = singleAdConfig({ headline: "오스템 임플란트 35만원", textLayers: [
+      { role: "headline", xRatio: 0.06, yRatio: 0.35, widthRatio: 0.55, sizeRatio: 0.08, lineHeight: 1.05, align: "left", color: "#FFFFFF", weight: "black", maxLines: 2 },
+      { role: "price", xRatio: 0.06, yRatio: 0.58, widthRatio: 0.48, sizeRatio: 0.15, lineHeight: 1, align: "left", color: "#FFD700", weight: "black", maxLines: 1 },
+    ] });
+    expect(config.mainCopy).toBeUndefined();
+    expect(config.textLayers).toHaveLength(2);
   });
 });

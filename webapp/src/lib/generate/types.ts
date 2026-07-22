@@ -64,8 +64,37 @@ export interface ReferenceTypographyProfile {
   hasStrokeOrShadow?: boolean;
 }
 
+export type ReferenceTextRole =
+  | "eyebrow"
+  | "headline"
+  | "price"
+  | "sub"
+  | "badge"
+  | "legal"
+  | "footer";
+
+/** 레퍼런스 광고의 텍스트 블록 하나. 좌표와 크기는 원본 캔버스 기준 0~1. */
+export interface ReferenceTextLayer {
+  role: ReferenceTextRole;
+  xRatio: number;
+  yRatio: number;
+  widthRatio: number;
+  sizeRatio: number;
+  lineHeight: number;
+  align: "left" | "center" | "right";
+  color: string;
+  gradientEndColor?: string;
+  weight: "regular" | "medium" | "bold" | "black";
+  maxLines: number;
+  strokeColor?: string;
+  backgroundColor?: string;
+  cornerRadiusRatio?: number;
+}
+
 /** 레퍼런스 비전 분석 결과 — 디자인 요소 추출. */
 export interface DesignReference {
+  /** 분석 스키마 버전. v2부터 의미 기반 textLayers를 지원한다. */
+  analysisVersion?: 2;
   palette: string[];
   mood: string;
   composition: string;
@@ -77,6 +106,8 @@ export interface DesignReference {
   fontFamily?: ReferenceFontFamily;
   /** 글자 배치와 비례를 후합성에서도 최대한 재현하기 위한 구조화 측정값. */
   typography?: ReferenceTypographyProfile;
+  /** 단일 headline/sub로 평탄화하지 않은 광고 레이어 구조. */
+  textLayers?: ReferenceTextLayer[];
   notes?: string;
 }
 

@@ -1,6 +1,6 @@
 import path from "node:path";
-import type { ComposeConfig, ComposeFontSet, LogoPosition } from "@/lib/canvas/compositor";
-import type { CopyPosition, ReferenceTypographyProfile } from "./types";
+import type { ComposeConfig, ComposeFontSet, ComposeTextLayer, LogoPosition } from "@/lib/canvas/compositor";
+import type { CopyPosition, ReferenceTextLayer, ReferenceTypographyProfile } from "./types";
 
 // 카피 위치별 텍스트존 세로 위치(yRatio). 그라데이션/스크림은 전 영역 대비를 확보하므로
 // 위치만 이동해도 가독성이 유지된다. center가 현행 기본값.
@@ -46,6 +46,62 @@ export interface SingleAdLayoutInput {
   fontSet?: ComposeFontSet | null;
   /** 레퍼런스에서 측정한 타이포 비례/배치. copyPosition보다 우선한다. */
   typography?: ReferenceTypographyProfile | null;
+  textLayers?: ReferenceTextLayer[] | null;
+}
+
+const PRICE_TOKEN = /(?:\d[\d,.]*\s*(?:억|천|백|십|만)?\s*원(?:부터)?|\d[\d,.]*\s*%|무료)/i;
+
+function layerWeight(weight: ReferenceTextLayer["weight"]): ComposeTextLayer["fontWeight"] {
+  return weight === "black" ? "900" : weight === "regular" ? "normal" : weight === "medium" ? "500" : "bold";
+}
+
+/** 새 카피를 레퍼런스의 의미 레이어에 배치한다. 원본 문구나 없는 고지는 발명하지 않는다. */
+export function buildReferenceTextLayers(input: {
+  headline?: string | null;
+  sub?: string | null;
+  layers?: ReferenceTextLayer[] | null;
+}): ComposeTextLayer[] {
+  if (!input.layers?.length) return [];
+  let headline = input.headline?.trim() ?? "";
+  let sub = input.sub?.trim() ?? "";
+  const priceMatch = headline.match(PRICE_TOKEN) ?? sub.match(PRICE_TOKEN);
+  const price = priceMatch?.[0]?.replace(/\s+/g, "") ?? "";
+  if (price && headline.includes(priceMatch?.[0] ?? "")) headline = headline.replace(priceMatch?.[0] ?? "", "").trim();
+  else if (price && sub.includes(priceMatch?.[0] ?? "")) sub = sub.replace(priceMatch?.[0] ?? "", "").trim();
+  headline = headline.replace(/[·|,/-]+\s*$/, "").trim();
+  sub = sub.replace(/[·|,/-]+\s*$/, "").trim();
+
+  const used = new Set<string>();
+  const result = input.layers.flatMap((layer): ComposeTextLayer[] => {
+    let text = "";
+    if (layer.role === "headline" && !used.has("headline")) text = headline || input.headline?.trim() || "";
+    else if (layer.role === "price" && !used.has("price")) text = price;
+    else if (layer.role === "sub" && !used.has("sub")) text = sub;
+    if (!text) return [];
+    used.add(layer.role);
+    return [{
+      text,
+      xRatio: layer.xRatio,
+      yRatio: layer.yRatio,
+      widthRatio: layer.widthRatio,
+      sizeRatio: layer.sizeRatio,
+      lineHeight: layer.lineHeight,
+      align: layer.align,
+      color: layer.color,
+      gradientEndColor: layer.gradientEndColor,
+      fontWeight: layerWeight(layer.weight),
+      fontRole: layer.role === "sub" ? "sub" : "headline",
+      maxLines: layer.maxLines,
+      minScale: 0.78,
+      strokeColor: layer.strokeColor,
+      backgroundColor: layer.backgroundColor,
+      cornerRadiusRatio: layer.cornerRadiusRatio,
+    }];
+  });
+  const complete = (!headline || used.has("headline"))
+    && (!price || used.has("price"))
+    && (!sub || used.has("sub"));
+  return complete ? result : [];
 }
 
 /** 이미지 모델 호출 전에 레퍼런스 텍스트 박스와 새 카피 길이의 명백한 충돌을 차단한다. */
@@ -83,13 +139,21 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
       : t?.headlineWeight === "medium"
         ? "500"
         : "bold";
+  const structuredLayers = buildReferenceTextLayers({
+    headline: input.headline,
+    sub: input.sub,
+    layers: input.textLayers,
+  });
   const config: ComposeConfig = {
     backgroundImageUrl: "",
     output: { bucket: "", path: "" },
     fontSet: input.fontSet ?? singleAdFontSet(),
     // AI 배경은 어디든 밝을 수 있어 상/하 그라데이션 + 은은한 전체 스크림으로
     // 임의 배경에서도 텍스트 가독성을 확보한다(히어로 텍스트는 외곽선 추가).
-    overlay: { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },
+    overlay: structuredLayers.length
+      ? { top: false, bottom: false }
+      : { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },
+    textLayers: structuredLayers,
   };
 
   if (input.logo?.buffer || input.logo?.url) {
@@ -103,7 +167,7 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     };
   }
 
-  if (input.headline) {
+  if (input.headline && structuredLayers.length === 0) {
     config.mainCopy = {
       text: input.headline,
       color: t?.headlineColor ?? "#FFFFFF",
@@ -121,7 +185,7 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     };
   }
 
-  if (input.sub) {
+  if (input.sub && structuredLayers.length === 0) {
     config.subCopy = {
       text: input.sub,
       color: t?.subColor ?? "#FFFFFF",

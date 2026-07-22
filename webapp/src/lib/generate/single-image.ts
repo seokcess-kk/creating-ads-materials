@@ -24,6 +24,7 @@ import {
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
+import { copyZoneCorrection, findBusyCopyZones } from "./quality";
 import type {
   SingleImageInput,
   SingleImageResult,
@@ -35,7 +36,7 @@ import type {
   ReferenceFontCategory,
 } from "./types";
 
-export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.4.0";
+export const SINGLE_IMAGE_PROMPT_VERSION = "single@0.5.0";
 
 // 아트디렉터 실패 시 폴백용 — 후보별 스타일 변주(결정적).
 const STYLE_HINTS = [
@@ -118,15 +119,17 @@ export async function generateSingleImageVariants(
       (input.referenceMode === "base" ? "layout" : "style"))
     : null;
 
-  // 업로드 시 이미 분석했으면(input.designRef) 재분석 생략. 픽셀을 직접 참조하는 강도에서도
-  // 텍스트 요약은 유지 — 아트디렉터의 팔레트 verbatim 지시 + overlay 폰트 매핑(fontCategory)에 쓰인다.
+  // 구 분석 결과에는 구조화 textLayers가 없으므로 텍스트가 있는 레퍼런스 생성은 자동 재분석한다.
+  // 새 분석이 실패하면 기존 요약을 유지해 생성 자체는 계속한다.
   let designRef: DesignReference | null = input.designRef ?? null;
-  if (!designRef && refUrl) {
-    designRef = await analyzeReferenceDesign(refUrl, {
+  const needsLayerAnalysis = Boolean(refUrl && hasText && designRef?.analysisVersion !== 2);
+  if (refUrl && (!designRef || needsLayerAnalysis)) {
+    const analyzed = await analyzeReferenceDesign(refUrl, {
       operation: "single_image_ref_analyze",
       brandId: input.brandId ?? null,
-      metadata: { generationId },
+      metadata: { generationId, reason: needsLayerAnalysis ? "missing_text_layers" : "missing_design_ref" },
     });
+    designRef = analyzed ?? designRef;
   }
 
   if (mode === "overlay" && designRef?.typography) {
@@ -191,6 +194,7 @@ export async function generateSingleImageVariants(
         brand,
         styleHint,
         designRef: designRefText,
+        referenceDriven: Boolean(designRef),
       });
     } else {
       p = buildFullImagePrompt({
@@ -204,6 +208,7 @@ export async function generateSingleImageVariants(
         brand,
         styleHint,
         designRef: designRefText,
+        referenceDriven: Boolean(designRef),
         headline: input.headline,
         sub: input.sub,
         cta: input.cta,
@@ -236,19 +241,42 @@ export async function generateSingleImageVariants(
         metadata: { generationId, i, mode, refStrength: refStrength ?? "none" },
       };
 
-      // 1) 베이스 이미지 — 레퍼런스 픽셀이 있으면(style/layout) editImage로 직접 참조, 없으면 text-to-image.
-      const base = refImage
-        ? await editImage({
-            prompt: `${prompt}${referenceGuard(
-              refStrength as Exclude<ReferenceStrength, "mood">,
-              mode === "full" && hasText,
-            )}`,
-            baseImage: refImage,
-            aspectRatio,
-            imageSize: "1K",
-            usageContext,
-          })
-        : await generateImage({ prompt, aspectRatio, imageSize: "1K", usageContext });
+      const renderBase = (correction = "") => {
+        const finalPrompt = `${prompt}${refImage ? referenceGuard(
+          refStrength as Exclude<ReferenceStrength, "mood">,
+          mode === "full" && hasText,
+        ) : ""}${correction}`;
+        return refImage
+          ? editImage({
+              prompt: finalPrompt,
+              baseImage: refImage,
+              aspectRatio,
+              imageSize: "1K",
+              usageContext,
+            })
+          : generateImage({ prompt: finalPrompt, aspectRatio, imageSize: "1K", usageContext });
+      };
+
+      // 1) 베이스 이미지. 구조화 텍스트 박스가 있으면 실제 픽셀의 피사체 침범을 검사하고 1회 교정한다.
+      let base = await renderBase();
+      let checkedBg: Buffer | null = null;
+      let zoneRetry = false;
+      if (mode === "overlay" && designRef?.textLayers?.length) {
+        const activeLayers = designRef.textLayers.filter((layer) =>
+          layer.role === "headline" || layer.role === "price" || layer.role === "sub",
+        );
+        checkedBg = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+        const violations = await findBusyCopyZones(checkedBg, activeLayers);
+        if (violations.length) {
+          base = await renderBase(copyZoneCorrection(violations));
+          checkedBg = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+          zoneRetry = true;
+          const remaining = await findBusyCopyZones(checkedBg, activeLayers);
+          if (remaining.length) {
+            throw new Error(`텍스트 안전영역 품질 검사 실패: ${remaining.map((v) => v.role).join(", ")}`);
+          }
+        }
+      }
 
       // variant 추적 메타(meta_json) — 어떤 프롬프트/모델/사이즈/합성으로 만들어졌는지 보존.
       const meta: Record<string, unknown> = {
@@ -261,11 +289,12 @@ export async function generateSingleImageVariants(
         size: base.size ?? null,
         aspectRatio,
         refStrength: refStrength ?? "none",
+        zoneRetry,
       };
 
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
       if (mode === "overlay" && hasText) {
-        const bgBuf = await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+        const bgBuf = checkedBg ?? await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
         // 오버레이는 그라데이션+스크림으로 배경이 어두워지므로 darken을 반영해 로고 대비를 판단.
         const placement = await planLogoPlacement(bgBuf, logoAssets, { darken: 0.55 });
         const config = singleAdConfig({
@@ -278,6 +307,7 @@ export async function generateSingleImageVariants(
           // 레퍼런스 타이포 카테고리가 있으면 그 폰트로(없으면 Pretendard).
           fontSet: designRef ? fontSetForReference(designRef) : null,
           typography: designRef?.typography ?? null,
+          textLayers: designRef?.textLayers ?? null,
         });
         // bg 보존 업로드와 합성은 둘 다 bgBuf에만 의존 → 병렬(핫패스 지연 단축).
         const [bgUploaded, composed] = await Promise.all([
@@ -301,6 +331,7 @@ export async function generateSingleImageVariants(
           fontCategory: designRef?.fontCategory ?? null,
           fontFamily: designRef?.fontFamily ?? null,
           typography: designRef?.typography ?? null,
+          textLayers: designRef?.textLayers ?? null,
           headline: input.headline ?? null,
           sub: input.sub ?? null,
           cta: input.cta ?? null,
@@ -416,6 +447,7 @@ export async function recomposeVariant(
       fontCategory?: ReferenceFontCategory | null;
       fontFamily?: DesignReference["fontFamily"] | null;
       typography?: DesignReference["typography"] | null;
+      textLayers?: DesignReference["textLayers"] | null;
     }) ?? {};
   const bgBuf = await fetchAsBuffer(bgUrl);
   const config = singleAdConfig({
@@ -441,6 +473,7 @@ export async function recomposeVariant(
         })
       : null,
     typography: compose.typography ?? null,
+    textLayers: compose.textLayers ?? null,
   });
   const composed = await renderComposite(bgBuf, config);
   // storage 경로 안전성을 위해 표시 라벨 대신 variant id 사용(공백·한글 회피).

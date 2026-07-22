@@ -39,6 +39,25 @@ export interface ComposeFontSet {
   slogan?: CanvasFontEntry;
 }
 
+export interface ComposeTextLayer {
+  text: string;
+  xRatio: number;
+  yRatio: number;
+  widthRatio: number;
+  sizeRatio: number;
+  lineHeight: number;
+  align: "left" | "center" | "right";
+  color: string;
+  gradientEndColor?: string;
+  fontWeight: "normal" | "500" | "bold" | "900";
+  fontRole: keyof ComposeFontSet;
+  maxLines: number;
+  minScale?: number;
+  strokeColor?: string;
+  backgroundColor?: string;
+  cornerRadiusRatio?: number;
+}
+
 export interface ComposeConfig {
   backgroundImageUrl: string;
   output: { bucket: string; path: string };
@@ -125,6 +144,8 @@ export interface ComposeConfig {
     sizeRatio?: number;
     yRatio?: number;
   };
+  /** 레퍼런스 광고를 의미 블록 단위로 재현하는 범용 텍스트 레이어. */
+  textLayers?: ComposeTextLayer[];
   fontSet?: ComposeFontSet;
 }
 
@@ -336,6 +357,70 @@ export async function renderComposite(
     const x = w * (config.brand.xRatio ?? 0.05);
     const y = h * (config.brand.yRatio ?? 0.05);
     drawTextWithShadow(ctx, x, y, config.brand.text, config.brand.color ?? "#FFFFFF", 1);
+  }
+
+  for (const layer of config.textLayers ?? []) {
+    if (!layer.text.trim()) continue;
+    const family = pickFamily(config.fontSet, layer.fontRole);
+    const baseSize = Math.round(h * layer.sizeRatio);
+    const maxWidth = w * layer.widthRatio;
+    const fit = fitText(
+      layer.text,
+      { baseSize, maxWidth, maxLines: layer.maxLines, minScale: layer.minScale ?? 0.78 },
+      (size, value) => {
+        ctx.font = `${layer.fontWeight} ${size}px ${family}`;
+        return ctx.measureText(value).width;
+      },
+    );
+    if (fit.overflow) {
+      throw new Error(`${layer.text} 문구가 레퍼런스의 ${layer.maxLines}줄 영역에 맞지 않습니다.`);
+    }
+
+    const lineHeight = fit.fontSize * layer.lineHeight;
+    const blockHeight = lineHeight * fit.lines.length;
+    const anchorX = w * layer.xRatio;
+    const firstBaselineY = h * layer.yRatio;
+    if (layer.backgroundColor) {
+      const padX = Math.max(8, fit.fontSize * 0.45);
+      const padY = Math.max(6, fit.fontSize * 0.3);
+      const boxX = layer.align === "center"
+        ? anchorX - maxWidth / 2 - padX
+        : layer.align === "right"
+          ? anchorX - maxWidth - padX
+          : anchorX - padX;
+      const boxY = firstBaselineY - fit.fontSize - padY;
+      ctx.fillStyle = layer.backgroundColor;
+      drawRoundedRect(
+        ctx,
+        boxX,
+        boxY,
+        maxWidth + padX * 2,
+        blockHeight + padY * 2,
+        h * (layer.cornerRadiusRatio ?? 0.012),
+      );
+      ctx.fill();
+    }
+
+    ctx.font = `${layer.fontWeight} ${fit.fontSize}px ${family}`;
+    ctx.textAlign = layer.align;
+    for (let i = 0; i < fit.lines.length; i++) {
+      const y = firstBaselineY + i * lineHeight;
+      if (layer.strokeColor) {
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(1, fit.fontSize * 0.035);
+        ctx.strokeStyle = layer.strokeColor;
+        ctx.strokeText(fit.lines[i], anchorX, y);
+      }
+      if (layer.gradientEndColor) {
+        const gradient = ctx.createLinearGradient(anchorX, y - fit.fontSize, anchorX + maxWidth, y);
+        gradient.addColorStop(0, layer.color);
+        gradient.addColorStop(1, layer.gradientEndColor);
+        ctx.fillStyle = gradient;
+      } else {
+        ctx.fillStyle = layer.color;
+      }
+      ctx.fillText(fit.lines[i], anchorX, y);
+    }
   }
 
   if (config.mainCopy?.text) {
