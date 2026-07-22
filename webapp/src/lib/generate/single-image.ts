@@ -25,8 +25,18 @@ import {
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
-import { copyZoneCorrection, findBusyCopyZones, type CopyZoneViolation } from "./quality";
-import { verifyBakedImage, bakeQaCorrection } from "./verify-baked";
+import {
+  copyZoneCorrection,
+  findBusyCopyZones,
+  findLowContrastLayers,
+  type CopyZoneViolation,
+} from "./quality";
+import {
+  verifyBakedImage,
+  bakeQaCorrection,
+  detectCopiedPerson,
+  PERSON_CORRECTION,
+} from "./verify-baked";
 import type {
   SingleImageInput,
   SingleImageResult,
@@ -55,18 +65,30 @@ const STYLE_HINTS = [
  *  - style: 색·조명·무드·구도만 따라가고 장면은 완전히 새로(콘텐츠 복제 억제).
  *  - layout: 배치·타이포 위계·장식 요소까지 템플릿처럼 유지, 내용(피사체·문구)만 교체.
  */
+// 실존 인물 복제(초상권) 방지 — 모든 픽셀 참조 강도에 공통으로 붙는 하드 가드.
+const PERSON_GUARD =
+  " If the reference contains any person, do NOT reproduce that person's identity: render a clearly DIFFERENT individual (different face, features and hairstyle) in a similar role and pose, or omit the person if the brief describes no people.";
+
+// 빈 배지·필 컨테이너 방지 — 텍스트·배지 배경은 컴포지터가 실측 좌표에 그린다(이중 소유 금지).
+const CONTAINER_GUARD =
+  " Where the reference has text, badges, pills, ribbons or stickers, leave those areas as PLAIN, flat background — do NOT draw empty containers, pills, badges, medallions or placeholder shapes there (text and badge backgrounds are composited later at exact coordinates).";
+
+// 배경 구조 보존 — 사진/일러스트 성격과 구역별 색 블록이 단일 톤으로 뭉개지는 것 방지.
+const BACKGROUND_GUARD =
+  " Preserve the nature of the reference background (photographic stays photographic, illustrated stays illustrated) and keep its distinct color-block regions in place — do not flatten them into one uniform backdrop.";
+
 function referenceGuard(
   strength: Exclude<ReferenceStrength, "mood">,
   rendersText: boolean,
 ): string {
   if (strength === "layout") {
     return rendersText
-      ? "\n\nDESIGN TEMPLATE REFERENCE — TYPOGRAPHY IS A HARD CONSTRAINT: Treat the attached image as a pixel-level design template. Preserve the exact text-block bounding boxes, baselines, alignment, line count, line-height, relative font sizes, weight, width/condensation, tracking, colors, outline/shadow treatment, and whitespace. Match the reference typeface's visible glyph personality as closely as the image model can (serif shape, terminals, stroke contrast, roundness, counters), not merely its broad font category. Render ONLY the new Korean text specified above, fitted into the same boxes without inventing, duplicating, or retaining any reference letters. Preserve the exact layout, grid, element placement, decorative elements, palette, lighting and mood. Swap subjects/content only. Do NOT copy reference logos, photos or products. Before finalizing, visually compare the new typography against the attached reference and correct any drift in geometry or styling."
-      : "\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design. Swap ONLY the content to the new subject/scene described above, and produce a fully TEXTLESS composition: where the reference has text, leave those areas as clean, empty space (Korean copy is composited there later). Do NOT copy the reference's literal text, logos, photos or products.";
+      ? `\n\nDESIGN TEMPLATE REFERENCE — TYPOGRAPHY IS A HARD CONSTRAINT: Treat the attached image as a pixel-level design template. Preserve the exact text-block bounding boxes, baselines, alignment, line count, line-height, relative font sizes, weight, width/condensation, tracking, colors, outline/shadow treatment, and whitespace. Match the reference typeface's visible glyph personality as closely as the image model can (serif shape, terminals, stroke contrast, roundness, counters), not merely its broad font category. Render ONLY the new Korean text specified above, fitted into the same boxes without inventing, duplicating, or retaining any reference letters. Preserve the exact layout, grid, element placement, decorative elements, palette, lighting and mood.${BACKGROUND_GUARD} Swap subjects/content only. Do NOT copy reference logos, photos or products.${PERSON_GUARD} Before finalizing, visually compare the new typography against the attached reference and correct any drift in geometry or styling.`
+      : `\n\nDESIGN TEMPLATE REFERENCE: The attached image is a design TEMPLATE to follow closely — replicate its exact layout, grid, element placement, decorative elements, color palette, lighting and mood, so the result reads as another version of the same design.${BACKGROUND_GUARD} Swap ONLY the content to the new subject/scene described above, and produce a fully TEXTLESS composition.${CONTAINER_GUARD} Do NOT copy the reference's literal text, logos, photos or products.${PERSON_GUARD}`;
   }
   return rendersText
-    ? "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so the result reads as designed after it. Build an ENTIRELY NEW image: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers. Render ONLY the Korean text specified above."
-    : "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.";
+    ? `\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so the result reads as designed after it. Build an ENTIRELY NEW image: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers.${PERSON_GUARD} Render ONLY the Korean text specified above.`
+    : `\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.${PERSON_GUARD}${CONTAINER_GUARD}`;
 }
 
 /**
@@ -223,6 +245,8 @@ export async function generateSingleImageVariants(
       },
     });
     const bgBuf = await resizeToChannel(Buffer.from(cleaned.base64, "base64"), reuseAspect);
+    // 텍스트 제거 과정에서 존이 밝아졌을 수 있으므로 저대비 역할에 스트로크를 적용한다.
+    const reuseBusyRoles = await findLowContrastLayers(bgBuf, measuredLayers);
     const placement = await planLogoPlacement(bgBuf, logoAssets);
     const logo = logoForCompositorFrom(logoAssets, placement);
     const bgUploaded = await uploadGeneratedImage(generationId, "bg_reuse", {
@@ -253,6 +277,7 @@ export async function generateSingleImageVariants(
           typography: designRef.typography ?? null,
           textLayers: measuredLayers,
           layerCopy,
+          busyTextRoles: reuseBusyRoles,
         });
         const composed = await renderComposite(bgBuf, config);
         const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
@@ -279,7 +304,7 @@ export async function generateSingleImageVariants(
             typography: designRef.typography ?? null,
             textLayers: measuredLayers,
             layerCopy,
-            busyTextRoles: [],
+            busyTextRoles: reuseBusyRoles,
             headline: c.headline ?? null,
             sub: c.sub ?? null,
             cta: c.cta ?? null,
@@ -399,6 +424,27 @@ export async function generateSingleImageVariants(
       // 1) 베이스 이미지. 실측 텍스트 박스가 있으면 픽셀의 피사체 침범을 검사하고 1회 교정하되,
       //    교정본이 더 나쁘면 원본을 유지한다(재시도가 항상 낫다는 보장이 없음).
       let base = await renderBase();
+
+      // 1a) 인물 복제 검사(초상권) — 레퍼런스 픽셀 참조 시 생성물의 인물이 레퍼런스와
+      //     동일 인물로 보이면 1회 교정 재생성. QA 인프라 실패는 생성을 막지 않는다.
+      let personRetry = false;
+      if (refImage) {
+        const copied = await detectCopiedPerson(
+          refImage,
+          { base64: base.base64, mimeType: base.mimeType },
+          {
+            operation: "single_image_person_check",
+            brandId: input.brandId ?? null,
+            metadata: { generationId, i },
+          },
+        );
+        if (copied) {
+          base = await renderBase(PERSON_CORRECTION);
+          personRetry = true;
+        }
+      }
+      // 이후 재시도(존 게이트·베이킹 QA)가 인물 교정을 되돌리지 않도록 교정 지시를 누적한다.
+      const personFix = personRetry ? PERSON_CORRECTION : "";
       let checkedBg: Buffer | null = null;
       let zoneRetry = false;
       let busyTextRoles: NonNullable<DesignReference["textLayers"]>[number]["role"][] = [];
@@ -410,7 +456,7 @@ export async function generateSingleImageVariants(
         const violations = await findBusyCopyZones(checkedBg, activeLayers);
         if (violations.length) {
           const severity = (v: CopyZoneViolation[]) => v.reduce((s, x) => s + x.edgeDensity, 0);
-          const retryBase = await renderBase(copyZoneCorrection(violations));
+          const retryBase = await renderBase(`${personFix}${copyZoneCorrection(violations)}`);
           const retryBg = await resizeToChannel(Buffer.from(retryBase.base64, "base64"), aspectRatio);
           const remaining = await findBusyCopyZones(retryBg, activeLayers);
           zoneRetry = true;
@@ -442,7 +488,7 @@ export async function generateSingleImageVariants(
         if (first) {
           bakeQa = { retried: false, issues: first.issues };
           if (!first.ok) {
-            const retryBase = await renderBase(bakeQaCorrection(first.issues));
+            const retryBase = await renderBase(`${personFix}${bakeQaCorrection(first.issues)}`);
             const second = await verifyBakedImage(
               { base64: retryBase.base64, mimeType: retryBase.mimeType },
               expected,
@@ -470,6 +516,7 @@ export async function generateSingleImageVariants(
         size: base.size ?? null,
         aspectRatio,
         refStrength: refStrength ?? "none",
+        personRetry,
         zoneRetry,
         busyTextRoles,
         ...(bakeQa ? { qa: bakeQa } : {}),
@@ -478,6 +525,12 @@ export async function generateSingleImageVariants(
       // 2) overlay면 배경을 채널 픽셀로 맞춰 보존(재합성용) 후 한글/로고/CTA 오버레이.
       if (mode === "overlay" && hasText) {
         const bgBuf = checkedBg ?? await resizeToChannel(Buffer.from(base.base64, "base64"), aspectRatio);
+        // 대비 게이트 — 배경이 레이어 글자색과 비슷한 밝기로 바뀐 역할('주황-위-주황')에
+        // 컴포지터가 대비 스트로크를 적용하도록 busy 역할과 합집합.
+        if (measuredLayers.length) {
+          const lowContrast = await findLowContrastLayers(bgBuf, measuredLayers);
+          busyTextRoles = [...new Set([...busyTextRoles, ...lowContrast])];
+        }
         // 오버레이는 그라데이션+스크림으로 배경이 어두워지므로 darken을 반영해 로고 대비를 판단.
         const placement = await planLogoPlacement(bgBuf, logoAssets, { darken: 0.55 });
         const layerCopy = mergeLayerCopy({

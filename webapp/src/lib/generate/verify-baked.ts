@@ -104,6 +104,77 @@ export async function verifyBakedImage(
   }
 }
 
+// ── 인물 동일성 검사 — 레퍼런스 픽셀 참조 생성에서 실존 인물 복제(초상권) 검출 ──
+const PERSON_TOOL = "record_person_check";
+
+const PersonSchema = z.object({
+  bothHavePerson: z.boolean(),
+  samePerson: z.boolean(),
+});
+
+const personTool: Tool = {
+  name: PERSON_TOOL,
+  description: "두 광고 이미지 속 인물이 동일 인물로 보이는지 판정.",
+  input_schema: {
+    type: "object",
+    properties: {
+      bothHavePerson: { type: "boolean", description: "두 이미지 모두에 사람 얼굴이 있는가" },
+      samePerson: {
+        type: "boolean",
+        description: "두 이미지의 인물이 같은 사람(동일 얼굴·정체성)으로 보이는가. 한쪽에 사람이 없으면 false.",
+      },
+    },
+    required: ["bothHavePerson", "samePerson"],
+  },
+};
+
+/**
+ * 레퍼런스와 생성물의 인물이 동일 인물인지 검사(haiku 1콜).
+ * true = 복제 의심(재생성 필요). QA 인프라 실패는 null(검증 생략 — 생성은 계속).
+ */
+export async function detectCopiedPerson(
+  reference: { base64: string; mimeType: string },
+  candidate: { base64: string; mimeType: string },
+  usageContext?: UsageContext,
+): Promise<boolean | null> {
+  try {
+    const resp = await callClaude({
+      model: "haiku",
+      maxTokens: 300,
+      system:
+        "당신은 광고 이미지 검수자입니다. 첫 번째(레퍼런스)와 두 번째(생성물) 이미지 속 인물이 같은 사람으로 보이는지만 판정하세요. 닮은 정도가 아니라 '동일 인물'로 오인될 수준인지 기준으로. 도구로만 기록.",
+      messages: [{
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: (reference.mimeType || "image/png") as Media, data: reference.base64 },
+          },
+          {
+            type: "image",
+            source: { type: "base64", media_type: (candidate.mimeType || "image/png") as Media, data: candidate.base64 },
+          },
+          { type: "text", text: `두 이미지의 인물 동일 여부를 ${PERSON_TOOL} 로 기록하세요.` },
+        ],
+      }],
+      tools: [personTool],
+      toolChoice: { type: "tool", name: PERSON_TOOL },
+      usageContext,
+    });
+    const raw = extractToolUse(resp, PERSON_TOOL);
+    if (!raw) return null;
+    const parsed = PersonSchema.parse(raw);
+    return parsed.bothHavePerson && parsed.samePerson;
+  } catch (e) {
+    console.warn("인물 동일성 검사 실패(생략):", (e as Error).message);
+    return null;
+  }
+}
+
+/** 인물 복제 검출 시 재생성 프롬프트에 붙일 교정 지시. */
+export const PERSON_CORRECTION =
+  "\n\nQUALITY CORRECTION (the previous attempt copied the reference person): The person in the reference must NOT be reproduced. Render a COMPLETELY DIFFERENT individual — different face, bone structure, features and hairstyle — in a similar role and pose.";
+
 /** QA 문제 → 재생성 프롬프트에 붙일 영어 교정 지시. */
 export function bakeQaCorrection(issues: BakeQaResult["issues"]): string {
   const notes = issues.map((i) => {

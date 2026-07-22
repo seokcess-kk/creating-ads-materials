@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { findBusyCopyZones } from "./quality";
+import { findBusyCopyZones, findLowContrastLayers } from "./quality";
 
 const layer = {
   role: "headline" as const,
@@ -32,5 +32,24 @@ describe("copy-zone quality gate", () => {
     const image = await sharp(raw, { raw: { width: 256, height: 256, channels: 3 } }).png().toBuffer();
     const violations = await findBusyCopyZones(image, [layer]);
     expect(violations[0]).toMatchObject({ role: "headline" });
+  });
+});
+
+describe("contrast gate", () => {
+  it("flags a layer whose color matches the zone luminance (orange-on-orange)", async () => {
+    const image = await sharp({ create: { width: 256, height: 256, channels: 3, background: "#F5A623" } }).png().toBuffer();
+    const orange = { ...layer, color: "#FFB84D" };
+    await expect(findLowContrastLayers(image, [orange])).resolves.toEqual(["headline"]);
+  });
+
+  it("passes a layer with strong contrast against its zone", async () => {
+    const image = await sharp({ create: { width: 256, height: 256, channels: 3, background: "#0F2044" } }).png().toBuffer();
+    await expect(findLowContrastLayers(image, [layer])).resolves.toEqual([]);
+  });
+
+  it("skips layers that carry their own background pill", async () => {
+    const image = await sharp({ create: { width: 256, height: 256, channels: 3, background: "#F5A623" } }).png().toBuffer();
+    const pill = { ...layer, color: "#FFB84D", backgroundColor: "#111111" };
+    await expect(findLowContrastLayers(image, [pill])).resolves.toEqual([]);
   });
 });

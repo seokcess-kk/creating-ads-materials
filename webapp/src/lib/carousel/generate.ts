@@ -92,9 +92,12 @@ async function generateSlideImage(params: {
   if (!params.referenceImage) {
     return generateImage({ prompt: params.prompt, ...shared });
   }
+  // 실존 인물 복제(초상권) 방지 — 단일 이미지 referenceGuard와 동일 원칙.
+  const personGuard =
+    " If the reference contains any person, do NOT reproduce that person's identity: render a clearly DIFFERENT individual (different face, features and hairstyle), or omit the person.";
   const guard = params.rendersText
-    ? "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so this slide reads as designed after it. Build an ENTIRELY NEW slide: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers. Render ONLY the Korean text specified above."
-    : "\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.";
+    ? `\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood, composition and typographic feel so this slide reads as designed after it. Build an ENTIRELY NEW slide: do NOT copy its subjects, objects, photos, logos, or ANY of its text/letters/numbers.${personGuard} Render ONLY the Korean text specified above.`
+    : `\n\nSTYLE REFERENCE: The attached image is a STYLE reference ONLY — replicate its exact color palette, lighting, mood and composition. Create an ENTIRELY NEW, fully TEXTLESS composition: do NOT copy its subjects, objects, photos, text, or logos.${personGuard}`;
   return editImage({
     prompt: `${params.prompt}${guard}`,
     baseImage: params.referenceImage,

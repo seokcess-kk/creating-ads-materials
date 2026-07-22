@@ -93,13 +93,18 @@ function buildSystem(
       ? "- cta는 작성하지 않는다(광고 지면 — 매체가 CTA 버튼을 제공)."
       : "- cta는 행동 동사 위주(예: 지금 신청, 자세히 보기).";
   // 디자인 인지 모드 — 레퍼런스 실측 레이어의 역할·자수 한도에 맞춰 처음부터 박스에 맞는 카피를 쓴다.
+  const hasPriceLayer = layerSpec?.some((s) => s.role === "price");
   const layerLines = layerSpec?.length
     ? `\n\n## 레이아웃 레이어(필수 — 각 옵션의 layers에 아래 역할 전부를 채울 것)\n${layerSpec
         .map(
           (s) =>
             `- ${s.role}: ${ROLE_GUIDE[s.role]} — 공백 제외 ${s.maxChars}자 이내, 최대 ${s.maxLines}줄`,
         )
-        .join("\n")}\n- layers.headline은 headline과, layers.sub는 sub와 동일한 값으로.\n- 자수 한도는 디자인 박스 크기에서 계산된 값 — 넘기면 글자가 줄어들어 디자인이 깨진다.`
+        .join("\n")}\n- layers.headline은 headline과, layers.sub는 sub와 동일한 값으로.\n- 자수 한도는 디자인 박스 크기에서 계산된 값 — 넘기면 글자가 줄어들어 디자인이 깨진다.${
+        hasPriceLayer
+          ? "\n- 가격·수치는 price 레이어 전용 — headline/sub에는 가격·숫자를 넣지 않는다(중복 노출 방지)."
+          : ""
+      }`
     : "";
   return `당신은 한국어 디지털 광고 카피라이터입니다. 한 컨셉에 대해 서로 다른 앵글의 카피를 여러 벌 작성합니다.
 
@@ -168,10 +173,17 @@ export async function generateAdCopy(
     options = options.map((o) => {
       const layers = Object.fromEntries(
         Object.entries(o.layers ?? {}).filter(([role, text]) => allowed.has(role as never) && text?.trim()),
-      ) as CopyOption["layers"];
+      ) as NonNullable<CopyOption["layers"]>;
+      // 가격 배타: price 레이어가 있으면 headline에서 동일 가격 문자열을 결정적으로 제거(중복 노출 방지).
+      let headline = o.headline;
+      const price = layers.price?.trim();
+      if (price && headline.includes(price)) {
+        headline = headline.replace(price, "").replace(/[·|,/+\-]+\s*$/, "").replace(/\s{2,}/g, " ").trim() || o.headline;
+      }
       return {
         ...o,
-        layers: { ...layers, headline: o.headline, ...(o.sub ? { sub: o.sub } : {}) },
+        headline,
+        layers: { ...layers, headline, ...(o.sub ? { sub: o.sub } : {}) },
       };
     });
   }

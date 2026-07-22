@@ -368,12 +368,16 @@ export async function renderComposite(
     const anchorX = w * layer.xRatio;
     const firstBaselineY = h * layer.yRatio;
     if (layer.backgroundColor) {
+      // 필·배지 배경은 레이어 최대 폭이 아니라 '실제 텍스트 폭'에 맞춘다 —
+      // 레퍼런스보다 짧은 카피가 들어오면 빈 꼬리가 남는 문제 방지(정렬 기준점은 유지).
+      ctx.font = `${layer.fontWeight} ${fit.fontSize}px ${family}`;
+      const textWidth = Math.max(...fit.lines.map((line) => ctx.measureText(line).width));
       const padX = Math.max(8, fit.fontSize * 0.45);
       const padY = Math.max(6, fit.fontSize * 0.3);
       const boxX = layer.align === "center"
-        ? anchorX - maxWidth / 2 - padX
+        ? anchorX - textWidth / 2 - padX
         : layer.align === "right"
-          ? anchorX - maxWidth - padX
+          ? anchorX - textWidth - padX
           : anchorX - padX;
       const boxY = firstBaselineY - fit.fontSize - padY;
       ctx.fillStyle = layer.backgroundColor;
@@ -381,7 +385,7 @@ export async function renderComposite(
         ctx,
         boxX,
         boxY,
-        maxWidth + padX * 2,
+        textWidth + padX * 2,
         blockHeight + padY * 2,
         h * (layer.cornerRadiusRatio ?? 0.012),
       );
