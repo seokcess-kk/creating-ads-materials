@@ -27,6 +27,7 @@ import {
 } from "./prompt";
 import { analyzeReferenceDesign, formatDesignReference } from "./analyze-reference";
 import { refineLayersFromOriginal, assessRemoval } from "./measure-layers";
+import { buildReplacements, buildBakeInstruction } from "./reuse-bake";
 import { buildImagePrompts, type CreativeBrief } from "./art-director";
 import { anyNeedsOverlay } from "@/lib/text/bake-policy";
 import {
@@ -235,16 +236,17 @@ export async function generateSingleImageVariants(
       )
     : [];
 
-  // ── 재사용(reuse) 경로: 레퍼런스에서 텍스트만 지운 배경 1장 + 카피 변형 N개 재합성 ──
-  // 아트디렉터·생성 프롬프트가 필요 없다(장면을 새로 만들지 않음).
+  // ── 재사용(reuse) 경로: 직접 교체 베이킹(기본) ──
+  // 레퍼런스를 editImage에 넣어 각 텍스트를 새 카피로 '교체'하되 타이포 스타일(색·외곽선·그림자·
+  // 배지)을 유지시켜 ChatGPT급 비주얼을 얻는다. 정확 데이터(날짜·금액·연락처)는 굽지 않고 그 자리를
+  // 비워 컴포지터가 정확히 후합성(하이브리드). 전부 정확데이터면 기존 '제거 후 합성'으로 폴백.
   if (refStrength === "reuse" && refImage && designRef) {
     const refBuf = Buffer.from(refImage.base64, "base64");
     // 실측 좌표(0~1 비율)가 어긋나지 않게 사용자 비율 대신 레퍼런스 원본 프레이밍에 스냅.
     const refMeta = await sharp(refBuf).metadata();
     const reuseAspect = nearestAspect(refMeta.width, refMeta.height) ?? aspectRatio;
 
-    // 궁극 수정: 좌표·크기·색·줄수는 비전 추정이 아니라 원본 픽셀에서 색 유도로 실측한다.
-    // 비전은 의미(역할·컨테이너 여부·대략 위치·색 prior)만 담당. 레이어별 실측 실패 시 비전 유지.
+    // 좌표·크기·색·줄수는 비전 추정이 아니라 원본 픽셀에서 색 유도로 실측(후합성·게이트 근거).
     let reuseLayers = measuredLayers;
     try {
       reuseLayers = await refineLayersFromOriginal(refBuf, measuredLayers);
@@ -252,15 +254,20 @@ export async function generateSingleImageVariants(
       console.warn("원본 색 유도 실측 실패(비전 레이어로 폴백):", (e as Error).message);
     }
 
-    // 텍스트 제거는 확률 과정(장면 드리프트·잔존 롤) — 품질 편차의 남은 원인.
-    //  1) 레퍼런스별 캐시: 같은 레퍼런스 재생성은 검증된 제거본을 재사용(품질 고정·비용 0).
-    //  2) 캐시 미스: 평가(파국 드리프트 >12% 또는 텍스트 잔존)에 걸리면 1회 재시도 후 나은 쪽.
-    const cachePath = `reuse-clean/${createHash("sha256")
-      .update(`${refUrl}|${TEXT_REMOVAL_PROMPT.length}|${reuseAspect}`)
+    // 제거배경(폴백용) — 전부 정확데이터일 때만 lazy 생성. 캐시 공유(품질 고정·비용 0).
+    const cleanCachePath = `reuse-clean/${createHash("sha256")
+      .update(`${refUrl}|${reuseAspect}`)
       .digest("hex")}.png`;
-    let bgBuf = await getCachedImage(cachePath).catch(() => null);
-    let removalMeta: Record<string, unknown> = { cached: true };
-    if (!bgBuf) {
+    let cleanBg: Buffer | null = null;
+    let removalMeta: Record<string, unknown> | null = null;
+    const ensureCleanBg = async (): Promise<Buffer> => {
+      if (cleanBg) return cleanBg;
+      const cached = await getCachedImage(cleanCachePath).catch(() => null);
+      if (cached) {
+        cleanBg = cached;
+        removalMeta = { cached: true };
+        return cached;
+      }
       const attemptRemoval = async (attempt: number) => {
         const cleaned = await editImage({
           prompt: TEXT_REMOVAL_PROMPT,
@@ -284,7 +291,6 @@ export async function generateSingleImageVariants(
       if (best.bad) {
         retried = true;
         const second = await attemptRemoval(2);
-        // 잔존 없는 쪽 우선, 동률이면 드리프트 낮은 쪽.
         if (
           second.unremoved.length < best.unremoved.length ||
           (second.unremoved.length === best.unremoved.length && second.drift < best.drift)
@@ -292,19 +298,11 @@ export async function generateSingleImageVariants(
           best = second;
         }
       }
-      bgBuf = best.buf;
+      cleanBg = best.buf;
       removalMeta = { cached: false, drift: best.drift, unremoved: best.unremoved, retried };
-      await putCachedImage(cachePath, bgBuf).catch(() => {});
-    }
-
-    // 텍스트 제거 과정에서 존이 밝아졌을 수 있으므로 저대비 역할에 스트로크를 적용한다.
-    const reuseBusyRoles = await findLowContrastLayers(bgBuf, reuseLayers);
-    const placement = await planLogoPlacement(bgBuf, logoAssets);
-    const logo = logoForCompositorFrom(logoAssets, placement);
-    const bgUploaded = await uploadGeneratedImage(generationId, "bg_reuse", {
-      mimeType: "image/png",
-      base64: bgBuf.toString("base64"),
-    });
+      await putCachedImage(cleanCachePath, cleanBg).catch(() => {});
+      return cleanBg;
+    };
 
     // 카피 변형 목록(있으면 그것이 후보 수). 광고용이면 CTA는 여기서도 제거.
     const stripCta = (raw.placement ?? "ad") === "ad";
@@ -318,23 +316,115 @@ export async function generateSingleImageVariants(
 
     const results = await Promise.allSettled(
       copies.map(async (c, i) => {
-        const layerCopy = mergeLayerCopy(c);
-        const config = singleAdConfig({
-          headline: c.headline,
-          sub: c.sub,
-          cta: c.cta,
-          logo,
-          brandColor: brand.ctaColor,
-          fontSet: fontSetForReference(designRef),
-          typography: designRef.typography ?? null,
-          textLayers: reuseLayers,
-          layerCopy,
-          busyTextRoles: reuseBusyRoles,
-        });
-        const composed = await renderComposite(bgBuf, config);
+        const layerCopy = mergeLayerCopy(c) ?? {};
+        const reps = buildReplacements(reuseLayers, layerCopy);
+        const bakeReps = reps.filter((r) => r.bake);
+        const blankRoles = new Set(reps.filter((r) => !r.bake).map((r) => r.role));
+
+        let finalBuf: Buffer;
+        let bgUrl: string | null = null;
+        let renderMode = "bake";
+        let bakeMeta: Record<string, unknown> | null = null;
+
+        if (bakeReps.length > 0) {
+          // 직접 교체 베이킹 (카피별 캐시 — 같은 레퍼런스+카피 재생성 시 품질 고정·비용 0)
+          const bakeCachePath = `reuse-bake/${createHash("sha256")
+            .update(`${refUrl}|${reuseAspect}|${JSON.stringify(layerCopy)}`)
+            .digest("hex")}.png`;
+          let baked = await getCachedImage(bakeCachePath).catch(() => null);
+          if (!baked) {
+            const instruction = buildBakeInstruction(reps);
+            const bakeOnce = async (correction = "") => {
+              const r = await editImage({
+                prompt: `${instruction}${correction}`,
+                baseImage: refImage,
+                aspectRatio: reuseAspect,
+                imageSize: "2K", // 최종 결과물 → 고품질
+                usageContext: {
+                  operation: "single_image_reuse_bake",
+                  brandId: input.brandId ?? null,
+                  metadata: { generationId, i },
+                },
+              });
+              return resizeToChannel(Buffer.from(r.base64, "base64"), reuseAspect, { allowCrop: false });
+            };
+            baked = await bakeOnce();
+            // 베이킹 결과를 비전 QA로 검증(한글 깨짐·오타·지정 외 텍스트) → 실패 시 교정 재생성 1회.
+            const expected = { headline: bakeReps[0]?.text, extra: bakeReps.slice(1).map((r) => r.text) };
+            const qaCtx = {
+              operation: "single_image_reuse_bake_qa",
+              brandId: input.brandId ?? null,
+              metadata: { generationId, i },
+            };
+            const qa = await verifyBakedImage(
+              { base64: baked.toString("base64"), mimeType: "image/png" },
+              expected,
+              qaCtx,
+            );
+            bakeMeta = { cached: false, qa: qa?.issues ?? null, retried: false };
+            if (qa && !qa.ok) {
+              const retry = await bakeOnce(bakeQaCorrection(qa.issues));
+              const qa2 = await verifyBakedImage(
+                { base64: retry.toString("base64"), mimeType: "image/png" },
+                expected,
+                qaCtx,
+              );
+              if (!qa2 || qa2.issues.length <= qa.issues.length) {
+                baked = retry;
+                bakeMeta = { cached: false, qa: qa2?.issues ?? null, retried: true };
+              }
+            }
+            await putCachedImage(bakeCachePath, baked).catch(() => {});
+          } else {
+            bakeMeta = { cached: true };
+          }
+
+          // 정확 데이터(blank) 레이어 + 로고 + CTA만 스크림 없이 후합성.
+          const placement = await planLogoPlacement(baked, logoAssets);
+          const blankLayers = reuseLayers.filter((l) => blankRoles.has(l.role));
+          const blankCopy: LayerCopy = {};
+          for (const role of blankRoles) if (layerCopy[role]) blankCopy[role] = layerCopy[role];
+          const config = singleAdConfig({
+            cta: c.cta,
+            logo: logoForCompositorFrom(logoAssets, placement),
+            brandColor: brand.ctaColor,
+            fontSet: fontSetForReference(designRef),
+            typography: designRef.typography ?? null,
+            textLayers: blankLayers,
+            layerCopy: Object.keys(blankCopy).length ? blankCopy : null,
+            busyTextRoles: [],
+            bakedBase: true,
+          });
+          finalBuf = await renderComposite(baked, config);
+        } else {
+          // 전부 정확 데이터 → 제거배경 + 전체 합성(기존 방식). 배경 보존 → 카피 재합성 가능.
+          renderMode = "compose";
+          const bg = await ensureCleanBg();
+          const busy = await findLowContrastLayers(bg, reuseLayers);
+          const placement = await planLogoPlacement(bg, logoAssets);
+          const config = singleAdConfig({
+            headline: c.headline,
+            sub: c.sub,
+            cta: c.cta,
+            logo: logoForCompositorFrom(logoAssets, placement),
+            brandColor: brand.ctaColor,
+            fontSet: fontSetForReference(designRef),
+            typography: designRef.typography ?? null,
+            textLayers: reuseLayers,
+            layerCopy,
+            busyTextRoles: busy,
+          });
+          const bgUp = await uploadGeneratedImage(generationId, `bg_v${i + 1}`, {
+            mimeType: "image/png",
+            base64: bg.toString("base64"),
+          });
+          bgUrl = bgUp.url;
+          finalBuf = await renderComposite(bg, config);
+        }
+
         const uploaded = await uploadGeneratedImage(generationId, `v${i + 1}`, {
           mimeType: "image/png",
-          base64: composed.toString("base64"),
+          base64: finalBuf.toString("base64"),
         });
         const meta: Record<string, unknown> = {
           mode: "overlay",
@@ -342,30 +432,16 @@ export async function generateSingleImageVariants(
           promptVersion: SINGLE_IMAGE_PROMPT_VERSION,
           aspectRatio: reuseAspect,
           refStrength: "reuse",
-          removal: removalMeta,
-          compose: {
-            logoUrl: placement?.url ?? null,
-            logoPosition: placement?.position ?? null,
-            logoBacking: placement?.backingColor ?? null,
-            brandColor: brand.ctaColor,
-            copyPosition: null,
-            fontCategory: designRef.fontCategory ?? null,
-            fontFamily: designRef.fontFamily ?? null,
-            typography: designRef.typography ?? null,
-            textLayers: reuseLayers,
-            layerCopy,
-            busyTextRoles: reuseBusyRoles,
-            headline: c.headline ?? null,
-            sub: c.sub ?? null,
-            cta: c.cta ?? null,
-          },
+          renderMode,
+          ...(bakeMeta ? { bake: bakeMeta } : {}),
+          ...(removalMeta ? { removal: removalMeta } : {}),
         };
         return {
           label: String(meta.label),
           url: uploaded.url,
           path: uploaded.path,
           mode: "overlay",
-          bgUrl: bgUploaded.url,
+          bgUrl,
           meta,
         } satisfies GeneratedImageVariant;
       }),

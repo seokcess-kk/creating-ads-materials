@@ -52,6 +52,11 @@ export interface SingleAdLayoutInput {
   layerCopy?: LayerCopy | null;
   /** 품질 게이트 재시도 후에도 배경 디테일이 남은 역할 — 국소 대비 처리만 적용한다. */
   busyTextRoles?: ReferenceTextLayer["role"][] | null;
+  /**
+   * 베이킹된 이미지 위 후합성 — 그라데이션·스크림을 끈다(이미 완성된 디자인을 덮으면 안 됨).
+   * 정확 데이터(blank) 레이어·로고·CTA만 정밀하게 올릴 때 사용.
+   */
+  bakedBase?: boolean;
 }
 
 const PRICE_TOKEN = /(?:(?:개당|단|월|총)\s*)?(?:\d[\d,.]*\s*(?:억|천|백|십|만)?\s*원(?:부터)?|\d[\d,.]*\s*%|무료)/i;
@@ -198,7 +203,8 @@ export function singleAdConfig(input: SingleAdLayoutInput): ComposeConfig {
     fontSet: input.fontSet ?? singleAdFontSet(),
     // AI 배경은 어디든 밝을 수 있어 상/하 그라데이션 + 은은한 전체 스크림으로
     // 임의 배경에서도 텍스트 가독성을 확보한다(히어로 텍스트는 외곽선 추가).
-    overlay: structuredLayers.length
+    // 단 베이킹된 완성 디자인 위(bakedBase)나 실측 레이어가 있으면 스크림을 끈다.
+    overlay: input.bakedBase || structuredLayers.length
       ? { top: false, bottom: false }
       : { top: true, topOpacity: 150, bottom: true, bottomOpacity: 225, scrim: 48 },
     textLayers: structuredLayers,

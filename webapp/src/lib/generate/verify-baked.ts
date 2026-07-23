@@ -60,12 +60,13 @@ type Media = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
 export async function verifyBakedImage(
   image: { base64: string; mimeType: string },
-  expected: { headline?: string | null; sub?: string | null },
+  expected: { headline?: string | null; sub?: string | null; extra?: Array<string | null | undefined> },
   usageContext?: UsageContext,
 ): Promise<BakeQaResult | null> {
   const strings = [
     expected.headline?.trim() ? `헤드라인: "${expected.headline.trim()}"` : null,
     expected.sub?.trim() ? `서브: "${expected.sub.trim()}"` : null,
+    ...(expected.extra ?? []).map((t) => (t?.trim() ? `문구: "${t.trim()}"` : null)),
   ].filter(Boolean);
   const expectation = strings.length
     ? `이미지에 렌더되어야 하는 텍스트는 정확히 다음뿐입니다:\n${strings.join("\n")}`

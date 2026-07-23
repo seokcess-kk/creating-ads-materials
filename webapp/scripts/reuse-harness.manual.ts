@@ -1,7 +1,8 @@
 /**
- * reuse 파이프라인 반복 검증 — 프로덕션 경로와 동일 순서:
- * 분석(실측+색 보정) → 텍스트 제거 → 대비 게이트 → 실측 레이어 합성.
- * 실행: npx tsx --tsconfig tsconfig.json scripts/__iterate-reuse.manual.ts [라운드라벨]
+ * reuse 파이프라인 반복 검증 — 프로덕션 경로와 동일 순서.
+ * 기본(직접 교체 베이킹): 분석 → 실측 → editImage 교체 → QA → 정확데이터 후합성.
+ * --compose: 구 경로(제거 → 합성). --long: 오버플로 강등 스트레스.
+ * 실행: npx tsx --tsconfig tsconfig.json scripts/reuse-harness.manual.ts [라벨] [--compose] [--fresh]
  */
 import { config } from "dotenv";
 config({ path: ".env.local" });
@@ -52,7 +53,9 @@ async function main() {
   const { findLowContrastLayers } = await import("@/lib/generate/quality");
   const { fontSetForReference } = await import("@/lib/carousel/style");
   const { refineLayersFromOriginal, assessRemoval } = await import("@/lib/generate/measure-layers");
+  const { buildReplacements, buildBakeInstruction } = await import("@/lib/generate/reuse-bake");
 
+  const bakeMode = !process.argv.includes("--compose");
   const refBuf = await fs.readFile(REF);
   const dataUrl = `data:image/jpeg;base64,${refBuf.toString("base64")}`;
 
@@ -82,9 +85,45 @@ async function main() {
     );
   }
 
-  // 2) 텍스트 제거(원본 비율 스냅) — 프로덕션과 동일한 드리프트 게이트(나쁜 롤 1회 재시도 후 선택)
   const meta = await sharp(refBuf).metadata();
   const aspect = nearestAspect(meta.width, meta.height) ?? "1:1";
+
+  // ── 직접 교체 베이킹(기본) — 원본을 editImage에 넣어 각 텍스트를 새 카피로 교체 ──
+  if (bakeMode) {
+    const layers = await refineLayersFromOriginal(refBuf, design.textLayers);
+    const reps = buildReplacements(layers, LAYER_COPY);
+    console.log(`[${label}] replacements:`);
+    for (const r of reps) console.log(`  ${r.role.padEnd(8)} bake=${r.bake} "${r.text}" @ ${r.position}`);
+    const instruction = buildBakeInstruction(reps);
+    const r = await editImage({
+      prompt: instruction,
+      baseImage: { mimeType: "image/jpeg", base64: refBuf.toString("base64") },
+      aspectRatio: aspect,
+      imageSize: "2K",
+      usageContext: { operation: "single_image_reuse_bake", brandId: null, metadata: { harness: label } },
+    });
+    let baked = await resizeToChannel(Buffer.from(r.base64, "base64"), aspect, { allowCrop: false });
+    // 정확데이터(blank) 레이어 후합성
+    const blankRoles = new Set(reps.filter((x) => !x.bake).map((x) => x.role));
+    const blankLayers = layers.filter((l) => blankRoles.has(l.role));
+    if (blankLayers.length) {
+      const blankCopy: Record<string, string> = {};
+      for (const role of blankRoles) if (LAYER_COPY[role]) blankCopy[role] = LAYER_COPY[role];
+      const config = singleAdConfig({
+        fontSet: fontSetForReference(design),
+        typography: design.typography ?? null,
+        textLayers: blankLayers,
+        layerCopy: blankCopy,
+        bakedBase: true,
+      });
+      baked = await renderComposite(baked, config);
+    }
+    await fs.writeFile(`${OUT}/it-${label}-final.png`, baked);
+    console.log(`[${label}] baked (${r.provider}/${r.model}) → it-${label}-final.png`);
+    return;
+  }
+
+  // 2) 텍스트 제거(원본 비율 스냅) — 프로덕션과 동일한 드리프트 게이트(나쁜 롤 1회 재시도 후 선택)
   const attemptRemoval = async () => {
     const cleaned = await editImage({
       prompt: TEXT_REMOVAL_PROMPT,
